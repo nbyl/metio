@@ -49,6 +49,12 @@ resource "google_project_iam_member" "sa_storage_object_creator" {
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
+resource "google_project_iam_member" "sa_logging_log_writer" {
+  project = "minecraftbyl"
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
 resource "google_compute_disk" "primary" {
   name  = "minecraft-data"
   type  = "pd-ssd"
@@ -88,18 +94,8 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
+  metadata_startup_script = file("scripts/startup.sh")
   metadata = {
-    startup_script = <<-EOT
-    #!/bin/bash
-    mount /dev/disk/by-id/google-minecraft-data /home/minecraft
-    (crontab -l | grep -v -F "/home/minecraft/backup.sh" ; echo "0 */4 * * * /home/minecraft/backup.sh")| crontab -
-    cd /home/minecraft
-    screen -d -m -S mcs java -Xms256M -Xmx768M -jar server.jar nogui
-    EOT
-    shutdown_script = <<-EOT
-    #!/bin/bash
-    /home/minecraft/backup.sh
-    sudo screen -r mcs -X stuff '/stop\n'
-    EOT
+    shutdown-script = file("scripts/shutdown.sh")
   }
 }
