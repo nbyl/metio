@@ -1,0 +1,10 @@
+{
+	"name": "Node.js & TypeScript",
+
+	"image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+	"features": {
+		"ghcr.io/robbert229/devcontainer-features/opentofu:1": {},
+		"ghcr.io/dhoeric/features/google-cloud-cli:1": {},
+		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {}
+	}
+}
