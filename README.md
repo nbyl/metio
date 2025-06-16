@@ -13,8 +13,8 @@ tofu apply -auto-approve
 
 * Deploy Minecraft server according to [Guide](https://web.archive.org/web/20190528003754/https://cloud.google.com/solutions/gaming/minecraft-server#try_an_alternative_minecraft_server) with the following changes:
   * Install Java with [Coretto](https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/generic-linux-install.html)
-  
- 
+
+
 
 # Links
 

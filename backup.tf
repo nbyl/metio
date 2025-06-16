@@ -1,0 +1,10 @@
+resource "google_storage_bucket" "minecraft-backups" {
+  name          = "minecraft-backups-bucket"
+  location      = "europe-west3"
+  force_destroy = true
+
+  public_access_prevention = "enforced"
+  retention_policy {
+    retention_period = 7776000 # 90 days in seconds
+  }
+}
