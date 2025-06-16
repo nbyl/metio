@@ -4,14 +4,35 @@ import * as compute from '@google-cloud/compute'
 const PROJECT = process.env.GCP_PROJECT || 'bylcraft';
 const ZONE = process.env.GCP_ZONE || "europe-west3-a";
 
-export const helloHttp = functions.http('startServer', async (req, res) => {
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export const startServer = functions.http('startServer', async (req, res) => {
   const client = new compute.InstancesClient();
 
   const response = await client.start({
     project: PROJECT,
     zone: ZONE,
     instance: 'minecraft-server'
-  })
+  });
 
-  res.send(`Hello ${req.query.name || req.body.name || 'World, I am BylCraft with'} ${JSON.stringify(response)}!`);
+  console.log(`Response from starting instance: ${JSON.stringify(response)}`);
+
+  var statusResponse = await client.get({
+    project: PROJECT,
+    zone: ZONE,
+    instance: 'minecraft-server'
+  });
+  while(statusResponse?.[0]?.status !== 'RUNNING') {
+    console.log(`Instance status: ${statusResponse?.[0]?.status}`);
+    await delay(5000); // Wait for 5 seconds before checking again
+    statusResponse = await client.get({
+      project: PROJECT,
+      zone: ZONE,
+      instance: 'minecraft-server'
+    });
+  }
+
+  res.send(`Der Minecraft Server ist gestartet! Er ist jetzt erreichbar unter: ${statusResponse?.[0]?.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP || 'unbekannt'}`);
 });
