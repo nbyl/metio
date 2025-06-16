@@ -1,6 +1,6 @@
 resource "google_storage_bucket" "functions_source_bucket" {
   name                        = "${random_id.default.hex}-bylcraft-source"
-  location                    = "EUROPE-WEST3"
+  location                    = var.region
   uniform_bucket_level_access = true
 }
 
@@ -24,12 +24,12 @@ data "google_storage_bucket_object" "functions_source_object" {
 
 resource "google_cloudfunctions2_function" "start_function" {
   name        = "start-server"
-  location    = "europe-west3"
+  location    = var.region
   description = "starts the minecraft server"
 
   build_config {
     runtime     = "nodejs22"
-    entry_point = "helloHttp" # Set the entry point
+    entry_point = "startServer" # Set the entry point
     source {
       storage_source {
         bucket     = data.google_storage_bucket_object.functions_source_object.bucket
@@ -40,8 +40,12 @@ resource "google_cloudfunctions2_function" "start_function" {
   }
 
   service_config {
+    environment_variables = {
+      GCP_PROJECT = var.project_id
+      GCP_ZONE    = var.zone
+    }
     max_instance_count = 1
-    available_memory   = "256M"
+    available_memory   = "512M"
     timeout_seconds    = 60
   }
 }
