@@ -12,9 +12,9 @@ terraform {
 }
 
 provider "google" {
-  project = "minecraftbyl"
-  region  = "europe-west3"
-  zone    = "europe-west3-a"
+  project = var.project_id
+  region  = var.region
+  zone    = var.zone
 }
 
 resource "random_id" "default" {
