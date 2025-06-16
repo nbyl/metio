@@ -57,6 +57,6 @@ resource "google_cloud_run_service_iam_member" "member" {
   member   = "allUsers"
 }
 
-output "function_uri" {
+output "start_url" {
   value = google_cloudfunctions2_function.start_function.service_config[0].uri
 }
