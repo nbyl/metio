@@ -1,5 +1,12 @@
 {
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
   "dependencies": {
     "@google-cloud/functions-framework": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
   }
 }
