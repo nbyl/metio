@@ -34,5 +34,5 @@ export const startServer = functions.http('startServer', async (req, res) => {
     });
   }
 
-  res.send(`Der Minecraft Server ist gestartet! Er ist jetzt erreichbar unter: ${statusResponse?.[0]?.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP || 'unbekannt'}`);
+  res.send(`Der Minecraft Server ist gestartet! Er ist jetzt erreichbar unter: ${statusResponse?.[0]?.networkInterfaces?.[0]?.accessConfigs?.[0]?.natIP || 'unbekannt'}:25565`);
 });
