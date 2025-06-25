@@ -50,11 +50,17 @@ resource "google_cloudfunctions2_function" "start_function" {
   }
 }
 
-resource "google_cloud_run_service_iam_member" "member" {
-  location = google_cloudfunctions2_function.start_function.location
-  service  = google_cloudfunctions2_function.start_function.name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+data "google_iam_policy" "admins" {
+  binding {
+    role    = "roles/run.invoker"
+    members = var.admin_members
+  }
+}
+
+resource "google_cloud_run_service_iam_policy" "policy" {
+  location    = google_cloudfunctions2_function.start_function.location
+  service     = google_cloudfunctions2_function.start_function.name
+  policy_data = data.google_iam_policy.admins.policy_data
 }
 
 output "start_url" {

@@ -14,3 +14,9 @@ variable "zone" {
   type        = string
   default     = "europe-west3-a"
 }
+
+variable "admin_members" {
+  description = "List of members to be granted admin access."
+  type        = list(string)
+  default     = []
+}
