@@ -50,6 +50,34 @@ resource "google_cloudfunctions2_function" "start_function" {
   }
 }
 
+resource "google_cloudfunctions2_function" "stop_function" {
+  name        = "stop-server"
+  location    = var.region
+  description = "stops the minecraft server"
+
+  build_config {
+    runtime     = "nodejs22"
+    entry_point = "stopServer" # Set the entry point
+    source {
+      storage_source {
+        bucket     = data.google_storage_bucket_object.functions_source_object.bucket
+        object     = data.google_storage_bucket_object.functions_source_object.name
+        generation = data.google_storage_bucket_object.functions_source_object.generation
+      }
+    }
+  }
+
+  service_config {
+    environment_variables = {
+      GCP_PROJECT = var.project_id
+      GCP_ZONE    = var.zone
+    }
+    max_instance_count = 1
+    available_memory   = "512M"
+    timeout_seconds    = 60
+  }
+}
+
 data "google_iam_policy" "admins" {
   binding {
     role    = "roles/run.invoker"
@@ -57,12 +85,22 @@ data "google_iam_policy" "admins" {
   }
 }
 
-resource "google_cloud_run_service_iam_policy" "policy" {
+resource "google_cloud_run_service_iam_policy" "start" {
   location    = google_cloudfunctions2_function.start_function.location
   service     = google_cloudfunctions2_function.start_function.name
   policy_data = data.google_iam_policy.admins.policy_data
 }
 
+resource "google_cloud_run_service_iam_policy" "stop_policy" {
+  location    = google_cloudfunctions2_function.stop_function.location
+  service     = google_cloudfunctions2_function.stop_function.name
+  policy_data = data.google_iam_policy.admins.policy_data
+}
+
 output "start_url" {
   value = google_cloudfunctions2_function.start_function.service_config[0].uri
+}
+
+output "stop_url" {
+  value = google_cloudfunctions2_function.stop_function.service_config[0].uri
 }
