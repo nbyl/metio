@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+set -x
+
+if ! command -v java >/dev/null 2>&1
+then
+  echo "Installing Amazon Corretto 21..."
+  wget -O - https://apt.corretto.aws/corretto.key | sudo gpg --dearmor -o /usr/share/keyrings/corretto-keyring.gpg && \
+  echo "deb [signed-by=/usr/share/keyrings/corretto-keyring.gpg] https://apt.corretto.aws stable main" | sudo tee /etc/apt/sources.list.d/corretto.list
+  sudo apt-get update; sudo apt-get install -y java-21-amazon-corretto-jdk
+fi
+
+# TODO: format data partition, if not already formatted
+mkdir -p /srv/minecraft/data
+mount /dev/disk/by-id/google-minecraft-data /srv/minecraft/data
+
+# setup backup script
+mkdir -p /srv/minecraft/bin
+cat << 'EOF' > /srv/minecraft/bin/backup.sh
+#!/bin/bash
+set -e
+set -x
+
+screen -r mcs -X stuff '/save-all\n/save-off\n'
+/usr/bin/gsutil cp -R /srv/minecraft/data/world gs://${backup_bucket}/$(date "+%Y%m%d-%H%M%S")-world
+screen -r mcs -X stuff '/save-on\n'
+EOF
+(crontab -l | grep -v -F "/srv/minecraft/bin/backup.sh" ; echo "0 */4 * * * /srv/minecraft/bin/backup.sh")| crontab -
+
+# download and start server
+curl -o /srv/minecraft/data/bin/server.jar ${server_jar_url}
+cd /srv/minecraft/data
+screen -d -m -S mcs java -Xms256M -Xmx768M -jar /srv/minecraft/data/bin/server.jar nogui
