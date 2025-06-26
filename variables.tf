@@ -20,3 +20,9 @@ variable "admin_members" {
   type        = list(string)
   default     = []
 }
+
+variable "server_jar_url" {
+  description = "The URL where the server.jar is downloaded"
+  type        = string
+  default     = "https://piston-data.mojang.com/v1/objects/e6ec2f64e6080b9b5d9b471b291c33cc7f509733/server.jar"
+}
