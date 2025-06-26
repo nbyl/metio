@@ -1,5 +1,5 @@
 resource "google_storage_bucket" "minecraft-backups" {
-  name          = "minecraft-backups-bucket"
+  name          = "${terraform.workspace}-minecraft-backups-bucket"
   location      = "europe-west3"
   force_destroy = true
 

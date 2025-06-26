@@ -23,7 +23,7 @@ data "google_storage_bucket_object" "functions_source_object" {
 }
 
 resource "google_cloudfunctions2_function" "start_function" {
-  name        = "start-server"
+  name        = "${terraform.workspace}-start-server"
   location    = var.region
   description = "starts the minecraft server"
 
@@ -51,7 +51,7 @@ resource "google_cloudfunctions2_function" "start_function" {
 }
 
 resource "google_cloudfunctions2_function" "stop_function" {
-  name        = "stop-server"
+  name        = "${terraform.workspace}-stop-server"
   location    = var.region
   description = "stops the minecraft server"
 
