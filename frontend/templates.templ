@@ -1,0 +1,245 @@
+package main
+
+import "time"
+
+templ HomePage(status ServerStatus, accessLink *AccessLink) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Metio - Minecraft Server Control</title>
+		<link rel="stylesheet" href="/static/styles.css"/>
+		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+		<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+	</head>
+	<body class="min-h-screen bg-gradient">
+		<div class="container">
+			<!-- Header -->
+			<div class="header">
+				<h1 class="title">
+					<i data-lucide="server"></i>
+					Metio
+				</h1>
+				<p class="subtitle">Minecraft Server Control Panel</p>
+			</div>
+
+			<!-- Server Status Card -->
+			<div id="server-status-card">
+				@ServerStatusCard(status)
+			</div>
+
+			<!-- Firewall Access Card -->
+			<div class="card">
+				<div class="card-header">
+					<h2 class="card-title">
+						<i data-lucide="shield"></i>
+						Firewall Access
+					</h2>
+				</div>
+				<div class="card-content">
+					<p class="description">
+						Generate a shareable link to allow other users to bypass the server firewall.
+						Links expire after 24 hours for security.
+					</p>
+
+					<button
+						class="btn btn-blue"
+						hx-post="/access/generate"
+						hx-target="#access-link-section"
+						hx-indicator="#access-loading"
+					>
+						<i data-lucide="shield"></i>
+						Generate Access Link
+					</button>
+
+					<div id="access-loading" class="htmx-indicator loading">
+						Generating link...
+					</div>
+
+					<div id="access-link-section">
+						if accessLink != nil {
+							@AccessLinkSection(accessLink)
+						}
+					</div>
+				</div>
+			</div>
+
+			<!-- Instructions Card -->
+			<div class="card">
+				<div class="card-header">
+					<h2 class="card-title">How to Use</h2>
+				</div>
+				<div class="card-content">
+					<div class="instructions">
+						<div class="instruction-group">
+							<h4>Server Control:</h4>
+							<ul>
+								<li>• Click "Start Server" to boot up the Minecraft server</li>
+								<li>• Click "Stop Server" to safely shut down the server</li>
+								<li>• Copy the server IP to share with players</li>
+							</ul>
+						</div>
+						<div class="instruction-group">
+							<h4>Firewall Access:</h4>
+							<ul>
+								<li>• Generate access links for new players</li>
+								<li>• Share the link with users who need firewall access</li>
+								<li>• Links automatically expire after 24 hours</li>
+							</ul>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Initialize Lucide icons
+			lucide.createIcons();
+
+			// Auto-refresh server status every 5 seconds
+			setInterval(() => {
+				htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
+			}, 5000);
+
+			// Copy to clipboard function
+			function copyToClipboard(text) {
+				navigator.clipboard.writeText(text).then(() => {
+					showToast('Copied to clipboard!');
+				}).catch(() => {
+					showToast('Failed to copy', 'error');
+				});
+			}
+
+			// Simple toast notification
+			function showToast(message, type = 'success') {
+				const toast = document.createElement('div');
+				toast.className = `toast toast-${type}`;
+				toast.textContent = message;
+				document.body.appendChild(toast);
+
+				setTimeout(() => {
+					toast.classList.add('show');
+				}, 100);
+
+				setTimeout(() => {
+					toast.classList.remove('show');
+					setTimeout(() => document.body.removeChild(toast), 300);
+				}, 3000);
+			}
+		</script>
+	</body>
+	</html>
+}
+
+templ ServerStatusCard(status ServerStatus) {
+	<div class="card">
+		<div class="card-header">
+			<h2 class="card-title">
+				<i data-lucide="globe"></i>
+				Server Status
+			</h2>
+			<span class={ "badge", templ.KV("badge-online", status.IsOnline), templ.KV("badge-offline", !status.IsOnline) }>
+				if status.IsOnline {
+					Online
+				} else {
+					Offline
+				}
+			</span>
+		</div>
+		<div class="card-content">
+			<div class="stats-grid">
+				<div class="stat">
+					<label>Players</label>
+					<div class="stat-value">
+						<i data-lucide="users"></i>
+						<span>{ strconv.Itoa(status.Players) }/{ strconv.Itoa(status.MaxPlayers) }</span>
+					</div>
+				</div>
+				<div class="stat">
+					<label>Uptime</label>
+					<div class="stat-value">
+						<i data-lucide="clock"></i>
+						<span>{ status.Uptime }</span>
+					</div>
+				</div>
+				<div class="stat">
+					<label>Version</label>
+					<div class="stat-value">{ status.Version }</div>
+				</div>
+				<div class="stat">
+					<label>Server IP</label>
+					<div class="stat-value">{ status.IP }</div>
+				</div>
+			</div>
+
+			<div class="separator"></div>
+
+			<div class="controls">
+				if !status.IsOnline {
+					<button
+						class="btn btn-green"
+						hx-post="/server/start"
+						hx-target="#server-status-card"
+						hx-indicator="#start-loading"
+					>
+						<i data-lucide="play"></i>
+						Start Server
+					</button>
+					<div id="start-loading" class="htmx-indicator loading">
+						Starting server...
+					</div>
+				} else {
+					<button
+						class="btn btn-red"
+						hx-post="/server/stop"
+						hx-target="#server-status-card"
+						hx-indicator="#stop-loading"
+					>
+						<i data-lucide="square"></i>
+						Stop Server
+					</button>
+					<div id="stop-loading" class="htmx-indicator loading">
+						Stopping server...
+					</div>
+				}
+
+				<button
+					class="btn btn-outline"
+					onclick={ "copyToClipboard('" + status.IP + "')" }
+				>
+					<i data-lucide="copy"></i>
+					Copy IP
+				</button>
+			</div>
+		</div>
+	</div>
+	<script>lucide.createIcons();</script>
+}
+
+templ AccessLinkSection(accessLink *AccessLink) {
+	<div class="access-link-container">
+		<div class="input-group">
+			<label>Shareable Access Link</label>
+			<div class="input-with-button">
+				<input
+					type="text"
+					value={ accessLink.URL }
+					readonly
+					class="input"
+					id="access-link-input"
+				/>
+				<button
+					class="btn btn-outline btn-icon"
+					onclick={ "copyToClipboard('" + accessLink.URL + "')" }
+				>
+					<i data-lucide="copy"></i>
+				</button>
+			</div>
+		</div>
+		<div class="expiry-info">
+			Expires: { accessLink.Expiry.Format("January 2, 2006 at 3:04 PM") }
+		</div>
+	</div>
+	<script>lucide.createIcons();</script>
+}
