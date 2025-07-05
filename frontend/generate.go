@@ -1,5 +1,3 @@
-package go_templ_htmx
+package frontend
 
 //go:generate go tool templ generate
-
-//go:generate npx tailwindcss -c ./tailwind.config.js -i ./views/assets/css/input.css -o ./views/assets/css/tailwind.css --minify

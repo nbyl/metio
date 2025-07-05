@@ -1,24 +1,23 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/nbyl/metio/frontend/views"
 )
 
 type ServerStatus struct {
-	IsOnline   bool   `json:"isOnline"`
-	Players    int    `json:"players"`
-	MaxPlayers int    `json:"maxPlayers"`
-	Uptime     string `json:"uptime"`
-	Version    string `json:"version"`
-	IP         string `json:"ip"`
+	IsOnline   bool      `json:"isOnline"`
+	Players    int       `json:"players"`
+	MaxPlayers int       `json:"maxPlayers"`
+	Uptime     string    `json:"uptime"`
+	Version    string    `json:"version"`
+	IP         string    `json:"ip"`
 	StartTime  time.Time `json:"-"`
 }
 
@@ -75,7 +74,7 @@ func uptimeTicker() {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	component := HomePage(serverStatus, currentAccessLink)
+	component := views.HomePage(serverStatus, currentAccessLink)
 	component.Render(r.Context(), w)
 }
 
@@ -88,7 +87,7 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus.Players = rand.Intn(5)
 	serverStatus.Uptime = "00:00:00"
 
-	component := ServerStatusCard(serverStatus)
+	component := views.ServerStatusCard(serverStatus)
 	component.Render(r.Context(), w)
 }
 
@@ -100,12 +99,12 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus.Players = 0
 	serverStatus.Uptime = "00:00:00"
 
-	component := ServerStatusCard(serverStatus)
+	component := views.ServerStatusCard(serverStatus)
 	component.Render(r.Context(), w)
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	component := ServerStatusCard(serverStatus)
+	component := views.ServerStatusCard(serverStatus)
 	component.Render(r.Context(), w)
 }
 
@@ -118,6 +117,6 @@ func generateAccessHandler(w http.ResponseWriter, r *http.Request) {
 		Expiry: expiry,
 	}
 
-	component := AccessLinkSection(currentAccessLink)
+	component := views.AccessLinkSection(currentAccessLink)
 	component.Render(r.Context(), w)
 }
