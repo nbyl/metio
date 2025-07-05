@@ -1,5 +1,5 @@
 {
-	"name": "Node.js & TypeScript",
+	"name": "Metio Dev Container",
 
 	"image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
 	"features": {
