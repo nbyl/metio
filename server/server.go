@@ -1,33 +1,20 @@
-package main
+package server
 
 import (
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/nbyl/metio/frontend/views"
+	"gitlab.com/nbyl/metio/views"
 )
 
-type ServerStatus struct {
-	IsOnline   bool      `json:"isOnline"`
-	Players    int       `json:"players"`
-	MaxPlayers int       `json:"maxPlayers"`
-	Uptime     string    `json:"uptime"`
-	Version    string    `json:"version"`
-	IP         string    `json:"ip"`
-	StartTime  time.Time `json:"-"`
-}
-
-type AccessLink struct {
-	URL    string    `json:"url"`
-	Expiry time.Time `json:"expiry"`
-}
-
 var (
-	serverStatus = ServerStatus{
+	serverStatus = views.ServerStatus{
 		IsOnline:   false,
 		Players:    0,
 		MaxPlayers: 20,
@@ -35,10 +22,9 @@ var (
 		Version:    "1.20.4",
 		IP:         "mc.metio.server:25565",
 	}
-	currentAccessLink *AccessLink
 )
 
-func main() {
+func RunServer() {
 	r := mux.NewRouter()
 
 	// Static files
@@ -49,32 +35,12 @@ func main() {
 	r.HandleFunc("/server/start", startServerHandler).Methods("POST")
 	r.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
 	r.HandleFunc("/server/status", statusHandler).Methods("GET")
-	r.HandleFunc("/access/generate", generateAccessHandler).Methods("POST")
-
-	// Start uptime ticker
-	go uptimeTicker()
 
 	fmt.Println("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe(":8080", handlers.LoggingHandler(os.Stdout, r)))
 }
-
-func uptimeTicker() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if serverStatus.IsOnline {
-			duration := time.Since(serverStatus.StartTime)
-			hours := int(duration.Hours())
-			minutes := int(duration.Minutes()) % 60
-			seconds := int(duration.Seconds()) % 60
-			serverStatus.Uptime = fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-		}
-	}
-}
-
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	component := views.HomePage(serverStatus, currentAccessLink)
+	component := views.HomePage(serverStatus)
 	component.Render(r.Context(), w)
 }
 
@@ -105,18 +71,5 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	component := views.ServerStatusCard(serverStatus)
-	component.Render(r.Context(), w)
-}
-
-func generateAccessHandler(w http.ResponseWriter, r *http.Request) {
-	linkId := fmt.Sprintf("%d", rand.Int63())
-	expiry := time.Now().Add(24 * time.Hour)
-
-	currentAccessLink = &AccessLink{
-		URL:    fmt.Sprintf("https://metio.app/join/%s", linkId),
-		Expiry: expiry,
-	}
-
-	component := views.AccessLinkSection(currentAccessLink)
 	component.Render(r.Context(), w)
 }

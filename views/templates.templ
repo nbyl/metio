@@ -1,15 +1,28 @@
 package views
 
-import "time"
+import(
+"strconv"
+"time"
+)
 
-templ HomePage(status ServerStatus, accessLink *AccessLink) {
+type ServerStatus struct {
+	IsOnline   bool      `json:"isOnline"`
+	Players    int       `json:"players"`
+	MaxPlayers int       `json:"maxPlayers"`
+	Uptime     string    `json:"uptime"`
+	Version    string    `json:"version"`
+	IP         string    `json:"ip"`
+	StartTime  time.Time `json:"-"`
+}
+
+templ HomePage(status ServerStatus) {
 	<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 		<title>Metio - Minecraft Server Control</title>
-		<link rel="stylesheet" href="/static/styles.css"/>
+		<link rel="stylesheet" href="/static/globals.css"/>
 		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 		<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 	</head>
@@ -27,42 +40,6 @@ templ HomePage(status ServerStatus, accessLink *AccessLink) {
 			<!-- Server Status Card -->
 			<div id="server-status-card">
 				@ServerStatusCard(status)
-			</div>
-
-			<!-- Firewall Access Card -->
-			<div class="card">
-				<div class="card-header">
-					<h2 class="card-title">
-						<i data-lucide="shield"></i>
-						Firewall Access
-					</h2>
-				</div>
-				<div class="card-content">
-					<p class="description">
-						Generate a shareable link to allow other users to bypass the server firewall.
-						Links expire after 24 hours for security.
-					</p>
-
-					<button
-						class="btn btn-blue"
-						hx-post="/access/generate"
-						hx-target="#access-link-section"
-						hx-indicator="#access-loading"
-					>
-						<i data-lucide="shield"></i>
-						Generate Access Link
-					</button>
-
-					<div id="access-loading" class="htmx-indicator loading">
-						Generating link...
-					</div>
-
-					<div id="access-link-section">
-						if accessLink != nil {
-							@AccessLinkSection(accessLink)
-						}
-					</div>
-				</div>
 			</div>
 
 			<!-- Instructions Card -->
@@ -206,39 +183,11 @@ templ ServerStatusCard(status ServerStatus) {
 
 				<button
 					class="btn btn-outline"
-					onclick={ "copyToClipboard('" + status.IP + "')" }
 				>
 					<i data-lucide="copy"></i>
 					Copy IP
 				</button>
 			</div>
-		</div>
-	</div>
-	<script>lucide.createIcons();</script>
-}
-
-templ AccessLinkSection(accessLink *AccessLink) {
-	<div class="access-link-container">
-		<div class="input-group">
-			<label>Shareable Access Link</label>
-			<div class="input-with-button">
-				<input
-					type="text"
-					value={ accessLink.URL }
-					readonly
-					class="input"
-					id="access-link-input"
-				/>
-				<button
-					class="btn btn-outline btn-icon"
-					onclick={ "copyToClipboard('" + accessLink.URL + "')" }
-				>
-					<i data-lucide="copy"></i>
-				</button>
-			</div>
-		</div>
-		<div class="expiry-info">
-			Expires: { accessLink.Expiry.Format("January 2, 2006 at 3:04 PM") }
 		</div>
 	</div>
 	<script>lucide.createIcons();</script>
