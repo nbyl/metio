@@ -1,0 +1,2 @@
+# copy this file to metio.auto.tfvars and change the values as needed
+project_id = "TBD"
