@@ -2,11 +2,13 @@
 	"name": "Metio Dev Container",
 	"image": "mcr.microsoft.com/devcontainers/go:1-1.24-bookworm",
 	"features": {
+		"ghcr.io/devcontainers/features/node:1": {},
 		"ghcr.io/robbert229/devcontainer-features/opentofu:1": {},
 		"ghcr.io/dhoeric/features/google-cloud-cli:1": {},
 		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {},
 		"ghcr.io/azutake/devcontainer-features/go-packages-install:0": {
 			"PACKAGES": "github.com/air-verse/air@latest"
 		}
-	}
+	},
+		"postCreateCommand": "npm install && go generate ./..."
 }
