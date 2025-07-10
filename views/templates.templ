@@ -22,6 +22,9 @@ templ HomePage(status ServerStatus) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>Metio - Minecraft Server Control</title>
+			<link rel="preconnect" href="https://fonts.googleapis.com">
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+			<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet">
 			<link rel="stylesheet" href="/static/styles.css"/>
 			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 			<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -56,14 +59,6 @@ templ HomePage(status ServerStatus) {
 										<li>• Copy the server IP to share with players</li>
 									</ul>
 								</div>
-								<div class="instruction-group">
-									<h4 class="instruction-group-title">Firewall Access:</h4>
-									<ul>
-										<li>• Generate access links for new players</li>
-										<li>• Share the link with users who need firewall access</li>
-										<li>• Links automatically expire after 24 hours</li>
-									</ul>
-								</div>
 							</div>
 						</div>
 					</div>
@@ -74,9 +69,9 @@ templ HomePage(status ServerStatus) {
 			lucide.createIcons();
 
 			// Auto-refresh server status every 5 seconds
-			// setInterval(() => {
-			// 	htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
-			// }, 5000);
+			setInterval(() => {
+				htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
+			}, 5000);
 
 			// Copy to clipboard function
 			function copyToClipboard(text) {
@@ -136,16 +131,16 @@ templ ServerStatusCard(status ServerStatus) {
 					<label>Uptime</label>
 					<div class="stat-value">
 						<i data-lucide="clock"></i>
-						<span>{ status.Uptime }</span>
+						<span class="font-mono">{ status.Uptime }</span>
 					</div>
 				</div>
 				<div class="stat">
 					<label>Version</label>
-					<div class="stat-value">{ status.Version }</div>
+					<div class="stat-value font-mono">{ status.Version }</div>
 				</div>
 				<div class="stat">
 					<label>Server IP</label>
-					<div class="stat-value">{ status.IP }</div>
+					<div class="stat-value font-mono">{ status.IP }</div>
 				</div>
 			</div>
 			<div class="separator"></div>
