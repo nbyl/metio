@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
+
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-geist-sans: 'Geist', sans-serif;
+  --font-geist-mono: 'Geist Mono', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -166,11 +170,35 @@
   }
 
   .stat-value {
-    @appl flex items-center gap-2 text-white
+    @apply flex items-center gap-2 text-white
   }
 
   .separator {
-    @apply shrink-0 h-px bg-slate-700
+    @apply bg-border shrink-0 h-px w-full bg-slate-700
+  }
+
+  .controls {
+    @apply flex gap-3
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive h-9 px-4 py-2 has-[>svg]:px-3
+  }
+
+  .btn-green {
+    @apply bg-green-600 hover:bg-green-700 text-white
+  }
+
+  .btn-red {
+    @apply bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60
+  }
+
+  .btn-outline {
+    @apply border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50
+  }
+
+  .loading {
+    @apply w-4 h-4 mr-2
   }
 
   .instruction-group {
