@@ -1,8 +1,8 @@
 package views
 
-import(
-"strconv"
-"time"
+import (
+	"strconv"
+	"time"
 )
 
 type ServerStatus struct {
@@ -18,66 +18,65 @@ type ServerStatus struct {
 templ HomePage(status ServerStatus) {
 	<!DOCTYPE html>
 	<html lang="en">
-	<head>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-		<title>Metio - Minecraft Server Control</title>
-		<link rel="stylesheet" href="/static/styles.css"/>
-		<script src="https://unpkg.com/htmx.org@1.9.10"></script>
-		<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-	</head>
-	<body class="min-h-screen bg-gradient">
-		<div class="container">
-			<!-- Header -->
-			<div class="header">
-				<h1 class="title">
-					<i data-lucide="server"></i>
-					Metio
-				</h1>
-				<p class="subtitle">Minecraft Server Control Panel</p>
-			</div>
-
-			<!-- Server Status Card -->
-			<div id="server-status-card">
-				@ServerStatusCard(status)
-			</div>
-
-			<!-- Instructions Card -->
-			<div class="card">
-				<div class="card-header">
-					<h2 class="card-title">How to Use</h2>
-				</div>
-				<div class="card-content">
-					<div class="instructions">
-						<div class="instruction-group">
-							<h4>Server Control:</h4>
-							<ul>
-								<li>• Click "Start Server" to boot up the Minecraft server</li>
-								<li>• Click "Stop Server" to safely shut down the server</li>
-								<li>• Copy the server IP to share with players</li>
-							</ul>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Metio - Minecraft Server Control</title>
+			<link rel="stylesheet" href="/static/styles.css"/>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+			<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+		</head>
+		<body class="antialiased">
+			<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+				<div class="container">
+					<!-- Header -->
+					<div class="header">
+						<h1 class="title">
+							<i data-lucide="server" class="text-green-400"></i>
+							Metio
+						</h1>
+						<p class="subtitle">Minecraft Server Control Panel</p>
+					</div>
+					<!-- Server Status Card -->
+					<div id="server-status-card">
+						@ServerStatusCard(status)
+					</div>
+					<!-- Instructions Card -->
+					<div class="card">
+						<div class="card-header">
+							<h2 class="card-title">How to Use</h2>
 						</div>
-						<div class="instruction-group">
-							<h4>Firewall Access:</h4>
-							<ul>
-								<li>• Generate access links for new players</li>
-								<li>• Share the link with users who need firewall access</li>
-								<li>• Links automatically expire after 24 hours</li>
-							</ul>
+						<div class="card-content">
+							<div class="instructions">
+								<div class="instruction-group">
+									<h4 class="instruction-group-title">Server Control:</h4>
+									<ul>
+										<li>• Click "Start Server" to boot up the Minecraft server</li>
+										<li>• Click "Stop Server" to safely shut down the server</li>
+										<li>• Copy the server IP to share with players</li>
+									</ul>
+								</div>
+								<div class="instruction-group">
+									<h4 class="instruction-group-title">Firewall Access:</h4>
+									<ul>
+										<li>• Generate access links for new players</li>
+										<li>• Share the link with users who need firewall access</li>
+										<li>• Links automatically expire after 24 hours</li>
+									</ul>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-		</div>
-
-		<script>
+			<script>
 			// Initialize Lucide icons
 			lucide.createIcons();
 
 			// Auto-refresh server status every 5 seconds
-			setInterval(() => {
-				htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
-			}, 5000);
+			// setInterval(() => {
+			// 	htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
+			// }, 5000);
 
 			// Copy to clipboard function
 			function copyToClipboard(text) {
@@ -105,7 +104,7 @@ templ HomePage(status ServerStatus) {
 				}, 3000);
 			}
 		</script>
-	</body>
+		</body>
 	</html>
 }
 
@@ -127,10 +126,10 @@ templ ServerStatusCard(status ServerStatus) {
 		<div class="card-content">
 			<div class="stats-grid">
 				<div class="stat">
-					<label>Players</label>
+					<label class="stat-label">Players</label>
 					<div class="stat-value">
 						<i data-lucide="users"></i>
-						<span>{ strconv.Itoa(status.Players) }/{ strconv.Itoa(status.MaxPlayers) }</span>
+						<span class="font-mono">{ strconv.Itoa(status.Players) }/{ strconv.Itoa(status.MaxPlayers) }</span>
 					</div>
 				</div>
 				<div class="stat">
@@ -149,9 +148,7 @@ templ ServerStatusCard(status ServerStatus) {
 					<div class="stat-value">{ status.IP }</div>
 				</div>
 			</div>
-
 			<div class="separator"></div>
-
 			<div class="controls">
 				if !status.IsOnline {
 					<button
@@ -180,7 +177,6 @@ templ ServerStatusCard(status ServerStatus) {
 						Stopping server...
 					</div>
 				}
-
 				<button
 					class="btn btn-outline"
 				>

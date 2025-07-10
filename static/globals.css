@@ -119,3 +119,65 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .container {
+    @apply max-w-4xl mx-auto space-y-6
+  }
+
+  .header {
+    @appl text-center space-y-2
+  }
+
+  .title {
+    @apply text-4xl font-bold text-white flex items-center justify-center gap-3
+  }
+
+  .subtitle {
+    @apply text-slate-400
+  }
+
+  .card {
+    @apply text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm bg-slate-800/50 border-slate-700
+  }
+
+  .card-header {
+    @apply @container/card-header grid auto-rows-min items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6
+  }
+
+  .card-title {
+    @apply leading-none font-semibold flex items-center justify-between text-white
+  }
+
+  .card-content {
+    @apply px-6 space-y-3 text-slate-300 text-sm
+  }
+
+  .stats-grid {
+    @apply grid grid-cols-2 md:grid-cols-4 gap-4
+  }
+
+  .stat {
+    @apply space-y-1
+  }
+
+  .stat-label {
+    @apply flex items-center gap-2 font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 text-slate-400 text-sm
+  }
+
+  .stat-value {
+    @appl flex items-center gap-2 text-white
+  }
+
+  .separator {
+    @apply shrink-0 h-px bg-slate-700
+  }
+
+  .instruction-group {
+    @apply space-y-2
+  }
+
+  .instruction-group-title {
+    @apply font-semibold text-white
+  }
+}
