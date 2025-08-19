@@ -34,6 +34,24 @@ resource "google_compute_address" "static" {
   name = "${terraform.workspace}-minecraft-server"
 }
 
+resource "google_compute_firewall" "minecraft-server-firewall" {
+  name    = "${terraform.workspace}-minecraft-server"
+  network = "default"
+
+  allow {
+    protocol = "icmp"
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["25565"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+
+  target_tags = ["${terraform.workspace}-minecraft-server"]
+}
+
 resource "google_compute_instance" "minecraft-server" {
   name         = "${terraform.workspace}-minecraft-server"
   machine_type = "e2-micro"
@@ -57,7 +75,7 @@ resource "google_compute_instance" "minecraft-server" {
     }
   }
 
-  tags = ["minecraft-server", terraform.workspace]
+  tags = ["${terraform.workspace}-minecraft-server", terraform.workspace]
 
   service_account {
     # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.

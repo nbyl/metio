@@ -65,9 +65,11 @@ screen -r mcs -X stuff '/save-all\n/save-off\n'
 /usr/bin/gsutil cp -R /srv/minecraft/data/world gs://${backup_bucket}/$(date "+%Y%m%d-%H%M%S")-world
 screen -r mcs -X stuff '/save-on\n'
 EOF
+chmod +x /srv/minecraft/bin/backup.sh
 (crontab -l | grep -v -F "/srv/minecraft/bin/backup.sh" ; echo "0 */4 * * * /srv/minecraft/bin/backup.sh")| crontab -
 
 # download and start server
 curl -o /srv/minecraft/bin/server.jar ${server_jar_url}
 cd /srv/minecraft/data
+echo "eula=true" > /srv/minecraft/data/eula.txt
 screen -d -m -S mcs java -Xms256M -Xmx768M -jar /srv/minecraft/bin/server.jar nogui
