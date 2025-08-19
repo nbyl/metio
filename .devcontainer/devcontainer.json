@@ -10,5 +10,11 @@
 			"PACKAGES": "github.com/air-verse/air@latest"
 		}
 	},
-		"postCreateCommand": "npm install && go generate ./..."
+	"postCreateCommand": "npm install && go generate ./...",
+	"extensions": [
+		"golang.go",
+		"a-h.templ",
+		"opentofu.vscode-opentofu",
+		"gitlab.gitlab-workflow"
+	]
 }
