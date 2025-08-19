@@ -71,4 +71,5 @@ chmod +x /srv/minecraft/bin/backup.sh
 # download and start server
 curl -o /srv/minecraft/bin/server.jar ${server_jar_url}
 cd /srv/minecraft/data
+echo "eula=true" > /srv/minecraft/data/eula.txt
 screen -d -m -S mcs java -Xms256M -Xmx768M -jar /srv/minecraft/bin/server.jar nogui
