@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -8,21 +9,23 @@ import (
 	"os"
 	"time"
 
+	compute "cloud.google.com/go/compute/apiv1"
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"gitlab.com/nbyl/metio/views"
 )
 
-var (
-	serverStatus = views.ServerStatus{
-		IsOnline:   false,
-		Players:    0,
-		MaxPlayers: 20,
-		Uptime:     "00:00:00",
-		Version:    "1.20.4",
-		IP:         "mc.metio.server:25565",
-	}
-)
+// var (
+// 	serverStatus = views.ServerStatus{
+// 		IsOnline:   false,
+// 		Players:    0,
+// 		MaxPlayers: 20,
+// 		Uptime:     "00:00:00",
+// 		Version:    "1.20.4",
+// 		IP:         "mc.metio.server:25565",
+// 	}
+// )
 
 func RunServer() {
 	r := mux.NewRouter()
@@ -40,13 +43,27 @@ func RunServer() {
 	log.Fatal(http.ListenAndServe(":8080", handlers.LoggingHandler(os.Stdout, r)))
 }
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	component := views.HomePage(serverStatus)
+	serverStatus, err := getServerStatus()
+	if err != nil {
+		log.Print(err)
+	}
+
+	component := views.HomePage(*serverStatus)
 	component.Render(r.Context(), w)
 }
 
 func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	// Simulate startup delay
 	time.Sleep(3 * time.Second)
+
+	serverStatus := views.ServerStatus{
+		IsOnline:   false,
+		Players:    0,
+		MaxPlayers: 20,
+		Uptime:     "00:00:00",
+		Version:    "1.20.4",
+		IP:         "mc.metio.server:25565",
+	}
 
 	serverStatus.IsOnline = true
 	serverStatus.StartTime = time.Now()
@@ -61,6 +78,15 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	// Simulate shutdown delay
 	time.Sleep(2 * time.Second)
 
+	serverStatus := views.ServerStatus{
+		IsOnline:   false,
+		Players:    0,
+		MaxPlayers: 20,
+		Uptime:     "00:00:00",
+		Version:    "1.20.4",
+		IP:         "mc.metio.server:25565",
+	}
+
 	serverStatus.IsOnline = false
 	serverStatus.Players = 0
 	serverStatus.Uptime = "00:00:00"
@@ -70,6 +96,40 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	component := views.ServerStatusCard(serverStatus)
+	serverStatus, err := getServerStatus()
+	if err != nil {
+		log.Print(err)
+	}
+	component := views.ServerStatusCard(*serverStatus)
 	component.Render(r.Context(), w)
+}
+
+func getServerStatus() (*views.ServerStatus, error) {
+	ctx := context.Background()
+	c, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	req := &computepb.GetInstanceRequest{
+		Instance: "default-minecraft-server", // TODO: use environment variable
+		Project:  "minecraftbyl",             // TODO: use environment variable
+		Zone:     "europe-west3-a",           // TODO: use environment variable
+	}
+
+	resp, err := c.Get(ctx, req)
+	log.Print(*resp.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	return &views.ServerStatus{
+		IsOnline:   false,
+		Players:    0,
+		MaxPlayers: 20,
+		Uptime:     "00:00:00",
+		Version:    "1.20.4",
+		IP:         fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP),
+	}, nil
 }
