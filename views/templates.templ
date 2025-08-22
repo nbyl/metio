@@ -6,6 +6,7 @@ import (
 )
 
 type ServerStatus struct {
+	Status		string     `json:"status"`
 	IsOnline   bool      `json:"isOnline"`
 	Players    int       `json:"players"`
 	MaxPlayers int       `json:"maxPlayers"`
@@ -33,7 +34,7 @@ templ HomePage(status ServerStatus) {
 			<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
 				<div class="container">
 					<!-- Header -->
-					<div class="header">
+					<div class="page-header">
 						<h1 class="title">
 							<i data-lucide="server" class="text-green-400"></i>
 							Metio
@@ -69,9 +70,9 @@ templ HomePage(status ServerStatus) {
 			lucide.createIcons();
 
 			// Auto-refresh server status every 5 seconds
-			setInterval(() => {
-				htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
-			}, 5000);
+			// setInterval(() => {
+			// 	htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
+			// }, 5000);
 
 			// Copy to clipboard function
 			function copyToClipboard(text) {
@@ -106,17 +107,15 @@ templ HomePage(status ServerStatus) {
 templ ServerStatusCard(status ServerStatus) {
 	<div class="card">
 		<div class="card-header">
-			<h2 class="card-title">
+			<div class="card-title">
+			<span class="flex items-center gap-2">
 				<i data-lucide="globe"></i>
 				Server Status
-			</h2>
+				</span>
 			<span class={ "badge", templ.KV("badge-online", status.IsOnline), templ.KV("badge-offline", !status.IsOnline) }>
-				if status.IsOnline {
-					Online
-				} else {
-					Offline
-				}
+				{ status.Status }
 			</span>
+			</div>
 		</div>
 		<div class="card-content">
 			<div class="stats-grid">
