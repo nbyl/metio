@@ -125,11 +125,12 @@ func getServerStatus() (*views.ServerStatus, error) {
 	}
 
 	return &views.ServerStatus{
-		IsOnline:   false,
+		Status:     *resp.Status,
+		IsOnline:   *resp.Status == "RUNNING",
 		Players:    0,
 		MaxPlayers: 20,
-		Uptime:     "00:00:00",
-		Version:    "1.20.4",
+		Uptime:     "TBD",
+		Version:    "TBD",
 		IP:         fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP),
 	}, nil
 }
