@@ -642,7 +642,6 @@
     border-style: var(--tw-border-style);
     border-width: 1px;
     border-color: transparent;
-    background-color: var(--color-red-600);
     padding-inline: calc(var(--spacing) * 2);
     padding-block: calc(var(--spacing) * 0.5);
     font-size: var(--text-xs);
@@ -650,15 +649,9 @@
     --tw-font-weight: var(--font-weight-medium);
     font-weight: var(--font-weight-medium);
     white-space: nowrap;
-    color: var(--secondary-foreground);
     transition-property: color,box-shadow;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
-    &:hover {
-      @media (hover: hover) {
-        background-color: var(--color-red-700);
-      }
-    }
     &:focus-visible {
       border-color: var(--ring);
     }
@@ -696,14 +689,22 @@
       width: calc(var(--spacing) * 3);
       height: calc(var(--spacing) * 3);
     }
-    a& {
-      &:hover {
-        @media (hover: hover) {
-          background-color: var(--secondary);
-          @supports (color: color-mix(in lab, red, red)) {
-            background-color: color-mix(in oklab, var(--secondary) 90%, transparent);
-          }
-        }
+  }
+  .badge-online {
+    background-color: var(--color-green-600);
+    color: var(--primary-foreground);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-green-700);
+      }
+    }
+  }
+  .badge-offline {
+    background-color: var(--color-red-600);
+    color: var(--secondary-foreground);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-red-700);
       }
     }
   }
