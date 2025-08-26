@@ -113,13 +113,13 @@ func getServerStatus() (*views.ServerStatus, error) {
 	defer c.Close()
 
 	req := &computepb.GetInstanceRequest{
-		Instance: "default-minecraft-server", // TODO: use environment variable
-		Project:  "minecraftbyl",             // TODO: use environment variable
-		Zone:     "europe-west3-a",           // TODO: use environment variable
+		Instance: os.Getenv("INSTANCE_NAME"),
+		Project:  os.Getenv("GCP_PROJECT"),
+		Zone:     os.Getenv("GCP_ZONE"),
 	}
 
 	resp, err := c.Get(ctx, req)
-	log.Print(*resp.Status)
+	log.Print(*resp.Status == "RUNNING")
 	if err != nil {
 		return nil, err
 	}

@@ -70,9 +70,9 @@ templ HomePage(status ServerStatus) {
 			lucide.createIcons();
 
 			// Auto-refresh server status every 5 seconds
-			// setInterval(() => {
-			// 	htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
-			// }, 5000);
+			setInterval(() => {
+				htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
+			}, 5000);
 
 			// Copy to clipboard function
 			function copyToClipboard(text) {
