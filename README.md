@@ -1,4 +1,4 @@
-# Minecraft Setup
+# Metio Minecraft Manager Minecraft Setup
 
 # Installation
 
@@ -12,6 +12,15 @@ tofu apply -auto-approve
 ```
 
 # Development
+
+## Initial Setup for CI/CD pipeline
+
+```
+cd pipeline/setup
+tofu apply -var "gcp_project_name=<PROJECT_NAME>" -var gitlab_namespace_path=<REPOSITORY_NAMESPACE> -var gitlab_project_id=<REPOSITORY_ID>
+```
+
+## Local Development
 
 * Open the workspace in a devcontainer and run the following commands:
 
