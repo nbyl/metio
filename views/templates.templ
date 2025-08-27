@@ -1,0 +1,184 @@
+package views
+
+import (
+	"strconv"
+	"time"
+)
+
+type ServerStatus struct {
+	Status		string     `json:"status"`
+	IsOnline   bool      `json:"isOnline"`
+	Players    int       `json:"players"`
+	MaxPlayers int       `json:"maxPlayers"`
+	Uptime     string    `json:"uptime"`
+	Version    string    `json:"version"`
+	IP         string    `json:"ip"`
+	StartTime  time.Time `json:"-"`
+}
+
+templ HomePage(status ServerStatus) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Metio - Minecraft Server Control</title>
+			<link rel="preconnect" href="https://fonts.googleapis.com">
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+			<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet">
+			<link rel="stylesheet" href="/static/styles.css"/>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+			<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+		</head>
+		<body class="antialiased">
+			<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+				<div class="container">
+					<!-- Header -->
+					<div class="page-header">
+						<h1 class="title">
+							<i data-lucide="server" class="text-green-400"></i>
+							Metio
+						</h1>
+						<p class="subtitle">Minecraft Server Control Panel</p>
+					</div>
+					<!-- Server Status Card -->
+					<div id="server-status-card">
+						@ServerStatusCard(status)
+					</div>
+					<!-- Instructions Card -->
+					<div class="card">
+						<div class="card-header">
+							<h2 class="card-title">How to Use</h2>
+						</div>
+						<div class="card-content">
+							<div class="instructions">
+								<div class="instruction-group">
+									<h4 class="instruction-group-title">Server Control:</h4>
+									<ul>
+										<li>• Click "Start Server" to boot up the Minecraft server</li>
+										<li>• Click "Stop Server" to safely shut down the server</li>
+										<li>• Copy the server IP to share with players</li>
+									</ul>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<script>
+			// Initialize Lucide icons
+			lucide.createIcons();
+
+			// Auto-refresh server status every 5 seconds
+			setInterval(() => {
+				htmx.ajax('GET', '/server/status', {target: '#server-status-card'});
+			}, 5000);
+
+			// Copy to clipboard function
+			function copyToClipboard(text) {
+				navigator.clipboard.writeText(text).then(() => {
+					showToast('Copied to clipboard!');
+				}).catch(() => {
+					showToast('Failed to copy', 'error');
+				});
+			}
+
+			// Simple toast notification
+			function showToast(message, type = 'success') {
+				const toast = document.createElement('div');
+				toast.className = `toast toast-${type}`;
+				toast.textContent = message;
+				document.body.appendChild(toast);
+
+				setTimeout(() => {
+					toast.classList.add('show');
+				}, 100);
+
+				setTimeout(() => {
+					toast.classList.remove('show');
+					setTimeout(() => document.body.removeChild(toast), 300);
+				}, 3000);
+			}
+		</script>
+		</body>
+	</html>
+}
+
+templ ServerStatusCard(status ServerStatus) {
+	<div class="card">
+		<div class="card-header">
+			<div class="card-title">
+			<span class="flex items-center gap-2">
+				<i data-lucide="globe"></i>
+				Server Status
+				</span>
+			<span class={ "badge", templ.KV("badge-online", status.IsOnline), templ.KV("badge-offline", !status.IsOnline) }>
+				{ status.Status }
+			</span>
+			</div>
+		</div>
+		<div class="card-content">
+			<div class="stats-grid">
+				<div class="stat">
+					<label class="stat-label">Players</label>
+					<div class="stat-value">
+						<i data-lucide="users"></i>
+						<span class="font-mono">{ strconv.Itoa(status.Players) }/{ strconv.Itoa(status.MaxPlayers) }</span>
+					</div>
+				</div>
+				<div class="stat">
+					<label>Uptime</label>
+					<div class="stat-value">
+						<i data-lucide="clock"></i>
+						<span class="font-mono">{ status.Uptime }</span>
+					</div>
+				</div>
+				<div class="stat">
+					<label>Version</label>
+					<div class="stat-value font-mono">{ status.Version }</div>
+				</div>
+				<div class="stat">
+					<label>Server IP</label>
+					<div class="stat-value font-mono">{ status.IP }</div>
+				</div>
+			</div>
+			<div class="separator"></div>
+			<div class="controls">
+				if !status.IsOnline {
+					<button
+						class="btn btn-green"
+						hx-post="/server/start"
+						hx-target="#server-status-card"
+						hx-indicator="#start-loading"
+					>
+						<i data-lucide="play"></i>
+						Start Server
+					</button>
+					<div id="start-loading" class="htmx-indicator loading">
+						Starting server...
+					</div>
+				} else {
+					<button
+						class="btn btn-red"
+						hx-post="/server/stop"
+						hx-target="#server-status-card"
+						hx-indicator="#stop-loading"
+					>
+						<i data-lucide="square"></i>
+						Stop Server
+					</button>
+					<div id="stop-loading" class="htmx-indicator loading">
+						Stopping server...
+					</div>
+				}
+				<button
+					class="btn btn-outline"
+				>
+					<i data-lucide="copy"></i>
+					Copy IP
+				</button>
+			</div>
+		</div>
+	</div>
+	<script>lucide.createIcons();</script>
+}

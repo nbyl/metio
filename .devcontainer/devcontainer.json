@@ -1,10 +1,23 @@
 {
 	"name": "Metio Dev Container",
-
-	"image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+	"image": "mcr.microsoft.com/devcontainers/go:1-1.24-bullseye",
 	"features": {
+		"ghcr.io/devcontainers/features/node:1": {},
 		"ghcr.io/robbert229/devcontainer-features/opentofu:1": {},
 		"ghcr.io/dhoeric/features/google-cloud-cli:1": {},
-		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {}
-	}
+		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {},
+		"ghcr.io/azutake/devcontainer-features/go-packages-install:0": {
+			"PACKAGES": "github.com/air-verse/air@latest"
+		},
+		"ghcr.io/devcontainers/features/docker-in-docker:1":{
+			"moby": true
+		}
+	},
+	"postCreateCommand": "npm install && go generate ./...",
+	"extensions": [
+		"golang.go",
+		"a-h.templ",
+		"opentofu.vscode-opentofu",
+		"gitlab.gitlab-workflow"
+	]
 }

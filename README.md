@@ -1,20 +1,26 @@
 # Minecraft Setup
 
-# Initial Setup
+# Installation
 
-* Create bucket called `minecraft-byl-tofu-state`
+* Create a GCS bucket called `minecraft-byl-tofu-state`
 * Deploy opentofu stuff:
 
 ```
-# TODO: authenticate
+gcloud auth application-default login
 tofu init
 tofu apply -auto-approve
 ```
 
-* Deploy Minecraft server according to [Guide](https://web.archive.org/web/20190528003754/https://cloud.google.com/solutions/gaming/minecraft-server#try_an_alternative_minecraft_server) with the following changes:
-  * Install Java with [Coretto](https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/generic-linux-install.html)
+# Development
 
+* Open the workspace in a devcontainer and run the following commands:
 
+```
+gcloud auth application-default login
+air
+```
+
+TODO: select workspace for development
 
 # Links
 
