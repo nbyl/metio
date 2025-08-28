@@ -1,24 +1,19 @@
 ---
 
-.id_tokens:
+.gcp-auth:
+  image: google/cloud-sdk:slim
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
-
-gcp-auth:
-  image: google/cloud-sdk:slim
-  extends: .id_tokens
-  script:
+  before_script:
     - echo ${GITLAB_OIDC_TOKEN} > .ci_job_jwt_file
     - gcloud iam workload-identity-pools create-cred-config ${GCP_WORKLOAD_IDENTITY_PROVIDER}
       --service-account="${GCP_SERVICE_ACCOUNT}"
       --output-file=.gcp_temp_cred.json
       --credential-source-file=.ci_job_jwt_file
     - gcloud auth login --cred-file=`pwd`/.gcp_temp_cred.json
-    - gcloud auth list
 
-gcp-sts:
-  extends: .id_tokens
-  image: dwdraju/alpine-curl-jq
+build:
+  extends: .gcp-auth
   script:
-    ./run_gcp_sts.sh
+    - gcloud builds submit --tag europe-west3-docker.pkg.dev/minecraftbyl/metio/metio-controller:${CI_COMMIT_SHORT_SHA}
