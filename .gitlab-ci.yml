@@ -31,3 +31,5 @@ include:
     inputs:
       root_dir: cloud/
       auto_define_backend: true
+      state_name: production
+      var_file: $TF_VARIABLES
