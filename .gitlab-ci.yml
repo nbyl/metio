@@ -1,7 +1,8 @@
 ---
 stages:
   - build
-  - deploy
+  - prepare
+  - review
 
 variables:
   GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
@@ -21,6 +22,6 @@ build-controller:
 include:
   - component: gitlab.com/google-gitlab-components/artifact-registry/upload-artifact-registry@0.1.0
     inputs:
-      stage: deploy
+      stage: prepare
       source: $GITLAB_IMAGE
       target: $GCP_NAME
