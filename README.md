@@ -16,6 +16,11 @@ tofu apply -auto-approve
 ## Initial Setup for CI/CD pipeline
 
 ```
+gcloud artifacts repositories create metio \
+    --repository-format=docker \
+    --location=europe-west3 \
+    --immutable-tags \
+    --disable-vulnerability-scanning
 cd pipeline/setup
 tofu apply -var "gcp_project_name=<PROJECT_NAME>" -var gitlab_namespace_path=<REPOSITORY_NAMESPACE> -var gitlab_project_id=<REPOSITORY_ID>
 ```
