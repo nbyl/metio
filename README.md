@@ -21,9 +21,9 @@ gcloud artifacts repositories create metio \
     --location=europe-west3 \
     --immutable-tags \
     --disable-vulnerability-scanning
-cd pipeline/setup
-tofu apply -var "gcp_project_name=<PROJECT_NAME>" -var gitlab_namespace_path=<REPOSITORY_NAMESPACE> -var gitlab_project_id=<REPOSITORY_ID>
 ```
+
+Follow the [tutorial](https://docs.gitlab.com/tutorials/set_up_gitlab_google_integration/#set-up-gitlab-runner-to-execute-your-cicd-jobs-on-google-cloud).
 
 ## Local Development
 
