@@ -1,8 +1,10 @@
 ---
 stages:
+  - validate
+  - test
   - build
-  - prepare
-  - review
+  - deploy
+  - cleanup
 
 variables:
   GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
@@ -22,6 +24,10 @@ build-controller:
 include:
   - component: gitlab.com/google-gitlab-components/artifact-registry/upload-artifact-registry@0.1.0
     inputs:
-      stage: prepare
+      stage: deploy
       source: $GITLAB_IMAGE
       target: $GCP_NAME
+  - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
+    inputs:
+      root_dir: cloud/
+      auto_define_backend: true
