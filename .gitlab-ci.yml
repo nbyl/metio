@@ -1,19 +1,25 @@
 ---
+stages:
+  - build
+  - deploy
 
-.gcp-auth:
-  image: google/cloud-sdk:slim
-  id_tokens:
-    GITLAB_OIDC_TOKEN:
-      aud: https://gitlab.com
+variables:
+  GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
+
+build-controller:
+  image: docker:24.0.5
+  stage: build
+  services:
+    - docker:24.0.5-dind
   before_script:
-    - echo ${GITLAB_OIDC_TOKEN} > .ci_job_jwt_file
-    - gcloud iam workload-identity-pools create-cred-config ${GCP_WORKLOAD_IDENTITY_PROVIDER}
-      --service-account="${GCP_SERVICE_ACCOUNT}"
-      --output-file=.gcp_temp_cred.json
-      --credential-source-file=.ci_job_jwt_file
-    - gcloud auth login --cred-file=`pwd`/.gcp_temp_cred.json
-
-build:
-  extends: .gcp-auth
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - gcloud builds submit --tag europe-west3-docker.pkg.dev/minecraftbyl/metio/metio-controller:${CI_COMMIT_SHORT_SHA}
+    - docker build -t $GITLAB_IMAGE .
+    - docker push $GITLAB_IMAGE
+
+include:
+  - component: gitlab.com/google-gitlab-components/artifact-registry/upload-artifact-registry@0.1.0
+    inputs:
+      stage: deploy
+      source: $GITLAB_IMAGE
+      target: europe-west3-docker.pkg.dev/google-project/metio/controller:$CI_COMMIT_SHORT_SHA
