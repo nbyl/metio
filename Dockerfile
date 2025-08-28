@@ -4,9 +4,15 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
 RUN mkdir /app/build
+
+RUN apk add --no-cache nodejs npm
+COPY package*.json ./
+RUN npm ci
+
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+RUN go generate ./...
 RUN CGO_ENABLED=0 GOOS=linux go build -o build/server ./cmd/main.go
 
 # Runtime stage
