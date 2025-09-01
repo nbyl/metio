@@ -22,7 +22,7 @@ build-controller:
     - docker push $GITLAB_IMAGE
 
 include:
-  - component:  gitlab.com/google-gitlab-components/run-gcloud@<VERSION>
+  - component:  gitlab.com/google-gitlab-components/run-gcloud@0.1.0
     inputs:
       project_id: minecraftbyl
       stage: validate
