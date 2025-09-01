@@ -5,10 +5,6 @@ terraform {
       version = "6.39.0"
     }
   }
-  backend "gcs" {
-    bucket = "minecraft-byl-tofu-state"
-    prefix = "state"
-  }
 }
 
 provider "google" {

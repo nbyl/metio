@@ -1,4 +1,4 @@
-# Minecraft Setup
+# Metio Minecraft Manager Minecraft Setup
 
 # Installation
 
@@ -12,6 +12,20 @@ tofu apply -auto-approve
 ```
 
 # Development
+
+## Initial Setup for CI/CD pipeline
+
+```
+gcloud artifacts repositories create metio \
+    --repository-format=docker \
+    --location=europe-west3 \
+    --immutable-tags \
+    --disable-vulnerability-scanning
+```
+
+Follow the [tutorial](https://docs.gitlab.com/tutorials/set_up_gitlab_google_integration/#set-up-gitlab-runner-to-execute-your-cicd-jobs-on-google-cloud).
+
+## Local Development
 
 * Open the workspace in a devcontainer and run the following commands:
 
