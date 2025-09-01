@@ -38,4 +38,4 @@ include:
 .gitlab-tofu:id_tokens:
   id_tokens:
     GITLAB_OIDC_TOKEN:
-      aud: https://gitlab.com
+      aud: https://auth.gcp.gitlab.com/oidc/nbyl
