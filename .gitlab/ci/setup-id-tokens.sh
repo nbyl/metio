@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+set -x
+
 apk add --update --no-cache curl ca-certificates bash python3
 
 cd /
