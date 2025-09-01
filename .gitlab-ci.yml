@@ -22,6 +22,13 @@ build-controller:
     - docker push $GITLAB_IMAGE
 
 include:
+  - component:  gitlab.com/google-gitlab-components/run-gcloud@<VERSION>
+    inputs:
+      project_id: minecraftbyl
+      stage: validate
+      commands: |
+          gcloud version
+          gcloud auth list
   - component: gitlab.com/google-gitlab-components/artifact-registry/upload-artifact-registry@0.1.0
     inputs:
       stage: deploy
