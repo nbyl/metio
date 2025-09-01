@@ -27,13 +27,14 @@ include:
       stage: deploy
       source: $GITLAB_IMAGE
       target: $GCP_NAME
-  - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
+  - component: $CI_SERVER_FQDN/components/opentofu/validate-plan-apply@3.0.1
     inputs:
       root_dir: cloud/
       auto_define_backend: true
       state_name: production
       var_file: $TF_VARIABLES
       enable_id_tokens: true
+      rules: [{if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH}]
 
 .gitlab-tofu:id_tokens:
   id_tokens:
