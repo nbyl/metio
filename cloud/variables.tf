@@ -21,6 +21,12 @@ variable "admin_members" {
   default     = []
 }
 
+variable "machine_type" {
+  description = "The machine type to be used for the server VM."
+  type        = string
+  default     = "e2-micro"
+}
+
 variable "server_jar_url" {
   description = "The URL where the server.jar is downloaded"
   type        = string

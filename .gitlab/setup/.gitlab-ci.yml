@@ -1,0 +1,24 @@
+---
+
+.id_tokens:
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+
+gcp-auth:
+  image: google/cloud-sdk:slim
+  extends: .id_tokens
+  script:
+    - echo ${GITLAB_OIDC_TOKEN} > .ci_job_jwt_file
+    - gcloud iam workload-identity-pools create-cred-config ${GCP_WORKLOAD_IDENTITY_PROVIDER}
+      --service-account="${GCP_SERVICE_ACCOUNT}"
+      --output-file=.gcp_temp_cred.json
+      --credential-source-file=.ci_job_jwt_file
+    - gcloud auth login --cred-file=`pwd`/.gcp_temp_cred.json
+    - gcloud auth list
+
+gcp-sts:
+  extends: .id_tokens
+  image: dwdraju/alpine-curl-jq
+  script:
+    ./run_gcp_sts.sh
