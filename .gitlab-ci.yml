@@ -34,8 +34,8 @@ include:
       state_name: production
       var_file: $TF_VARIABLES
       enable_id_tokens: true
-      rules: [{if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH}]
-
+      apply_rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 .gitlab-tofu:id_tokens:
   id_tokens:
     GITLAB_OIDC_TOKEN:
