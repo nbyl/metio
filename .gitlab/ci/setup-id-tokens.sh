@@ -2,9 +2,11 @@
 
 apk add --update --no-cache curl ca-certificates bash python3
 
+cd /
 curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
 tar xzf google-cloud-cli-linux-x86_64.tar.gz
 /google-cloud-sdk/install.sh
+cd "${CI_PROJECT_DIR}" || exit 1
 
 export PATH="/google-cloud-sdk/bin:${PATH}"
 
