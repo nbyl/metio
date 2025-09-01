@@ -54,7 +54,7 @@ resource "google_compute_firewall" "minecraft-server-firewall" {
 
 resource "google_compute_instance" "minecraft-server" {
   name         = "${terraform.workspace}-minecraft-server"
-  machine_type = "e2-micro"
+  machine_type = var.machine_type
 
   boot_disk {
     initialize_params {
