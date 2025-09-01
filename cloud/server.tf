@@ -55,7 +55,7 @@ resource "google_compute_firewall" "minecraft-server-firewall" {
 resource "google_compute_instance" "minecraft-server" {
   name           = "${terraform.workspace}-minecraft-server"
   machine_type   = var.machine_type
-  desired_status = "SUSPENDED"
+  desired_status = "TERMINATED"
 
   boot_disk {
     initialize_params {
