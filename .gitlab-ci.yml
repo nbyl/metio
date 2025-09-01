@@ -33,3 +33,9 @@ include:
       auto_define_backend: true
       state_name: production
       var_file: $TF_VARIABLES
+      enable_id_tokens: true
+
+.gitlab-tofu:id_tokens:
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
