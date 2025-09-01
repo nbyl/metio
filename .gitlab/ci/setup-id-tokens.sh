@@ -21,7 +21,4 @@ gcloud iam workload-identity-pools create-cred-config "${GCP_WORKLOAD_IDENTITY_P
 gcloud auth login --cred-file="${CI_PROJECT_DIR}/.gcp_temp_cred.json"
 gcloud auth list
 
-cat "${CI_PROJECT_DIR}/.gcp_temp_cred.json"
-cat "${CI_PROJECT_DIR}/.ci_job_jwt_file"
-
 export GOOGLE_APPLICATION_CREDENTIALS=${CI_PROJECT_DIR}/.gcp_temp_cred.json
