@@ -21,6 +21,12 @@ resource "google_project_iam_member" "sa_logging_log_writer" {
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
+resource "google_project_iam_member" "sa_logging_metric_writer" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
 resource "google_compute_disk" "primary" {
   name = "${terraform.workspace}-minecraft-data"
   type = "pd-ssd"
