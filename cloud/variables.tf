@@ -27,6 +27,12 @@ variable "machine_type" {
   default     = "e2-micro"
 }
 
+variable "desired_status" {
+  description = "The desired status of the server."
+  type        = string
+  default     = "TERMINATED"
+}
+
 variable "server_jar_url" {
   description = "The URL where the server.jar is downloaded"
   type        = string
