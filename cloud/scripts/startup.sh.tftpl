@@ -54,13 +54,13 @@ do_start_server() {
 
 HAS_JAVA=$(has_java)
 HAS_OPS_AGENT=$(has_ops_agent)
+HAS_FILESYSTEM=$(has_filesystem $${DISK})
 
 set -e
 
 echo "HAS_JAVA: $${HAS_JAVA}"
 echo "HAS_OPS_AGENT: $${HAS_OPS_AGENT}"
 echo "HAS_FILESYSTEM: $${HAS_FILESYSTEM}"
-echo "HAS_FILESYSTEM=$(has_filesystem $${DISK})"
 
 PACKAGES_TO_INSTALL=""
 
