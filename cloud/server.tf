@@ -65,7 +65,7 @@ resource "google_compute_instance" "minecraft-server" {
 
   boot_disk {
     initialize_params {
-      image = "debian-cloud/debian-12"
+      image = "cos-cloud/cos-stable"
     }
   }
 
@@ -90,11 +90,10 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
-  metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, server_jar_url = var.server_jar_url })
+  metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, minecraft_version = var.minecraft_version })
   metadata = {
     shutdown-script = templatefile("scripts/shutdown.sh.tftpl", {
-      backup_bucket  = resource.google_storage_bucket.minecraft-backups.name,
-      server_jar_url = var.server_jar_url
+      backup_bucket = resource.google_storage_bucket.minecraft-backups.name,
       }
     )
   }

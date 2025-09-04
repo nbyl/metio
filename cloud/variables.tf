@@ -33,8 +33,8 @@ variable "desired_status" {
   default     = "TERMINATED"
 }
 
-variable "server_jar_url" {
-  description = "The URL where the server.jar is downloaded"
+variable "minecraft_version" {
+  description = "The version of the Minecraft server to deploy."
   type        = string
-  default     = "https://piston-data.mojang.com/v1/objects/e6ec2f64e6080b9b5d9b471b291c33cc7f509733/server.jar"
+  default     = "1.21.5"
 }

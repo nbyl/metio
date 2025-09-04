@@ -6,17 +6,7 @@ DISK=/dev/disk/by-id/google-minecraft-data
 
 has_filesystem() {
     DEVICE=$${1}
-    file -L -s $${DEVICE} | grep -q -v filesystem
-    echo "$${?}"
-}
-
-has_java() {
-    command -v java >/dev/null 2>&1
-    echo "$${?}"
-}
-
-has_ops_agent() {
-    dpkg -l | grep -q google-cloud-ops-agent
+    file -L -s $${DEVICE} | grep -q filesystem
     echo "$${?}"
 }
 
@@ -27,66 +17,62 @@ do_create_filesystem() {
 
 do_setup_backup() {
     BACKUP_BUCKET=$${1}
-    mkdir -p /srv/minecraft/bin
-    cat << 'EOF' > /srv/minecraft/bin/backup.sh
+    mkdir -p /mnt/disks/minecraft/bin
+    cat << 'EOF' > /mnt/disks/minecraft/bin/backup.sh
 #!/bin/bash
 set -e
 set -x
 
 screen -r mcs -X stuff '/save-all\n/save-off\n'
-/usr/bin/gsutil cp -R /srv/minecraft/data/world gs://${backup_bucket}/$(date "+%Y%m%d-%H%M%S")-world
+/usr/bin/gsutil cp -R /mnt/disks/minecraft/data/world gs://${backup_bucket}/$(date "+%Y%m%d-%H%M%S")-world
 screen -r mcs -X stuff '/save-on\n'
 EOF
-    chmod +x /srv/minecraft/bin/backup.sh
-    (crontab -l | grep -v -F "/srv/minecraft/bin/backup.sh" ; echo "0 */4 * * * /srv/minecraft/bin/backup.sh")| crontab -
-}
-
-do_download_server() {
-    SERVER_JAR_URL=$${1}
-    curl -o /srv/minecraft/bin/server.jar $${SERVER_JAR_URL}
+    chmod +x /mnt/disks/minecraft/bin/backup.sh
+    (crontab -l | grep -v -F "/mnt/disks/minecraft/bin/backup.sh" ; echo "0 */4 * * * /mnt/disks/minecraft/bin/backup.sh")| crontab -
 }
 
 do_start_server() {
-    cd /srv/minecraft/data
-    echo "eula=true" > /srv/minecraft/data/eula.txt
-    screen -d -m -S mcs java -Xms256M -Xmx768M -jar /srv/minecraft/bin/server.jar nogui
+    cat << 'EOF' > /etc/systemd/system/minecraft.service
+[Unit]
+Description=Minecraft Server
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+Restart=always
+ExecStartPre=-/usr/bin/docker stop %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull itzg/minecraft-server:stable-java21
+ExecStart=/usr/bin/docker run --rm --name %n \
+-p 25565:25565 \
+-e EULA=TRUE \
+-e VERSION=${minecraft_version} \
+-v /mnt/disks/minecraft/data:/data \
+itzg/minecraft-server:stable-java21
+ExecStop=/usr/bin/docker stop %n
+
+[Install]
+WantedBy=default.target
+EOF
+    systemctl daemon-reload
+    systemctl enable minecraft
+    systemctl start minecraft
 }
 
-HAS_JAVA=$(has_java)
-HAS_OPS_AGENT=$(has_ops_agent)
 HAS_FILESYSTEM=$(has_filesystem $${DISK})
 
 set -e
 
-echo "HAS_JAVA: $${HAS_JAVA}"
-echo "HAS_OPS_AGENT: $${HAS_OPS_AGENT}"
 echo "HAS_FILESYSTEM: $${HAS_FILESYSTEM}"
-
-PACKAGES_TO_INSTALL=""
-
-if ! (exit $${HAS_JAVA}); then
-  echo "Installing Amazon Corretto 21..."
-  wget -O - https://apt.corretto.aws/corretto.key | gpg --dearmor -o /usr/share/keyrings/corretto-keyring.gpg && \
-  echo "deb [signed-by=/usr/share/keyrings/corretto-keyring.gpg] https://apt.corretto.aws stable main" | tee /etc/apt/sources.list.d/corretto.list
-  PACKAGES_TO_INSTALL="$${PACKAGES_TO_INSTALL} java-21-amazon-corretto-jdk"
-fi
-
-if ! (exit $${HAS_OPS_AGENT}); then
-  echo "Installing Google Cloud Ops Agent..."
-  curl -s https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh | bash
-  PACKAGES_TO_INSTALL="$${PACKAGES_TO_INSTALL} google-cloud-ops-agent"
-fi
-
-apt-get update && apt-get install -y $${PACKAGES_TO_INSTALL}
 
 if ! (exit $${HAS_FILESYSTEM}); then
     echo "Creating filesystem on $${DISK}."
     do_create_filesystem $${DISK}
 fi
 
-mkdir -p /srv/minecraft/data
-mount /dev/disk/by-id/google-minecraft-data /srv/minecraft/data
+mkdir -p /mnt/disks/minecraft/data
+mount /dev/disk/by-id/google-minecraft-data /mnt/disks/minecraft/data
 
-do_setup_backup
-do_download_server ${server_jar_url}
+#do_setup_backup
 do_start_server
