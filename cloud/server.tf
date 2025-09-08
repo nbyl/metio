@@ -3,9 +3,9 @@ resource "google_service_account" "minecraft-server-sa" {
   display_name = "Custom SA for VM Instance"
 }
 
-resource "google_project_iam_member" "sa_storage_object_viewer" {
+resource "google_project_iam_member" "sa_storage_object_user" {
   project = var.project_id
-  role    = "roles/storage.objectViewer"
+  role    = "roles/storage.objectUser"
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
@@ -34,7 +34,6 @@ resource "google_compute_disk" "primary" {
 
   physical_block_size_bytes = 4096
 }
-
 
 resource "google_compute_address" "static" {
   name = "${terraform.workspace}-minecraft-server"
@@ -65,7 +64,7 @@ resource "google_compute_instance" "minecraft-server" {
 
   boot_disk {
     initialize_params {
-      image = "debian-cloud/debian-12"
+      image = "cos-cloud/cos-stable"
     }
   }
 
@@ -90,11 +89,10 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
-  metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, server_jar_url = var.server_jar_url })
+  metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, minecraft_version = var.minecraft_version })
   metadata = {
     shutdown-script = templatefile("scripts/shutdown.sh.tftpl", {
-      backup_bucket  = resource.google_storage_bucket.minecraft-backups.name,
-      server_jar_url = var.server_jar_url
+      backup_bucket = resource.google_storage_bucket.minecraft-backups.name,
       }
     )
   }
