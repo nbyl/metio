@@ -90,10 +90,4 @@ resource "google_compute_instance" "minecraft-server" {
   }
 
   metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, minecraft_version = var.minecraft_version })
-  metadata = {
-    shutdown-script = templatefile("scripts/shutdown.sh.tftpl", {
-      backup_bucket = resource.google_storage_bucket.minecraft-backups.name,
-      }
-    )
-  }
 }
