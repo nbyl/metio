@@ -38,3 +38,9 @@ variable "minecraft_version" {
   type        = string
   default     = "1.21.5"
 }
+
+variable "controller_image" {
+  description = "The container image for the controller service."
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
