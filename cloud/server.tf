@@ -3,9 +3,9 @@ resource "google_service_account" "minecraft-server-sa" {
   display_name = "Custom SA for VM Instance"
 }
 
-resource "google_project_iam_member" "sa_storage_object_viewer" {
+resource "google_project_iam_member" "sa_storage_object_user" {
   project = var.project_id
-  role    = "roles/storage.objectViewer"
+  role    = "roles/storage.objectUser"
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
@@ -34,7 +34,6 @@ resource "google_compute_disk" "primary" {
 
   physical_block_size_bytes = 4096
 }
-
 
 resource "google_compute_address" "static" {
   name = "${terraform.workspace}-minecraft-server"

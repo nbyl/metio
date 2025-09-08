@@ -15,20 +15,37 @@ do_create_filesystem() {
     mkfs -j -t ext4 $${DISK}
 }
 
-do_setup_backup() {
-    BACKUP_BUCKET=$${1}
-    mkdir -p /mnt/disks/minecraft/bin
-    cat << 'EOF' > /mnt/disks/minecraft/bin/backup.sh
-#!/bin/bash
-set -e
-set -x
+do_start_backup() {
+    cat << 'EOF' > /etc/systemd/system/minecraft-backup.service
+[Unit]
+Description=Minecraft Server
+After=minecraft.service
+Requires=minecraft.service
 
-screen -r mcs -X stuff '/save-all\n/save-off\n'
-/usr/bin/gsutil cp -R /mnt/disks/minecraft/data/world gs://${backup_bucket}/$(date "+%Y%m%d-%H%M%S")-world
-screen -r mcs -X stuff '/save-on\n'
+[Service]
+TimeoutStartSec=0
+Restart=always
+ExecStartPre=-/usr/bin/docker stop %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull itzg/mc-backup
+ExecStart=/usr/bin/docker run --rm --name %n \
+--network host \
+-e BACKUP_METHOD=restic \
+-e BACKUP_INTERVAL=1h \
+-e RESTIC_REPOSITORY=gs:${backup_bucket}:/ \
+-e RESTIC_PASSWORD=minecraft2025 \
+-e RCON_HOST=127.0.0.1 \
+-e RCON_PASSWORD=minecraft2025 \
+-v /mnt/disks/minecraft/data:/data \
+itzg/mc-backup
+ExecStop=/usr/bin/docker stop %n
+
+[Install]
+WantedBy=default.target
 EOF
-    chmod +x /mnt/disks/minecraft/bin/backup.sh
-    (crontab -l | grep -v -F "/mnt/disks/minecraft/bin/backup.sh" ; echo "0 */4 * * * /mnt/disks/minecraft/bin/backup.sh")| crontab -
+    systemctl daemon-reload
+    systemctl enable minecraft-backup
+    systemctl start minecraft-backup
 }
 
 do_start_server() {
@@ -46,8 +63,10 @@ ExecStartPre=-/usr/bin/docker rm %n
 ExecStartPre=/usr/bin/docker pull itzg/minecraft-server:stable-java21
 ExecStart=/usr/bin/docker run --rm --name %n \
 -p 25565:25565 \
+-p 127.0.0.1:25575:25575 \
 -e EULA=TRUE \
 -e VERSION=${minecraft_version} \
+-e RCON_PASSWORD=minecraft2025 \
 -v /mnt/disks/minecraft/data:/data \
 itzg/minecraft-server:stable-java21
 ExecStop=/usr/bin/docker stop %n
@@ -76,3 +95,4 @@ mount /dev/disk/by-id/google-minecraft-data /mnt/disks/minecraft/data
 
 #do_setup_backup
 do_start_server
+do_start_backup
