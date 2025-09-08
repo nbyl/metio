@@ -16,16 +16,13 @@ import (
 	"gitlab.com/nbyl/metio/views"
 )
 
-// var (
-// 	serverStatus = views.ServerStatus{
-// 		IsOnline:   false,
-// 		Players:    0,
-// 		MaxPlayers: 20,
-// 		Uptime:     "00:00:00",
-// 		Version:    "1.20.4",
-// 		IP:         "mc.metio.server:25565",
-// 	}
-// )
+func getEnv(key, fallback string) string {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		value = fallback
+	}
+	return value
+}
 
 func RunServer() {
 	r := mux.NewRouter()
@@ -39,13 +36,17 @@ func RunServer() {
 	r.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
 	r.HandleFunc("/server/status", statusHandler).Methods("GET")
 
-	fmt.Println("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", handlers.LoggingHandler(os.Stdout, r)))
+	port := getEnv("PORT", "8080")
+
+	log.Printf("Server starting on :%s", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), handlers.LoggingHandler(os.Stdout, r)))
 }
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus, err := getServerStatus()
 	if err != nil {
 		log.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	component := views.HomePage(*serverStatus)
@@ -99,7 +100,10 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus, err := getServerStatus()
 	if err != nil {
 		log.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
 	component := views.ServerStatusCard(*serverStatus)
 	component.Render(r.Context(), w)
 }
@@ -119,10 +123,10 @@ func getServerStatus() (*views.ServerStatus, error) {
 	}
 
 	resp, err := c.Get(ctx, req)
-	log.Print(*resp.Status == "RUNNING")
 	if err != nil {
 		return nil, err
 	}
+	log.Print(*resp.Status == "RUNNING")
 
 	return &views.ServerStatus{
 		Status:     *resp.Status,
