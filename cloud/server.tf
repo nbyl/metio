@@ -81,6 +81,12 @@ resource "google_compute_instance" "minecraft-server" {
     }
   }
 
+  scheduling {
+    preemptible        = true
+    automatic_restart  = false
+    provisioning_model = "SPOT"
+  }
+
   tags = ["${terraform.workspace}-minecraft-server", terraform.workspace]
 
   service_account {
