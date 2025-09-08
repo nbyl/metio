@@ -66,6 +66,8 @@ ExecStart=/usr/bin/docker run --rm --name %n \
 -p 127.0.0.1:25575:25575 \
 -e EULA=TRUE \
 -e VERSION=${minecraft_version} \
+-e MAX_MEMORY=3G \
+-e USE_MEOWICE_FLAGS=true \
 -e RCON_PASSWORD=minecraft2025 \
 -v /mnt/disks/minecraft/data:/data \
 itzg/minecraft-server:stable-java21
