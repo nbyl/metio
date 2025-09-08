@@ -91,3 +91,22 @@ resource "google_compute_instance" "minecraft-server" {
 
   metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, minecraft_version = var.minecraft_version })
 }
+
+resource "google_compute_resource_policy" "daily_shutdown" {
+  name   = "${terraform.workspace}-daily-shutdown"
+  region = var.region
+
+  instance_schedule_policy {
+    vm_stop_schedule {
+      schedule = "0 21 * * *"
+    }
+
+    time_zone = "Europe/Berlin"
+  }
+}
+
+resource "google_compute_resource_policy_attachment" "daily_shutdown_attachment" {
+  name     = google_compute_resource_policy.daily_shutdown.name
+  instance = google_compute_instance.minecraft-server.name
+  zone     = var.zone
+}
