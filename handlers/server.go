@@ -14,9 +14,6 @@ import (
 	"gitlab.com/nbyl/metio/views"
 )
 
-func RunServer() {
-
-}
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus, err := getServerStatus()
 	if err != nil {
@@ -102,7 +99,6 @@ func getServerStatus() (*views.ServerStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Print(*resp.Status == "RUNNING")
 
 	return &views.ServerStatus{
 		Status:     *resp.Status,
