@@ -1,4 +1,4 @@
-package server
+package handlers
 
 import (
 	"context"
@@ -11,35 +11,11 @@ import (
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"gitlab.com/nbyl/metio/views"
 )
 
-func getEnv(key, fallback string) string {
-	value, exists := os.LookupEnv(key)
-	if !exists {
-		value = fallback
-	}
-	return value
-}
-
 func RunServer() {
-	r := mux.NewRouter()
 
-	// Static files
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-
-	// Routes
-	r.HandleFunc("/", homeHandler).Methods("GET")
-	r.HandleFunc("/server/start", startServerHandler).Methods("POST")
-	r.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
-	r.HandleFunc("/server/status", statusHandler).Methods("GET")
-
-	port := getEnv("PORT", "8080")
-
-	log.Printf("Server starting on :%s", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), handlers.LoggingHandler(os.Stdout, r)))
 }
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus, err := getServerStatus()
