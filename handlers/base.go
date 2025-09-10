@@ -18,9 +18,12 @@ func New() *mux.Router {
 	r.HandleFunc("/auth/login", loginHandler).Methods("GET")
 	r.HandleFunc("/auth/callback", callbackHandler).Methods("GET")
 
-	r.HandleFunc("/server/start", startServerHandler).Methods("POST")
-	r.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
-	r.HandleFunc("/server/status", statusHandler).Methods("GET")
+	serverRouter := r.PathPrefix("/server").Subrouter()
+	serverRouter.Use(authMiddleware)
+
+	serverRouter.HandleFunc("/start", startServerHandler).Methods("POST")
+	serverRouter.HandleFunc("/stop", stopServerHandler).Methods("POST")
+	serverRouter.HandleFunc("/status", statusHandler).Methods("GET")
 
 	return r
 }
