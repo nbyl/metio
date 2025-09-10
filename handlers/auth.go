@@ -11,11 +11,15 @@ import (
 	"os"
 	"time"
 
+	"github.com/gorilla/sessions"
+	"gitlab.com/nbyl/metio/views"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
+
+var store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
 
 func getGoogleOauthConfig() *oauth2.Config {
 	return &oauth2.Config{
@@ -53,10 +57,31 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session, _ := store.Get(r, "session-name")
+	log.Println("Session:", session.IsNew, session.Values["user"])
+
+	session.Values["user"] = data
+	err = session.Save(r, w)
+	if err != nil {
+		log.Println("Error saving session:", err)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
 	// GetOrCreate User in your db.
 	// Redirect or response with a token.
 	// More code .....
-	fmt.Fprintf(w, "UserInfo: %s\n", data)
+	//fmt.Fprintf(w, "UserInfo: %s\n", data)
+
+	serverStatus, err := getServerStatus()
+	if err != nil {
+		log.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	component := views.HomePage(*serverStatus)
+	component.Render(r.Context(), w)
 }
 
 func generateStateOauthCookie(w http.ResponseWriter) string {

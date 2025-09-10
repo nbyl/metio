@@ -15,6 +15,9 @@ import (
 )
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session-name")
+	log.Println("Session:", session.IsNew, session.Values["user"])
+
 	serverStatus, err := getServerStatus()
 	if err != nil {
 		log.Print(err)

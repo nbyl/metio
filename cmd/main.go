@@ -7,7 +7,6 @@ import (
 	"os"
 
 	gorillahandlers "github.com/gorilla/handlers"
-	"github.com/joho/godotenv"
 	"gitlab.com/nbyl/metio/handlers"
 )
 
@@ -20,11 +19,6 @@ func getEnv(key, fallback string) string {
 }
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Print("Could not load .env file")
-	}
-
 	r := handlers.New()
 
 	port := getEnv("PORT", "8080")
