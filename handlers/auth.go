@@ -12,31 +12,31 @@ import (
 	"time"
 
 	"github.com/gorilla/sessions"
-	"gitlab.com/nbyl/metio/views"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+const sessionName = "metio"
+const userKey = "user"
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
 var store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
 
-func getGoogleOauthConfig() *oauth2.Config {
-	return &oauth2.Config{
-		RedirectURL:  "http://localhost:3000/auth/callback",
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		Scopes: []string{
-			"https://www.googleapis.com/auth/userinfo.profile",
-			"https://www.googleapis.com/auth/userinfo.email"},
-		Endpoint: google.Endpoint,
-	}
+var googleOauthConfig = oauth2.Config{
+	RedirectURL:  "http://localhost:3000/auth/callback",
+	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+	Scopes: []string{
+		"https://www.googleapis.com/auth/userinfo.profile",
+		"https://www.googleapis.com/auth/userinfo.email"},
+	Endpoint: google.Endpoint,
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	oauthState := generateStateOauthCookie(w)
 
-	u := getGoogleOauthConfig().AuthCodeURL(oauthState)
+	u := googleOauthConfig.AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 }
 
@@ -57,10 +57,9 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, _ := store.Get(r, "session-name")
-	log.Println("Session:", session.IsNew, session.Values["user"])
+	session, _ := store.Get(r, sessionName)
 
-	session.Values["user"] = data
+	session.Values[userKey] = data
 	err = session.Save(r, w)
 	if err != nil {
 		log.Println("Error saving session:", err)
@@ -68,20 +67,22 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// GetOrCreate User in your db.
-	// Redirect or response with a token.
-	// More code .....
-	//fmt.Fprintf(w, "UserInfo: %s\n", data)
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
 
-	serverStatus, err := getServerStatus()
-	if err != nil {
-		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, _ := store.Get(r, sessionName)
 
-	component := views.HomePage(*serverStatus)
-	component.Render(r.Context(), w)
+		// Check if user is authenticated
+		if session.IsNew || session.Values["user"] == nil {
+			http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
+			return
+		}
+
+		// User is authenticated, proceed to the next handler
+		next.ServeHTTP(w, r)
+	})
 }
 
 func generateStateOauthCookie(w http.ResponseWriter) string {
@@ -99,7 +100,7 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 func getUserDataFromGoogle(code string) ([]byte, error) {
 	// Use code to get token and get user info from Google.
 
-	token, err := getGoogleOauthConfig().Exchange(context.Background(), code)
+	token, err := googleOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
 	}
