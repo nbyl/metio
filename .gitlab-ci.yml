@@ -9,7 +9,6 @@ stages:
 variables:
   GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
   TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
-  TF_VAR_environment: $CI_ENVIRONMENT_SLUG
 
 build-controller:
   image: docker:24.0.5
@@ -32,7 +31,7 @@ include:
     inputs:
       root_dir: cloud/
       auto_define_backend: true
-      state_name: $CI_ENVIRONMENT_SLUG
+      state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
       apply_rules:
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
