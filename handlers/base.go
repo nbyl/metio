@@ -21,9 +21,19 @@ func New() *mux.Router {
 	serverRouter := r.PathPrefix("/server").Subrouter()
 	serverRouter.Use(authMiddleware)
 
+	serverRouter.HandleFunc("/", serverHandler).Methods("GET")
 	serverRouter.HandleFunc("/start", startServerHandler).Methods("POST")
 	serverRouter.HandleFunc("/stop", stopServerHandler).Methods("POST")
 	serverRouter.HandleFunc("/status", statusHandler).Methods("GET")
 
 	return r
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	if !isUserAuthenticated(r) {
+		http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
+		return
+	}
+
+	http.Redirect(w, r, "/server/", http.StatusTemporaryRedirect)
 }
