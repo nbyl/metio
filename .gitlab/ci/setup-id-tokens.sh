@@ -22,3 +22,6 @@ gcloud auth login --cred-file="${CI_PROJECT_DIR}/.gcp_temp_cred.json"
 gcloud auth list
 
 export GOOGLE_APPLICATION_CREDENTIALS=${CI_PROJECT_DIR}/.gcp_temp_cred.json
+
+# TODO: find a better export place for this
+export TF_VAR_environment=$CI_ENVIRONMENT_SLUG

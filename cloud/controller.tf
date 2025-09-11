@@ -1,5 +1,5 @@
 resource "google_cloud_run_v2_service" "controller" {
-  name                = "${terraform.workspace}-controller"
+  name                = "${var.environment}-controller"
   location            = var.region
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
