@@ -14,10 +14,7 @@ import (
 	"gitlab.com/nbyl/metio/views"
 )
 
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	session, _ := store.Get(r, sessionName)
-	log.Println("Session:", session.IsNew, session.Values[userKey])
-
+func serverHandler(w http.ResponseWriter, r *http.Request) {
 	serverStatus, err := getServerStatus()
 	if err != nil {
 		log.Print(err)
@@ -25,7 +22,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	component := views.HomePage(*serverStatus)
+	component := views.ServerPage(*serverStatus)
 	component.Render(r.Context(), w)
 }
 

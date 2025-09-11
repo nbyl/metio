@@ -70,12 +70,14 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
+func isUserAuthenticated(r *http.Request) bool {
+	session, _ := store.Get(r, sessionName)
+	return !session.IsNew && session.Values[userKey] != nil
+}
+
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, _ := store.Get(r, sessionName)
-
-		// Check if user is authenticated
-		if session.IsNew || session.Values["user"] == nil {
+		if isUserAuthenticated(r) == false {
 			http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
 			return
 		}
