@@ -61,6 +61,16 @@ include:
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
           when: never
         - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
+      destroy_rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH  # Don't add it to a pipeline for the default branch if it's already in a merge request pipeline.
+          when: never
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: manual
+      delete_state_rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH  # Don't add it to a pipeline for the default branch if it's already in a merge request pipeline.
+          when: never
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: manual
   - component: $CI_SERVER_FQDN/components/opentofu/validate-plan-apply@3.0.1
     inputs:
       root_dir: cloud/
