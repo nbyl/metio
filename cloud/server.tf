@@ -1,5 +1,5 @@
 resource "google_service_account" "minecraft-server-sa" {
-  account_id   = "${terraform.workspace}-minecraft-server"
+  account_id   = "${var.environment}-ms"
   display_name = "Custom SA for VM Instance"
 }
 
@@ -28,7 +28,7 @@ resource "google_project_iam_member" "sa_logging_metric_writer" {
 }
 
 resource "google_compute_disk" "primary" {
-  name = "${terraform.workspace}-minecraft-data"
+  name = "${var.environment}-minecraft-data"
   type = "pd-ssd"
   size = 10
 
@@ -36,11 +36,11 @@ resource "google_compute_disk" "primary" {
 }
 
 resource "google_compute_address" "static" {
-  name = "${terraform.workspace}-minecraft-server"
+  name = "${var.environment}-minecraft-server"
 }
 
 resource "google_compute_firewall" "minecraft-server-firewall" {
-  name    = "${terraform.workspace}-minecraft-server"
+  name    = "${var.environment}-minecraft-server"
   network = "default"
 
   allow {
@@ -54,11 +54,11 @@ resource "google_compute_firewall" "minecraft-server-firewall" {
 
   source_ranges = ["0.0.0.0/0"]
 
-  target_tags = ["${terraform.workspace}-minecraft-server"]
+  target_tags = ["${var.environment}-minecraft-server"]
 }
 
 resource "google_compute_instance" "minecraft-server" {
-  name           = "${terraform.workspace}-minecraft-server"
+  name           = "${var.environment}-minecraft-server"
   machine_type   = var.machine_type
   desired_status = var.desired_status
 
@@ -87,7 +87,7 @@ resource "google_compute_instance" "minecraft-server" {
     provisioning_model = "SPOT"
   }
 
-  tags = ["${terraform.workspace}-minecraft-server", terraform.workspace]
+  tags = ["${var.environment}-minecraft-server", var.environment]
 
   service_account {
     # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
@@ -99,7 +99,7 @@ resource "google_compute_instance" "minecraft-server" {
 }
 
 resource "google_compute_resource_policy" "daily_shutdown" {
-  name   = "${terraform.workspace}-daily-shutdown"
+  name   = "${var.environment}-daily-shutdown"
   region = var.region
 
   instance_schedule_policy {

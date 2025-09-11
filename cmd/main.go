@@ -1,16 +1,27 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/http"
+	"os"
 
-	"github.com/joho/godotenv"
-	"gitlab.com/nbyl/metio/server"
+	gorillahandlers "github.com/gorilla/handlers"
+	"gitlab.com/nbyl/metio/handlers"
 )
 
-func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Print("Could not load .env file")
+func getEnv(key, fallback string) string {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		value = fallback
 	}
-	server.RunServer()
+	return value
+}
+
+func main() {
+	r := handlers.New()
+
+	port := getEnv("PORT", "8080")
+	log.Printf("Server starting on :%s", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), gorillahandlers.LoggingHandler(os.Stdout, r)))
 }

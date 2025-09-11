@@ -44,3 +44,9 @@ variable "controller_image" {
   type        = string
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
+
+variable "environment" {
+  description = "The deployment environment (e.g., dev, staging, prod)."
+  type        = string
+  default     = "development"
+}

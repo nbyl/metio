@@ -27,14 +27,27 @@ include:
       stage: deploy
       source: $GITLAB_IMAGE
       target: $TF_VAR_controller_image
-  - component: $CI_SERVER_FQDN/components/opentofu/validate-plan-apply@3.0.1
+  - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
     inputs:
       root_dir: cloud/
       auto_define_backend: true
-      state_name: production
+      state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
       apply_rules:
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+        - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
+          when: never
+        - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
+      destroy_rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: never
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: manual
+      delete_state_rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: never
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: manual
 .gitlab-tofu:id_tokens:
   id_tokens:
     GITLAB_OIDC_TOKEN:

@@ -206,4 +206,4 @@ build/
 tmp/
 .DS_Store
 views/*_templ.go
-.env
+.devcontainer/devcontainer.env

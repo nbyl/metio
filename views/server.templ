@@ -16,7 +16,7 @@ type ServerStatus struct {
 	StartTime  time.Time `json:"-"`
 }
 
-templ HomePage(status ServerStatus) {
+templ ServerPage(status ServerStatus) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
