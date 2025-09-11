@@ -33,29 +33,8 @@ include:
       auto_define_backend: true
       state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
-      fmt_rules:
-        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-        - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
-          when: never
-        - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
-      validate_rules:
-        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-          when: never
-        - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
-          when: never
-        - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
-      plan_rules:
-        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-          when: never
-        - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
-          when: never
-        - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
       apply_rules:
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-          when: never
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
           when: never
         - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
@@ -69,20 +48,6 @@ include:
           when: never
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
           when: manual
-  - component: $CI_SERVER_FQDN/components/opentofu/validate-plan-apply@3.0.1
-    inputs:
-      root_dir: cloud/
-      auto_define_backend: true
-      state_name: production
-      enable_id_tokens: true
-      fmt_rules:
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      validate_rules:
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      plan_rules:
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      apply_rules:
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 .gitlab-tofu:id_tokens:
   id_tokens:
     GITLAB_OIDC_TOKEN:
