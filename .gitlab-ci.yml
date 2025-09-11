@@ -9,6 +9,7 @@ stages:
 variables:
   GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
   TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
+  TF_VAR_environment: $CI_COMMIT_REF_SLUG
 
 build-controller:
   image: docker:24.0.5
