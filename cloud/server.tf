@@ -1,5 +1,5 @@
 resource "google_service_account" "minecraft-server-sa" {
-  account_id   = "${var.environment}-minecraft-server"
+  account_id   = "${var.environment}-ms"
   display_name = "Custom SA for VM Instance"
 }
 
