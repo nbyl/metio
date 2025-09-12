@@ -22,3 +22,12 @@ resource "google_cloud_run_v2_service" "controller" {
     }
   }
 }
+
+resource "google_cloud_run_service_iam_binding" "default" {
+  location = google_cloud_run_v2_service.controller.location
+  service  = google_cloud_run_v2_service.controller.name
+  role     = "roles/run.invoker"
+  members = [
+    "allUsers"
+  ]
+}
