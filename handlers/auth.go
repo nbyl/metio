@@ -3,11 +3,13 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/gorilla/sessions"
@@ -15,6 +17,12 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+type User struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
 
 const sessionName = "metio"
 const userKey = "user"
@@ -65,16 +73,22 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := getUserDataFromGoogle(r.FormValue("code"))
+	user, err := getUserDataFromGoogle(r.FormValue("code"))
 	if err != nil {
 		log.Println(err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
+	if !isUserAllowed(user) {
+		log.Printf("User %s is not allowed", user.Email)
+		http.Redirect(w, r, "/", http.StatusForbidden)
+		return
+	}
+
 	session, _ := getSessionStore().Get(r, sessionName)
 
-	session.Values[userKey] = data
+	session.Values[userKey] = user.ID
 	err = session.Save(r, w)
 	if err != nil {
 		log.Println("Error saving session:", err)
@@ -88,6 +102,11 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 func isUserAuthenticated(r *http.Request) bool {
 	session, _ := getSessionStore().Get(r, sessionName)
 	return !session.IsNew && session.Values[userKey] != nil
+}
+
+func isUserAllowed(user *User) bool {
+	allowed_users := viper.GetStringSlice("ALLOWED_USERS")
+	return slices.Contains(allowed_users, user.Email)
 }
 
 func authMiddleware(next http.Handler) http.Handler {
@@ -114,7 +133,7 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 	return state
 }
 
-func getUserDataFromGoogle(code string) ([]byte, error) {
+func getUserDataFromGoogle(code string) (*User, error) {
 	// Use code to get token and get user info from Google.
 
 	token, err := getGoogleOauthConfig().Exchange(context.Background(), code)
@@ -130,5 +149,12 @@ func getUserDataFromGoogle(code string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed read response: %s", err.Error())
 	}
-	return contents, nil
+
+	var user User
+	err = json.Unmarshal(contents, &user)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing response: %s", err.Error())
+	}
+
+	return &user, nil
 }
