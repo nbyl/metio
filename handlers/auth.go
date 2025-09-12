@@ -8,10 +8,10 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gorilla/sessions"
+	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -21,22 +21,37 @@ const userKey = "user"
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
-var store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
+var store *sessions.CookieStore
 
-var googleOauthConfig = oauth2.Config{
-	RedirectURL:  "http://localhost:3000/auth/callback",
-	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-	Scopes: []string{
-		"https://www.googleapis.com/auth/userinfo.profile",
-		"https://www.googleapis.com/auth/userinfo.email"},
-	Endpoint: google.Endpoint,
+func getSessionStore() *sessions.CookieStore {
+	if store == nil {
+		store = sessions.NewCookieStore([]byte(viper.GetString("SESSION_KEY")))
+	}
+	return store
+}
+
+var googleOauthConfig *oauth2.Config
+
+func getGoogleOauthConfig() *oauth2.Config {
+	if googleOauthConfig == nil {
+		googleOauthConfig = &oauth2.Config{
+			RedirectURL: "http://localhost:3000/auth/callback",
+			ClientID:    viper.GetString("GOOGLE_CLIENT_ID"),
+
+			ClientSecret: viper.GetString("GOOGLE_CLIENT_SECRET"),
+			Scopes: []string{
+				"https://www.googleapis.com/auth/userinfo.profile",
+				"https://www.googleapis.com/auth/userinfo.email"},
+			Endpoint: google.Endpoint,
+		}
+	}
+	return googleOauthConfig
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	oauthState := generateStateOauthCookie(w)
 
-	u := googleOauthConfig.AuthCodeURL(oauthState)
+	u := getGoogleOauthConfig().AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 }
 
@@ -57,7 +72,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, _ := store.Get(r, sessionName)
+	session, _ := getSessionStore().Get(r, sessionName)
 
 	session.Values[userKey] = data
 	err = session.Save(r, w)
@@ -71,13 +86,13 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func isUserAuthenticated(r *http.Request) bool {
-	session, _ := store.Get(r, sessionName)
+	session, _ := getSessionStore().Get(r, sessionName)
 	return !session.IsNew && session.Values[userKey] != nil
 }
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isUserAuthenticated(r) == false {
+		if !isUserAuthenticated(r) {
 			http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
 			return
 		}
@@ -102,7 +117,7 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 func getUserDataFromGoogle(code string) ([]byte, error) {
 	// Use code to get token and get user info from Google.
 
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
+	token, err := getGoogleOauthConfig().Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
 	}
