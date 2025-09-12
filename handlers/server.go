@@ -6,11 +6,11 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"time"
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
+	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/views"
 )
 
@@ -90,9 +90,9 @@ func getServerStatus() (*views.ServerStatus, error) {
 	defer c.Close()
 
 	req := &computepb.GetInstanceRequest{
-		Instance: os.Getenv("INSTANCE_NAME"),
-		Project:  os.Getenv("GCP_PROJECT"),
-		Zone:     os.Getenv("GCP_ZONE"),
+		Instance: viper.GetString("INSTANCE_NAME"),
+		Project:  viper.GetString("GCP_PROJECT"),
+		Zone:     viper.GetString("GCP_ZONE"),
 	}
 
 	resp, err := c.Get(ctx, req)
