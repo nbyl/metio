@@ -21,7 +21,7 @@ resource "google_cloud_run_v2_service" "controller" {
       }
       env {
         name  = "ALLOWED_USERS"
-        value = join(" ", var.allowed_users)
+        value = join(" ", var.admin_users)
       }
     }
   }
