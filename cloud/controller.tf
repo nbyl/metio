@@ -1,3 +1,92 @@
+resource "google_project_iam_custom_role" "controller-role" {
+  role_id = "${var.environment}_controller"
+  title   = "Controller for ${var.environment}"
+  permissions = [
+    "artifactregistry.repositories.deleteArtifacts",
+    "artifactregistry.repositories.downloadArtifacts",
+    "artifactregistry.repositories.uploadArtifacts",
+    "compute.instances.get",
+    "compute.instances.start",
+    "compute.instances.stop",
+    "compute.zoneOperations.get",
+    "logging.logEntries.create",
+    "monitoring.timeSeries.create",
+  ]
+}
+
+resource "google_service_account" "controller_service_account" {
+  account_id = "${var.environment}-controller-sa"
+}
+
+# resource "google_project_iam_member" "project" {
+#   project = var.project_id
+#   role    = "roles/${google_project_iam_custom_role.controller-role.role_id}"
+#   member  = "serviceAccount:${google_service_account.controller_service_account.email}"
+# }
+
+# data "google_iam_policy" "controller_policy_data" {
+#   binding {
+#     role = "roles/${google_project_iam_custom_role.controller-role.role_id}"
+
+#     members = [
+#       "serviceAccount:${google_service_account.controller_service_account.email}"
+#     ]
+#   }
+# }
+
+# resource "google_project_iam_policy" "controller_policy" {
+#   project     = var.project_id
+#   policy_data = data.google_iam_policy.controller_policy_data.policy_data
+# }
+
+# resource "google_project_iam_member" "controller_role_member" {
+#   project = var.project_id
+#   role    = "roles/${google_project_iam_custom_role.controller-role.role_id}"
+#   member  = "serviceAccount:${google_service_account.controller_service_account.email}"
+# }
+
+resource "google_secret_manager_secret" "client_id" {
+  secret_id = "${var.environment}-client_id"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "client_id_dummy" {
+  secret                 = google_secret_manager_secret.client_id.id
+  secret_data_wo_version = 0
+  secret_data            = "dummy"
+}
+
+resource "google_secret_manager_secret" "client_secret" {
+  secret_id = "${var.environment}-client_secret"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "client_secret_dummy" {
+  secret                 = google_secret_manager_secret.client_secret.id
+  secret_data_wo_version = 0
+  secret_data            = "dummy"
+}
+
+resource "google_secret_manager_secret" "base_url" {
+  secret_id = "${var.environment}-base_url"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "base_url_dummy" {
+  secret                 = google_secret_manager_secret.base_url.id
+  secret_data_wo_version = 0
+  secret_data            = "http://dummy:3000"
+}
+
 resource "google_cloud_run_v2_service" "controller" {
   name                = "${var.environment}-controller"
   location            = var.region
@@ -5,6 +94,8 @@ resource "google_cloud_run_v2_service" "controller" {
   ingress             = "INGRESS_TRAFFIC_ALL"
 
   template {
+    service_account = google_service_account.controller_service_account.email
+
     containers {
       image = var.controller_image
       env {
@@ -23,9 +114,39 @@ resource "google_cloud_run_v2_service" "controller" {
         name  = "ALLOWED_USERS"
         value = join(" ", var.admin_users)
       }
+      env {
+        name = "GOOGLE_CLIENT_ID"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.client_id.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GOOGLE_CLIENT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.client_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "BASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.base_url.secret_id
+            version = "latest"
+          }
+        }
+      }
+
     }
   }
 }
+
+# TODO: SESSION_KEY
 
 resource "google_cloud_run_service_iam_binding" "default" {
   location = google_cloud_run_v2_service.controller.location
@@ -34,4 +155,25 @@ resource "google_cloud_run_service_iam_binding" "default" {
   members = [
     "allUsers"
   ]
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-client_id" {
+  secret_id  = google_secret_manager_secret.client_id.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.client_id]
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-client_secret" {
+  secret_id  = google_secret_manager_secret.client_secret.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.client_secret]
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-base_url" {
+  secret_id  = google_secret_manager_secret.base_url.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.base_url]
 }
