@@ -42,8 +42,11 @@ var googleOauthConfig *oauth2.Config
 
 func getGoogleOauthConfig() *oauth2.Config {
 	if googleOauthConfig == nil {
+		baseUrl := viper.GetString("BASE_URL")
+		redirectUrl := fmt.Sprintf("%s/auth/callback", baseUrl)
+
 		googleOauthConfig = &oauth2.Config{
-			RedirectURL: "http://localhost:3000/auth/callback",
+			RedirectURL: redirectUrl,
 			ClientID:    viper.GetString("GOOGLE_CLIENT_ID"),
 
 			ClientSecret: viper.GetString("GOOGLE_CLIENT_SECRET"),
@@ -58,6 +61,9 @@ func getGoogleOauthConfig() *oauth2.Config {
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	oauthState := generateStateOauthCookie(w)
+	log.Println(r.URL.Path)
+	log.Println(r.Host)
+	log.Println(r.URL.Scheme)
 
 	u := getGoogleOauthConfig().AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
