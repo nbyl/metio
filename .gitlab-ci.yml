@@ -41,7 +41,7 @@ include:
       auto_define_backend: true
       state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
-      builld_stage: stage_build
+      stage_build: plan
       apply_rules:
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
