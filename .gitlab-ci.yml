@@ -3,6 +3,8 @@ stages:
   - validate
   - test
   - build
+  - publish
+  - plan
   - deploy
   - cleanup
 
@@ -20,11 +22,17 @@ build-controller:
   script:
     - docker build -t $GITLAB_IMAGE .
     - docker push $GITLAB_IMAGE
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
+      when: never
+    - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
 
 include:
   - component: gitlab.com/google-gitlab-components/artifact-registry/upload-artifact-registry@0.1.0
     inputs:
-      stage: deploy
+      stage: publish
       source: $GITLAB_IMAGE
       target: $TF_VAR_controller_image
   - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
@@ -33,6 +41,7 @@ include:
       auto_define_backend: true
       state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
+      builld_stage: plan
       apply_rules:
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
