@@ -1,5 +1,5 @@
 resource "google_project_iam_custom_role" "controller-role" {
-  role_id = "${var.environment}_controller"
+  role_id = "${replace(var.environment, "-", "_")}_controller"
   title   = "Controller for ${var.environment}"
   permissions = [
     "artifactregistry.repositories.deleteArtifacts",
@@ -15,7 +15,7 @@ resource "google_project_iam_custom_role" "controller-role" {
 }
 
 resource "google_service_account" "controller_service_account" {
-  account_id = "${var.environment}-controller-sa"
+  account_id = "${var.environment}-c-sa"
 }
 
 resource "google_project_iam_binding" "controller-role-binding" {
