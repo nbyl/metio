@@ -18,32 +18,13 @@ resource "google_service_account" "controller_service_account" {
   account_id = "${var.environment}-controller-sa"
 }
 
-# resource "google_project_iam_member" "project" {
-#   project = var.project_id
-#   role    = "roles/${google_project_iam_custom_role.controller-role.role_id}"
-#   member  = "serviceAccount:${google_service_account.controller_service_account.email}"
-# }
-
-# data "google_iam_policy" "controller_policy_data" {
-#   binding {
-#     role = "roles/${google_project_iam_custom_role.controller-role.role_id}"
-
-#     members = [
-#       "serviceAccount:${google_service_account.controller_service_account.email}"
-#     ]
-#   }
-# }
-
-# resource "google_project_iam_policy" "controller_policy" {
-#   project     = var.project_id
-#   policy_data = data.google_iam_policy.controller_policy_data.policy_data
-# }
-
-# resource "google_project_iam_member" "controller_role_member" {
-#   project = var.project_id
-#   role    = "roles/${google_project_iam_custom_role.controller-role.role_id}"
-#   member  = "serviceAccount:${google_service_account.controller_service_account.email}"
-# }
+resource "google_project_iam_binding" "controller-role-binding" {
+  project = var.project_id
+  role    = "projects/${var.project_id}/roles/${google_project_iam_custom_role.controller-role.role_id}"
+  members = [
+    "serviceAccount:${google_service_account.controller_service_account.email}"
+  ]
+}
 
 resource "google_secret_manager_secret" "client_id" {
   secret_id = "${var.environment}-client_id"
@@ -113,6 +94,10 @@ resource "google_cloud_run_v2_service" "controller" {
       env {
         name  = "ALLOWED_USERS"
         value = join(" ", var.admin_users)
+      }
+      env {
+        name  = "SESSION_KEY"
+        value = "session-key-${var.environment}-${random_id.default.hex}"
       }
       env {
         name = "GOOGLE_CLIENT_ID"
