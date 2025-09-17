@@ -30,7 +30,7 @@ build-controller:
     - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
 
 include:
-  - component: gitlab.com/google-gitlab-components/artifact-registry/upload-artifact-registry@0.1.0
+  - component: gitlab.com/nbyl/goole-artifact-registry/upload-artifact-registry@main
     inputs:
       stage: publish
       source: $GITLAB_IMAGE
