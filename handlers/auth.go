@@ -3,40 +3,69 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
+	"slices"
 	"time"
 
 	"github.com/gorilla/sessions"
+	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+type User struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
 
 const sessionName = "metio"
 const userKey = "user"
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
-var store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
+var store *sessions.CookieStore
 
-var googleOauthConfig = oauth2.Config{
-	RedirectURL:  "http://localhost:3000/auth/callback",
-	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-	Scopes: []string{
-		"https://www.googleapis.com/auth/userinfo.profile",
-		"https://www.googleapis.com/auth/userinfo.email"},
-	Endpoint: google.Endpoint,
+func getSessionStore() *sessions.CookieStore {
+	if store == nil {
+		store = sessions.NewCookieStore([]byte(viper.GetString("SESSION_KEY")))
+	}
+	return store
+}
+
+var googleOauthConfig *oauth2.Config
+
+func getGoogleOauthConfig() *oauth2.Config {
+	if googleOauthConfig == nil {
+		baseUrl := viper.GetString("BASE_URL")
+		redirectUrl := fmt.Sprintf("%s/auth/callback", baseUrl)
+
+		googleOauthConfig = &oauth2.Config{
+			RedirectURL: redirectUrl,
+			ClientID:    viper.GetString("GOOGLE_CLIENT_ID"),
+
+			ClientSecret: viper.GetString("GOOGLE_CLIENT_SECRET"),
+			Scopes: []string{
+				"https://www.googleapis.com/auth/userinfo.profile",
+				"https://www.googleapis.com/auth/userinfo.email"},
+			Endpoint: google.Endpoint,
+		}
+	}
+	return googleOauthConfig
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	oauthState := generateStateOauthCookie(w)
+	log.Println(r.URL.Path)
+	log.Println(r.Host)
+	log.Println(r.URL.Scheme)
 
-	u := googleOauthConfig.AuthCodeURL(oauthState)
+	u := getGoogleOauthConfig().AuthCodeURL(oauthState)
 	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
 }
 
@@ -50,16 +79,22 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := getUserDataFromGoogle(r.FormValue("code"))
+	user, err := getUserDataFromGoogle(r.FormValue("code"))
 	if err != nil {
 		log.Println(err.Error())
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
-	session, _ := store.Get(r, sessionName)
+	if !isUserAllowed(user) {
+		log.Printf("User %s is not allowed", user.Email)
+		http.Redirect(w, r, "/", http.StatusForbidden)
+		return
+	}
 
-	session.Values[userKey] = data
+	session, _ := getSessionStore().Get(r, sessionName)
+
+	session.Values[userKey] = user.ID
 	err = session.Save(r, w)
 	if err != nil {
 		log.Println("Error saving session:", err)
@@ -71,13 +106,18 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func isUserAuthenticated(r *http.Request) bool {
-	session, _ := store.Get(r, sessionName)
+	session, _ := getSessionStore().Get(r, sessionName)
 	return !session.IsNew && session.Values[userKey] != nil
+}
+
+func isUserAllowed(user *User) bool {
+	allowed_users := viper.GetStringSlice("ALLOWED_USERS")
+	return slices.Contains(allowed_users, user.Email)
 }
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isUserAuthenticated(r) == false {
+		if !isUserAuthenticated(r) {
 			http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
 			return
 		}
@@ -99,10 +139,10 @@ func generateStateOauthCookie(w http.ResponseWriter) string {
 	return state
 }
 
-func getUserDataFromGoogle(code string) ([]byte, error) {
+func getUserDataFromGoogle(code string) (*User, error) {
 	// Use code to get token and get user info from Google.
 
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
+	token, err := getGoogleOauthConfig().Exchange(context.Background(), code)
 	if err != nil {
 		return nil, fmt.Errorf("code exchange wrong: %s", err.Error())
 	}
@@ -115,5 +155,12 @@ func getUserDataFromGoogle(code string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed read response: %s", err.Error())
 	}
-	return contents, nil
+
+	var user User
+	err = json.Unmarshal(contents, &user)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing response: %s", err.Error())
+	}
+
+	return &user, nil
 }
