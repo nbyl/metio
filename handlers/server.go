@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"time"
 
@@ -27,25 +26,29 @@ func serverHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func startServerHandler(w http.ResponseWriter, r *http.Request) {
-	// Simulate startup delay
-	time.Sleep(3 * time.Second)
+	ctx := context.Background()
+	c, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		log.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer c.Close()
 
-	serverStatus := views.ServerStatus{
-		IsOnline:   false,
-		Players:    0,
-		MaxPlayers: 20,
-		Uptime:     "00:00:00",
-		Version:    "1.20.4",
-		IP:         "mc.metio.server:25565",
+	req := &computepb.StartInstanceRequest{
+		Instance: viper.GetString("INSTANCE_NAME"),
+		Project:  viper.GetString("GCP_PROJECT"),
+		Zone:     viper.GetString("GCP_ZONE"),
 	}
 
-	serverStatus.IsOnline = true
-	serverStatus.StartTime = time.Now()
-	serverStatus.Players = rand.Intn(5)
-	serverStatus.Uptime = "00:00:00"
+	_, err = c.Start(ctx, req)
+	if err != nil {
+		log.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	component := views.ServerStatusCard(serverStatus)
-	component.Render(r.Context(), w)
+	http.Redirect(w, r, "/server", http.StatusSeeOther)
 }
 
 func stopServerHandler(w http.ResponseWriter, r *http.Request) {
