@@ -5,6 +5,8 @@
   :root, :host {
     --color-red-600: oklch(57.7% 0.245 27.325);
     --color-red-700: oklch(50.5% 0.213 27.518);
+    --color-yellow-600: oklch(68.1% 0.162 75.834);
+    --color-yellow-700: oklch(55.4% 0.135 66.442);
     --color-green-400: oklch(79.2% 0.209 151.711);
     --color-green-600: oklch(62.7% 0.194 149.214);
     --color-green-700: oklch(52.7% 0.154 150.069);
@@ -25,6 +27,7 @@
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
+    --animate-spin: spin 1s linear infinite;
     --default-transition-duration: 150ms;
     --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     --default-font-family: var(--font-geist-sans);
@@ -205,6 +208,9 @@
   }
   .min-h-screen {
     min-height: 100vh;
+  }
+  .animate-spin {
+    animation: var(--animate-spin);
   }
   .items-center {
     align-items: center;
@@ -701,10 +707,19 @@
   }
   .badge-offline {
     background-color: var(--color-red-600);
-    color: var(--secondary-foreground);
+    color: var(--primary-foreground);
     &:hover {
       @media (hover: hover) {
         background-color: var(--color-red-700);
+      }
+    }
+  }
+  .badge-transitioning {
+    background-color: var(--color-yellow-600);
+    color: var(--primary-foreground);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-yellow-700);
       }
     }
   }
@@ -833,6 +848,11 @@
 @property --tw-leading {
   syntax: "*";
   inherits: false;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 @layer properties {
   @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
