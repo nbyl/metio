@@ -109,7 +109,6 @@ func getServerStatus() (*views.ServerStatus, error) {
 
 	return &views.ServerStatus{
 		Status:     *resp.Status,
-		IsOnline:   *resp.Status == "RUNNING",
 		Players:    0,
 		MaxPlayers: 20,
 		Uptime:     "TBD",
