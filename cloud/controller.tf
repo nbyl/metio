@@ -93,7 +93,7 @@ resource "google_cloud_run_v2_service" "controller" {
       }
       env {
         name  = "ALLOWED_USERS"
-        value = join(" ", var.admin_users)
+        value = var.admin_users
       }
       env {
         name  = "SESSION_KEY"
