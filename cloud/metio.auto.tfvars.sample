@@ -2,6 +2,4 @@
 project_id = "TBD"
 region     = "TBD"
 zone       = "TBD"
-admin_members = [
-  "user:TBD"
-]
+admin_members = "user:TBD"
