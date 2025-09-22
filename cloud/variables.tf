@@ -17,8 +17,8 @@ variable "zone" {
 
 variable "admin_users" {
   description = "List of members to be granted admin access."
-  type        = list(string)
-  default     = []
+  type        = string
+  default     = ""
 }
 
 variable "machine_type" {
