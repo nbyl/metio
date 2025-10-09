@@ -8,33 +8,57 @@ stages:
   - deploy
   - cleanup
 
-variables:
-  GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
-  TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
+ variables:
+   GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
+   TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
+   GITLAB_MACHINE_AGENT_IMAGE: $CI_REGISTRY_IMAGE/machine-agent:$CI_COMMIT_SHORT_SHA
+   TF_VAR_machine_agent_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/machine-agent:$CI_COMMIT_SHORT_SHA
 
-build-controller:
-  image: docker:24.0.5
-  stage: build
-  services:
-    - docker:24.0.5-dind
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+ build-controller:
+   image: docker:24.0.5
+   stage: build
+   services:
+     - docker:24.0.5-dind
+   before_script:
+     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
    script:
      - docker build -f cmd/controller/Dockerfile -t $GITLAB_IMAGE .
      - docker push $GITLAB_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-    - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
-      when: never
-    - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
+   rules:
+     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+     - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+     - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
+       when: never
+     - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
 
-include:
-  - component: gitlab.com/nbyl/google-artifact-registry/upload-artifact-registry@main
-    inputs:
-      stage: publish
-      source: $GITLAB_IMAGE
-      target: $TF_VAR_controller_image
+ build-machine-agent:
+   image: docker:24.0.5
+   stage: build
+   services:
+     - docker:24.0.5-dind
+   before_script:
+     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+   script:
+     - docker build -f cmd/machine-agent/Dockerfile -t $GITLAB_MACHINE_AGENT_IMAGE .
+     - docker push $GITLAB_MACHINE_AGENT_IMAGE
+   rules:
+     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+     - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+     - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
+       when: never
+     - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
+
+ include:
+   - component: gitlab.com/nbyl/google-artifact-registry/upload-artifact-registry@main
+     inputs:
+       stage: publish
+       source: $GITLAB_IMAGE
+       target: $TF_VAR_controller_image
+   - component: gitlab.com/nbyl/google-artifact-registry/upload-artifact-registry@main
+     inputs:
+       stage: publish
+       source: $GITLAB_MACHINE_AGENT_IMAGE
+       target: $TF_VAR_machine_agent_image
   - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
     inputs:
       root_dir: cloud/
