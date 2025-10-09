@@ -2,9 +2,11 @@
 
 ## Build/Test Commands
 - **Development server**: `air` (auto-reloads on file changes)
-- **Build**: `go build -o ./build/server ./cmd/main.go`
+- **Build single binary**: `make <binary_name>` (e.g., `make controller`)
+- **Build all binaries**: `make` or `make all` (builds all cmd/*/main.go files)
+- **Clean build artifacts**: `make clean`
 - **Generate templates/CSS**: `go generate ./...`
-- **Docker build**: `docker build -t <image> .`
+- **Docker build**: `docker build -t <image> .` (builds controller binary)
 - **No test framework configured** - add Go tests as needed
 
 ## Code Style Guidelines
