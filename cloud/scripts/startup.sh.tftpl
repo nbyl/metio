@@ -48,6 +48,32 @@ EOF
     systemctl start minecraft-backup
 }
 
+do_start_machine_agent() {
+    cat << 'EOF' > /etc/systemd/system/metio-machine-agent.service
+[Unit]
+Description=Metio Machine Agent
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+Restart=always
+ExecStartPre=-/usr/bin/docker stop %n
+ExecStartPre=-/usr/bin/docker rm %n
+ExecStartPre=/usr/bin/docker pull gcr.io/your-project/metio-machine-agent:latest
+ExecStart=/usr/bin/docker run --rm --name %n \
+-v /var/run/docker.sock:/var/run/docker.sock \
+gcr.io/your-project/metio-machine-agent:latest
+ExecStop=/usr/bin/docker stop %n
+
+[Install]
+WantedBy=default.target
+EOF
+    systemctl daemon-reload
+    systemctl enable metio-machine-agent
+    systemctl start metio-machine-agent
+}
+
 do_start_server() {
     cat << 'EOF' > /etc/systemd/system/minecraft.service
 [Unit]
@@ -98,3 +124,4 @@ mount /dev/disk/by-id/google-minecraft-data /mnt/disks/minecraft/data
 #do_setup_backup
 do_start_server
 do_start_backup
+do_start_machine_agent
