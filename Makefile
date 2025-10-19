@@ -34,10 +34,19 @@ clean:
 
 # Deploy Minecraft server: build Docker image and apply OpenTofu
 deploy-minecraft: machine-agent
-	@echo "Building Docker image for machine-agent..."
-	gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml
-	@echo "Deploying infrastructure with OpenTofu..."
-	tofu -chdir=cloud apply || terraform -chdir=cloud apply
+	set -e ;\
+	echo "Building Docker image for machine-agent..." ;\
+	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)") ;\
+	echo "Build ID: $${MACHINE_AGENT_BUILD_ID}" ;\
+	MACHINE_AGENT_IMAGE_TAG=$$(gcloud builds describe $${MACHINE_AGENT_BUILD_ID} --format="value(images[0])") ;\
+	echo "Built image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
+	echo "Deploying infrastructure with OpenTofu using image $${MACHINE_AGENT_IMAGE_TAG}..." ;\
+	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}"
+
+# #	
+# 	@echo "Built image: $(MACHINE_AGENT_IMAGE_TAG)"
+# 	@echo "Deploying infrastructure with OpenTofu using image $(MACHINE_AGENT_IMAGE_TAG)..."
+# 	tofu -chdir=cloud apply -var="machine_agent_image=$(MACHINE_AGENT_IMAGE_TAG)"
 
 # Show available targets
 help:
