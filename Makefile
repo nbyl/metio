@@ -32,11 +32,19 @@ build:
 clean:
 	rm -rf build/
 
+# Deploy Minecraft server: build Docker image and apply OpenTofu
+deploy-minecraft: machine-agent
+	@echo "Building Docker image for machine-agent..."
+	gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml
+	@echo "Deploying infrastructure with OpenTofu..."
+	tofu -chdir=cloud apply || terraform -chdir=cloud apply
+
 # Show available targets
 help:
 	@echo "Available targets:"
-	@echo "  all        - Build all binaries (default)"
-	@echo "  build      - Build all binaries"
-	@echo "  <binary>   - Build specific binary (e.g., make controller)"
-	@echo "  clean      - Remove build artifacts"
-	@echo "  help       - Show this help"
+	@echo "  all             - Build all binaries (default)"
+	@echo "  build           - Build all binaries"
+	@echo "  <binary>        - Build specific binary (e.g., make controller)"
+	@echo "  deploy-minecraft - Build Docker image and deploy with OpenTofu"
+	@echo "  clean           - Remove build artifacts"
+	@echo "  help            - Show this help"
