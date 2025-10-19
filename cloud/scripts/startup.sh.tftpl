@@ -49,7 +49,7 @@ EOF
 }
 
 do_start_machine_agent() {
-    cat << 'EOF' > /etc/systemd/system/metio-machine-agent.service
+    cat << EOF > /etc/systemd/system/metio-machine-agent.service
 [Unit]
 Description=Metio Machine Agent
 After=docker.service
@@ -60,10 +60,10 @@ TimeoutStartSec=0
 Restart=always
 ExecStartPre=-/usr/bin/docker stop %n
 ExecStartPre=-/usr/bin/docker rm %n
-ExecStartPre=/usr/bin/docker pull gcr.io/your-project/metio-machine-agent:latest
+ExecStartPre=/usr/bin/docker pull ${machine_agent_image}
 ExecStart=/usr/bin/docker run --rm --name %n \
 -v /var/run/docker.sock:/var/run/docker.sock \
-gcr.io/your-project/metio-machine-agent:latest
+${machine_agent_image}
 ExecStop=/usr/bin/docker stop %n
 
 [Install]
