@@ -45,6 +45,12 @@ variable "controller_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "machine_agent_image" {
+  description = "Docker image for metio-machine-agent"
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+
 variable "environment" {
   description = "The deployment environment (e.g., dev, staging, prod)."
   type        = string
