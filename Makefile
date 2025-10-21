@@ -41,12 +41,7 @@ deploy-minecraft: machine-agent
 	MACHINE_AGENT_IMAGE_TAG=$$(gcloud builds describe $${MACHINE_AGENT_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
 	echo "Built image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Deploying infrastructure with OpenTofu using image $${MACHINE_AGENT_IMAGE_TAG}..." ;\
-	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}"
-
-# #	
-# 	@echo "Built image: $(MACHINE_AGENT_IMAGE_TAG)"
-# 	@echo "Deploying infrastructure with OpenTofu using image $(MACHINE_AGENT_IMAGE_TAG)..."
-# 	tofu -chdir=cloud apply -var="machine_agent_image=$(MACHINE_AGENT_IMAGE_TAG)"
+	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -auto-approve
 
 # Show available targets
 help:
