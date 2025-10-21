@@ -29,7 +29,7 @@ resource "google_project_iam_member" "sa_logging_metric_writer" {
 
 resource "google_project_iam_member" "sa_container_registry_reader" {
   project = var.project_id
-  role    = "roles/containerregistry.ServiceAgent"
+  role    = "roles/artifactregistry.reader"
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 

@@ -1,7 +1,7 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-f', 'cmd/machine-agent/Dockerfile', '-t', 'gcr.io/$PROJECT_ID/metio-machine-agent:latest', '.']
+  args: ['build', '-f', 'cmd/machine-agent/Dockerfile', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/machine-agent:$BUILD_ID', '.']
 images:
-- 'gcr.io/$PROJECT_ID/metio-machine-agent:latest'
+- '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/machine-agent:$BUILD_ID'
 options:
   logging: CLOUD_LOGGING_ONLY
