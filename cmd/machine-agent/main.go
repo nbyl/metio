@@ -42,7 +42,7 @@ func main() {
 }
 
 func getMinecraftPlayerCount() (int, int, error) {
-	cmd := exec.Command("docker", "exec", "minecraft", "rcon-cli", "--password", "minecraft2025", "list")
+	cmd := exec.Command("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "list")
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, 0, err
