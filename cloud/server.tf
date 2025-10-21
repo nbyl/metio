@@ -101,7 +101,14 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
-   metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, minecraft_version = var.minecraft_version, machine_agent_image = var.machine_agent_image })
+  metadata = {
+    user-data = templatefile("scripts/cloud-config.yaml.tftpl", {
+      backup_bucket       = resource.google_storage_bucket.minecraft-backups.name,
+      minecraft_version   = var.minecraft_version,
+      machine_agent_image = var.machine_agent_image,
+      region = var.region,
+    })
+  }
 }
 
 resource "google_compute_resource_policy" "daily_shutdown" {
