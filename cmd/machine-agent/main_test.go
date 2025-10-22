@@ -19,6 +19,11 @@ func (m *MockDB) UpdateStatus(ctx context.Context, instanceName string, status d
 	return args.Error(0)
 }
 
+func (m *MockDB) GetStatus(ctx context.Context, instanceName string) (db.Status, error) {
+	args := m.Called(ctx, instanceName)
+	return args.Get(0).(db.Status), args.Error(1)
+}
+
 func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
