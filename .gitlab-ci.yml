@@ -16,6 +16,7 @@ build-controller:
     stage: build
     identity: google_cloud
     script:
+      - gcloud config set project "${TF_VAR_project_id}"  
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
       - gcloud compute  instances list
       - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
