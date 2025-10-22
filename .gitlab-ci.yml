@@ -1,8 +1,8 @@
 ---
 stages:
+  - build
   - validate
   - test
-  - build
   - plan
   - deploy
   - cleanup
@@ -14,8 +14,8 @@ variables:
 build-controller:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
     stage: build
+    identity: google_cloud
     script:
-      - source .gitlab/ci/setup-application-credentials.sh
       - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
