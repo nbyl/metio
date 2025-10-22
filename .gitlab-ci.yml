@@ -1,8 +1,8 @@
 ---
 stages:
-  - build
   - validate
   - test
+  - build
   - plan
   - deploy
   - cleanup
@@ -18,7 +18,6 @@ build-controller:
     script:
       - gcloud config set project "${TF_VAR_project_id}"  
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
-      - gcloud compute  instances list
       - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -30,8 +29,10 @@ build-controller:
 build-machine-agent:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
     stage: build
+    identity: google_cloud
     script:
-      - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+      - gcloud config set project "${TF_VAR_project_id}"  
+      - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
       - gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
