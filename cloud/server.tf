@@ -33,6 +33,12 @@ resource "google_project_iam_member" "sa_container_registry_reader" {
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
+resource "google_project_iam_member" "sa_firestore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
 resource "google_compute_disk" "primary" {
   name = "${var.environment}-minecraft-data"
   type = "pd-ssd"
@@ -106,7 +112,9 @@ resource "google_compute_instance" "minecraft-server" {
       backup_bucket       = resource.google_storage_bucket.minecraft-backups.name,
       minecraft_version   = var.minecraft_version,
       machine_agent_image = var.machine_agent_image,
-      region = var.region,
+      region              = var.region,
+      environment         = var.environment,
+      instance_name       = "${var.environment}-minecraft-server",
     })
   }
 }

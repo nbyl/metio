@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
@@ -8,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
+	"cloud.google.com/go/firestore"
 	"github.com/spf13/viper"
 )
 
@@ -21,6 +24,32 @@ func main() {
 		log.Fatalf("Invalid interval format: %v", err)
 	}
 
+	environment := viper.GetString("ENVIRONMENT")
+	if environment == "" {
+		environment = "dev"
+	}
+	region := viper.GetString("REGION")
+	if region == "" {
+		region = "us-central1"
+	}
+	instanceName := viper.GetString("INSTANCE_NAME")
+	if instanceName == "" {
+		instanceName = "minecraft-server"
+	}
+
+	projectID, err := metadata.ProjectID()
+	if err != nil {
+		log.Fatalf("Error getting project ID: %v", err)
+	}
+
+	ctx := context.Background()
+	databaseID := fmt.Sprintf("%s-metio-db", environment)
+	client, err := firestore.NewClientWithDatabase(ctx, projectID, databaseID)
+	if err != nil {
+		log.Fatalf("Error creating Firestore client: %v", err)
+	}
+	defer client.Close()
+
 	fmt.Printf("Machine agent started with check interval: %v\n", interval)
 
 	ticker := time.NewTicker(interval)
@@ -32,7 +61,14 @@ func main() {
 			if err != nil {
 				log.Printf("Error getting player count: %v", err)
 			} else {
-				log.Printf("Minecraft players online: %d/%d", current, max)
+				_, _, err = client.Collection("instances").Doc(fmt.Sprintf("%s-%s-%s", environment, region, instanceName)).Collection("status").Add(ctx, map[string]interface{}{
+					"current":   current,
+					"max":       max,
+					"timestamp": time.Now(),
+				})
+				if err != nil {
+					log.Printf("Error writing to Firestore: %v", err)
+				}
 			}
 		}
 	}()
