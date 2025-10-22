@@ -1,5 +1,7 @@
 .PHONY: all build clean help
 
+USERNAME := $(shell whoami)
+
 # Default target builds all binaries
 all: build
 
@@ -36,7 +38,7 @@ clean:
 deploy-minecraft: machine-agent
 	set -e ;\
 	echo "Building Docker image for machine-agent..." ;\
-	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3) ;\
+	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local") ;\
 	echo "Build ID: $${MACHINE_AGENT_BUILD_ID}" ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(gcloud builds describe $${MACHINE_AGENT_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
 	echo "Built image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
