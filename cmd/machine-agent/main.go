@@ -14,6 +14,9 @@ import (
 	"gitlab.com/nbyl/metio/db"
 )
 
+var execCommand = exec.Command
+var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
+
 func main() {
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
 	viper.AutomaticEnv()
@@ -56,17 +59,8 @@ func main() {
 
 	go func() {
 		for range ticker.C {
-			current, max, err := getMinecraftPlayerCount()
-			if err != nil {
-				log.Printf("Error getting player count: %v", err)
-			} else {
-				err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
-					Players:   db.Players{Current: current, Max: max},
-					Timestamp: time.Now(),
-				})
-				if err != nil {
-					log.Printf("Error writing to Firestore: %v", err)
-				}
+			if err := runStatusUpdate(ctx, dbConn, instanceName); err != nil {
+				log.Printf("Error in status update: %v", err)
 			}
 		}
 	}()
@@ -75,8 +69,19 @@ func main() {
 	select {}
 }
 
+func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) error {
+	current, max, err := getMinecraftPlayerCountFunc()
+	if err != nil {
+		return err
+	}
+	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
+		Players:   db.Players{Current: current, Max: max},
+		Timestamp: time.Now(),
+	})
+}
+
 func getMinecraftPlayerCount() (int, int, error) {
-	cmd := exec.Command("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "list")
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "list")
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, 0, err
