@@ -15,6 +15,7 @@ build-controller:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
     stage: build
     script:
+      - source .gitlab/ci/setup-application-credentials.sh
       - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
       - gcloud builds submit --tag gcr.io/$TF_VAR_project_id/controller:$CI_COMMIT_SHORT_SHA cmd/controller
     rules:
