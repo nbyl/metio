@@ -14,6 +14,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Players struct {
+	Current int `firestore:"current"`
+	Max     int `firestore:"max"`
+}
+
 func main() {
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
 	viper.AutomaticEnv()
@@ -43,7 +48,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	databaseID := fmt.Sprintf("%s-metio-db", environment)
+	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
 	client, err := firestore.NewClientWithDatabase(ctx, projectID, databaseID)
 	if err != nil {
 		log.Fatalf("Error creating Firestore client: %v", err)
@@ -61,9 +66,8 @@ func main() {
 			if err != nil {
 				log.Printf("Error getting player count: %v", err)
 			} else {
-				_, _, err = client.Collection("instances").Doc(fmt.Sprintf("%s-%s-%s", environment, region, instanceName)).Collection("status").Add(ctx, map[string]interface{}{
-					"current":   current,
-					"max":       max,
+				_, err = client.Collection("instances").Doc(instanceName).Collection("data").Doc("status").Set(ctx, map[string]interface{}{
+					"players":   Players{Current: current, Max: max},
 					"timestamp": time.Now(),
 				})
 				if err != nil {
