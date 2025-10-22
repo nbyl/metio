@@ -10,14 +10,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
-	"cloud.google.com/go/firestore"
 	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/db"
 )
-
-type Players struct {
-	Current int `firestore:"current"`
-	Max     int `firestore:"max"`
-}
 
 func main() {
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
@@ -49,11 +44,10 @@ func main() {
 
 	ctx := context.Background()
 	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
-	client, err := firestore.NewClientWithDatabase(ctx, projectID, databaseID)
+	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
 	if err != nil {
 		log.Fatalf("Error creating Firestore client: %v", err)
 	}
-	defer client.Close()
 
 	fmt.Printf("Machine agent started with check interval: %v\n", interval)
 
@@ -66,14 +60,12 @@ func main() {
 			if err != nil {
 				log.Printf("Error getting player count: %v", err)
 			} else {
-				_, err = client.Collection("instances").Doc(instanceName).Collection("data").Doc("status").Set(ctx, map[string]interface{}{
-					"players":   Players{Current: current, Max: max},
-					"timestamp": time.Now(),
+				err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
+					Players:   db.Players{Current: current, Max: max},
+					Timestamp: time.Now(),
 				})
 				if err != nil {
 					log.Printf("Error writing to Firestore: %v", err)
-				} else {
-					log.Printf("Successfully updated status for instance %s", instanceName)
 				}
 			}
 		}
