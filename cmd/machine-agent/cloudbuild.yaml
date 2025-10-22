@@ -3,3 +3,5 @@ steps:
   args: ['build', '-f', 'cmd/machine-agent/Dockerfile', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/machine-agent:$COMMIT_SHA', '.']
 images:
 - '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/machine-agent:$COMMIT_SHA'
+options:
+  logging: CLOUD_LOGGING_ONLY
