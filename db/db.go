@@ -9,6 +9,7 @@ import (
 
 type DB interface {
 	UpdateStatus(ctx context.Context, instanceName string, status Status) error
+	GetStatus(ctx context.Context, instanceName string) (Status, error)
 }
 
 type FirestoreDB struct {
@@ -30,4 +31,14 @@ func (db *FirestoreDB) UpdateStatus(ctx context.Context, instanceName string, st
 	}
 	log.Printf("Successfully updated status for instance %s", instanceName)
 	return nil
+}
+
+func (db *FirestoreDB) GetStatus(ctx context.Context, instanceName string) (Status, error) {
+	doc, err := db.client.Collection("instances").Doc(instanceName).Collection("data").Doc("status").Get(ctx)
+	if err != nil {
+		return Status{}, err
+	}
+	var status Status
+	err = doc.DataTo(&status)
+	return status, err
 }
