@@ -16,8 +16,7 @@ build-controller:
     stage: build
     script:
       - source .gitlab/ci/setup-application-credentials.sh
-      - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-      - gcloud builds submit --tag gcr.io/$TF_VAR_project_id/controller:$CI_COMMIT_SHORT_SHA cmd/controller
+      - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
@@ -30,7 +29,7 @@ build-machine-agent:
     stage: build
     script:
       - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-      - gcloud builds submit --tag gcr.io/$TF_VAR_project_id/machine-agent:$CI_COMMIT_SHORT_SHA cmd/machine-agent
+      - gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
