@@ -72,6 +72,8 @@ func main() {
 				})
 				if err != nil {
 					log.Printf("Error writing to Firestore: %v", err)
+				} else {
+					log.Printf("Successfully updated status for instance %s", instanceName)
 				}
 			}
 		}
