@@ -42,13 +42,13 @@ variable "minecraft_version" {
 variable "controller_image" {
   description = "The container image for the controller service."
   type        = string
-  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+  default     = "us-central1-docker.pkg.dev/cloudrun/container/hello"
 }
 
 variable "machine_agent_image" {
   description = "Docker image for metio-machine-agent"
   type        = string
-  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+  default     = "us-central1-docker.pkg.dev/cloudrun/container/hello"
 }
 
 variable "environment" {
