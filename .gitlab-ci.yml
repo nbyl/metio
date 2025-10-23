@@ -58,6 +58,7 @@ include:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: never
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+          when: manual
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
           when: never
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
@@ -66,6 +67,7 @@ include:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: never
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+          when: manual
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
           when: never
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
