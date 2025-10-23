@@ -15,6 +15,7 @@ build-controller:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
     stage: build
     identity: google_cloud
+    resource_group: cloudbuild
     script:
       - gcloud config set project "${TF_VAR_project_id}"  
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
@@ -30,6 +31,7 @@ build-machine-agent:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
     stage: build
     identity: google_cloud
+    resource_group: cloudbuild
     script:
       - gcloud config set project "${TF_VAR_project_id}"  
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
