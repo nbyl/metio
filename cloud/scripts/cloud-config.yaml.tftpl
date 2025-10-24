@@ -1,0 +1,104 @@
+#cloud-config
+device_aliases: {minecraft-data: /dev/disk/by-id/google-minecraft-data}
+fs_setup:
+  - {device: minecraft-data, filesystem: ext4, label: fs1}
+mounts:
+  - [minecraft-data, /mnt/disks/minecraft/data, ext4, "defaults", "0", "2"]
+users:
+  - name: metio
+    gecos: Metio User
+    shell: /bin/bash
+    primary_group: metio
+    groups: docker
+    system: false
+write_files:
+  - path: /etc/systemd/system/minecraft.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Minecraft Server
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      User=metio
+      WorkingDirectory=/home/metio
+      TimeoutStartSec=0
+      Restart=always
+      ExecStartPre=-/usr/bin/docker stop %n
+      ExecStartPre=-/usr/bin/docker rm %n
+      ExecStartPre=/usr/bin/docker pull itzg/minecraft-server:stable-java21
+      ExecStart=/usr/bin/docker run --rm --name %n \
+        -p 25565:25565 \
+        -p 127.0.0.1:25575:25575 \
+        -e EULA=TRUE \
+        -e VERSION=${minecraft_version} \
+        -e MAX_MEMORY=3G \
+        -e USE_MEOWICE_FLAGS=true \
+        -e RCON_PASSWORD=minecraft2025 \
+        -v /mnt/disks/minecraft/data:/data \
+        itzg/minecraft-server:stable-java21
+      ExecStop=/usr/bin/docker stop %n
+
+      [Install]
+      WantedBy=default.target
+  - path: /etc/systemd/system/minecraft-backup.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Minecraft Server
+      After=minecraft.service
+      Requires=minecraft.service
+
+      [Service]
+      User=metio
+      WorkingDirectory=/home/metio
+      TimeoutStartSec=0
+      Restart=always
+      ExecStartPre=-/usr/bin/docker stop %n
+      ExecStartPre=-/usr/bin/docker rm %n
+      ExecStartPre=/usr/bin/docker pull itzg/mc-backup
+      ExecStart=/usr/bin/docker run --rm --name %n \
+        --network host \
+        -e BACKUP_METHOD=restic \
+        -e BACKUP_INTERVAL=1h \
+        -e RESTIC_REPOSITORY=gs:${backup_bucket}:/ \
+        -e RESTIC_PASSWORD=minecraft2025 \
+        -e RCON_HOST=127.0.0.1 \
+        -e RCON_PASSWORD=minecraft2025 \
+        -v /mnt/disks/minecraft/data:/data \
+        itzg/mc-backup
+      ExecStop=/usr/bin/docker stop %n
+
+      [Install]
+      WantedBy=default.target
+  - path: /etc/systemd/system/metio-machine-agent.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Metio Machine Agent
+      After=docker.service
+      Requires=docker.service
+       [Service]
+       User=metio
+       WorkingDirectory=/home/metio
+       TimeoutStartSec=0
+       Restart=always
+       ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${region}-docker.pkg.dev
+       ExecStartPre=-/usr/bin/docker stop %n
+       ExecStartPre=-/usr/bin/docker rm %n
+       ExecStartPre=/usr/bin/docker pull ${machine_agent_image}
+       ExecStart=/usr/bin/docker run --rm --name %n \
+         -v /var/run/docker.sock:/var/run/docker.sock \
+         -e ENVIRONMENT=${environment} \
+         -e REGION=${region} \
+         -e INSTANCE_NAME=${instance_name} \
+         ${machine_agent_image}
+      ExecStop=/usr/bin/docker stop %n
+
+      [Install]
+      WantedBy=default.target
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable minecraft minecraft-backup metio-machine-agent
+  - systemctl start minecraft minecraft-backup metio-machine-agent

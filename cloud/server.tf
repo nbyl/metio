@@ -1,3 +1,18 @@
+locals {
+  user_data = templatefile("scripts/cloud-config.yaml.tftpl", {
+    backup_bucket       = google_storage_bucket.minecraft-backups.name
+    minecraft_version   = var.minecraft_version
+    machine_agent_image = var.machine_agent_image
+    region              = var.region
+    environment         = var.environment
+    instance_name       = "${var.environment}-minecraft-server"
+  })
+}
+
+resource "terraform_data" "user-data" {
+  input = local.user_data
+}
+
 resource "google_service_account" "minecraft-server-sa" {
   account_id   = "${var.environment}-ms"
   display_name = "Custom SA for VM Instance"
@@ -24,6 +39,18 @@ resource "google_project_iam_member" "sa_logging_log_writer" {
 resource "google_project_iam_member" "sa_logging_metric_writer" {
   project = var.project_id
   role    = "roles/monitoring.metricWriter"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
+resource "google_project_iam_member" "sa_container_registry_reader" {
+  project = var.project_id
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
+resource "google_project_iam_member" "sa_firestore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
@@ -95,7 +122,13 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
-  metadata_startup_script = templatefile("scripts/startup.sh.tftpl", { backup_bucket = resource.google_storage_bucket.minecraft-backups.name, minecraft_version = var.minecraft_version })
+    metadata = {
+      user-data = local.user_data
+    }
+
+    lifecycle {
+      replace_triggered_by = [terraform_data.user-data]
+    }
 }
 
 resource "google_compute_resource_policy" "daily_shutdown" {
