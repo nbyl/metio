@@ -1,3 +1,18 @@
+locals {
+  user_data = templatefile("scripts/cloud-config.yaml.tftpl", {
+    backup_bucket       = google_storage_bucket.minecraft-backups.name
+    minecraft_version   = var.minecraft_version
+    machine_agent_image = var.machine_agent_image
+    region              = var.region
+    environment         = var.environment
+    instance_name       = "${var.environment}-minecraft-server"
+  })
+}
+
+resource "terraform_data" "user-data" {
+  input = local.user_data
+}
+
 resource "google_service_account" "minecraft-server-sa" {
   account_id   = "${var.environment}-ms"
   display_name = "Custom SA for VM Instance"
@@ -107,16 +122,13 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
-  metadata = {
-    user-data = templatefile("scripts/cloud-config.yaml.tftpl", {
-      backup_bucket       = resource.google_storage_bucket.minecraft-backups.name,
-      minecraft_version   = var.minecraft_version,
-      machine_agent_image = var.machine_agent_image,
-      region              = var.region,
-      environment         = var.environment,
-      instance_name       = "${var.environment}-minecraft-server",
-    })
-  }
+    metadata = {
+      user-data = local.user_data
+    }
+
+    lifecycle {
+      replace_triggered_by = [terraform_data.user-data]
+    }
 }
 
 resource "google_compute_resource_policy" "daily_shutdown" {

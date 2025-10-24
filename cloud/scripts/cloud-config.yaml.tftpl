@@ -1,4 +1,9 @@
 #cloud-config
+device_aliases: {minecraft-data: /dev/disk/by-id/google-minecraft-data}
+fs_setup:
+  - {device: minecraft-data, filesystem: ext4, label: fs1}
+mounts:
+  - [minecraft-data, /mnt/disks/minecraft/data, ext4, "defaults", "0", "2"]
 users:
   - name: metio
     gecos: Metio User
@@ -94,27 +99,6 @@ write_files:
       [Install]
       WantedBy=default.target
 runcmd:
-  - |
-    #!/bin/bash
-    set -e
-    DISK=/dev/disk/by-id/google-minecraft-data
-    has_filesystem() {
-        DEVICE=$${1}
-        file -L -s $${DEVICE} | grep -q filesystem
-        echo "$${?}"
-    }
-    do_create_filesystem() {
-        DISK=$${1}
-        mkfs -j -t ext4 $${DISK}
-    }
-    HAS_FILESYSTEM=$(has_filesystem $${DISK})
-    echo "HAS_FILESYSTEM: $${HAS_FILESYSTEM}"
-    if ! (exit $${HAS_FILESYSTEM}); then
-        echo "Creating filesystem on $${DISK}."
-        do_create_filesystem $${DISK}
-    fi
-    mkdir -p /mnt/disks/minecraft/data
-    mount /dev/disk/by-id/google-minecraft-data /mnt/disks/minecraft/data
-    systemctl daemon-reload
-    systemctl enable minecraft minecraft-backup metio-machine-agent
-    systemctl start minecraft minecraft-backup metio-machine-agent
+  - systemctl daemon-reload
+  - systemctl enable minecraft minecraft-backup metio-machine-agent
+  - systemctl start minecraft minecraft-backup metio-machine-agent
