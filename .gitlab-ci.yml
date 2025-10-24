@@ -3,40 +3,49 @@ stages:
   - validate
   - test
   - build
-  - publish
   - plan
   - deploy
   - cleanup
 
 variables:
-  GITLAB_IMAGE: $CI_REGISTRY_IMAGE/controller:$CI_COMMIT_SHORT_SHA
-  TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
+    TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
+    TF_VAR_machine_agent_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/machine-agent:$CI_COMMIT_SHORT_SHA
 
 build-controller:
-  image: docker:24.0.5
-  stage: build
-  services:
-    - docker:24.0.5-dind
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    - docker build -t $GITLAB_IMAGE .
-    - docker push $GITLAB_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-    - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
-      when: never
-    - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
+    stage: build
+    identity: google_cloud
+    resource_group: cloudbuild
+    script:
+      - gcloud config set project "${TF_VAR_project_id}"  
+      - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
+      - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+      - if: $CI_OPEN_MERGE_REQUESTS
+        when: never
+      - if: $CI_COMMIT_BRANCH
+
+build-machine-agent:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
+    stage: build
+    identity: google_cloud
+    resource_group: cloudbuild
+    script:
+      - gcloud config set project "${TF_VAR_project_id}"  
+      - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
+      - gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
+    rules:
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+      - if: $CI_OPEN_MERGE_REQUESTS
+        when: never
+      - if: $CI_COMMIT_BRANCH
 
 include:
-  - component: gitlab.com/nbyl/google-artifact-registry/upload-artifact-registry@main
-    inputs:
-      stage: publish
-      source: $GITLAB_IMAGE
-      target: $TF_VAR_controller_image
-  - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
-    inputs:
+   - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
+     inputs:
       root_dir: cloud/
       auto_define_backend: true
       state_name: $CI_COMMIT_REF_SLUG
@@ -51,6 +60,7 @@ include:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: never
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+          when: manual
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
           when: never
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
@@ -59,6 +69,7 @@ include:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: never
         - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+          when: manual
         - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
           when: never
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
