@@ -80,6 +80,14 @@ resource "google_cloud_run_v2_service" "controller" {
     containers {
       image = var.controller_image
       env {
+        name  = "ENVIRONMENT"
+        value = google_compute_instance.minecraft-server.name
+      }
+      env {
+        name  = "REGION"
+        value = var.region
+      }
+      env {
         name  = "INSTANCE_NAME"
         value = google_compute_instance.minecraft-server.name
       }
