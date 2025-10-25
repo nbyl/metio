@@ -15,6 +15,11 @@ validate-go:
   stage: validate
   image: golang:1.24
   script:
+    - go generate ./...
+    - go mod tidy
+    - go mod verify
+    - go fmt ./...
+    - go vet ./...
     - go test ./... -coverprofile=coverage.out -covermode=atomic
     - go tool cover -html=coverage.out -o coverage.html
   artifacts:
