@@ -16,6 +16,7 @@ import (
 
 var execCommand = exec.Command
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
+var getUptimeFunc = getUptime
 
 func main() {
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
@@ -74,9 +75,14 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 	if err != nil {
 		return err
 	}
+	uptime, err := getUptimeFunc()
+	if err != nil {
+		return err
+	}
 	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
 		Players:   db.Players{Current: current, Max: max},
 		Timestamp: time.Now(),
+		Uptime:    uptime,
 	})
 }
 
@@ -97,4 +103,21 @@ func getMinecraftPlayerCount() (int, int, error) {
 	current, _ := strconv.Atoi(matches[1])
 	max, _ := strconv.Atoi(matches[2])
 	return current, max, nil
+}
+
+func getUptime() (string, error) {
+	cmd := execCommand("uptime")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	// Parse output like "14:23:45 up 2 days,  3:45,  1 user,  load average: 0.00, 0.00, 0.00"
+	re := regexp.MustCompile(`up\s+(.+?),\s+\d+\s+user`)
+	matches := re.FindStringSubmatch(string(output))
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not parse uptime from output: %s", string(output))
+	}
+
+	return matches[1], nil
 }

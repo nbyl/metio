@@ -27,10 +27,17 @@ func (m *MockDB) GetStatus(ctx context.Context, instanceName string) (db.Status,
 func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
+	oldUptimeFunc := getUptimeFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 5, 20, nil
 	}
-	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
+	getUptimeFunc = func() (string, error) {
+		return "2 days, 3:45", nil
+	}
+	defer func() {
+		getMinecraftPlayerCountFunc = oldGetFunc
+		getUptimeFunc = oldUptimeFunc
+	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
 
@@ -42,10 +49,17 @@ func TestRunStatusUpdate(t *testing.T) {
 func TestRunStatusUpdateError(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
+	oldUptimeFunc := getUptimeFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 10, nil
 	}
-	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
+	getUptimeFunc = func() (string, error) {
+		return "2 days, 3:45", nil
+	}
+	defer func() {
+		getMinecraftPlayerCountFunc = oldGetFunc
+		getUptimeFunc = oldUptimeFunc
+	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
 
@@ -75,5 +89,28 @@ func TestGetMinecraftPlayerCountInvalidOutput(t *testing.T) {
 	defer func() { execCommand = oldExecCommand }()
 
 	_, _, err := getMinecraftPlayerCount()
+	assert.Error(t, err)
+}
+
+func TestGetUptime(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "14:23:45 up 2 days, 3:45, 1 user, load average: 0.00, 0.00, 0.00")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	uptime, err := getUptime()
+	assert.NoError(t, err)
+	assert.Equal(t, "2 days, 3:45", uptime)
+}
+
+func TestGetUptimeInvalidOutput(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "Invalid output")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	_, err := getUptime()
 	assert.Error(t, err)
 }
