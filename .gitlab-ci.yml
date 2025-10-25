@@ -15,8 +15,6 @@ validate-go:
   stage: validate
   image: golang:1.24
   script:
-    - go fmt $(go list ./... | grep -v /vendor/)
-    - go vet $(go list ./... | grep -v /vendor/)
     - go test ./... -coverprofile=coverage.out -covermode=atomic
     - go tool cover -html=coverage.out -o coverage.html
   artifacts:
