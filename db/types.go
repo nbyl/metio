@@ -10,4 +10,5 @@ type Players struct {
 type Status struct {
 	Players   Players   `firestore:"players"`
 	Timestamp time.Time `firestore:"timestamp"`
+	Uptime    string    `firestore:"uptime"`
 }

@@ -133,7 +133,7 @@ func getServerStatus() (*views.ServerStatus, error) {
 		Status:     *resp.Status,
 		Players:    playerStatus.Players.Current,
 		MaxPlayers: playerStatus.Players.Max,
-		Uptime:     "TBD",
+		Uptime:     playerStatus.Uptime,
 		Version:    "TBD",
 		IP:         fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP),
 	}, nil
