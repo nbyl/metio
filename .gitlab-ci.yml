@@ -11,9 +11,12 @@ variables:
     TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
     TF_VAR_machine_agent_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/machine-agent:$CI_COMMIT_SHORT_SHA
 
-validate-go:
+test:
   stage: validate
-  image: golang:1.24
+  image: golang:1.24-alpine
+  before_script:
+    - apk add --no-cache nodejs npm
+    - npm ci
   script:
     - go generate ./...
     - go mod tidy
