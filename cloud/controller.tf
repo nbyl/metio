@@ -9,6 +9,12 @@ resource "google_project_iam_custom_role" "controller-role" {
     "compute.instances.start",
     "compute.instances.stop",
     "compute.zoneOperations.get",
+    "datastore.entities.allocateIds",
+    "datastore.entities.create",
+    "datastore.entities.delete",
+    "datastore.entities.get",
+    "datastore.entities.list",
+    "datastore.entities.update",
     "logging.logEntries.create",
     "monitoring.timeSeries.create",
   ]
@@ -81,7 +87,7 @@ resource "google_cloud_run_v2_service" "controller" {
       image = var.controller_image
       env {
         name  = "ENVIRONMENT"
-        value = google_compute_instance.minecraft-server.name
+        value = var.environment
       }
       env {
         name  = "REGION"
