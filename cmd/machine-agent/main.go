@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	compute "cloud.google.com/go/compute/apiv1"
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/db"
@@ -20,6 +22,7 @@ var execCommand = exec.Command
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
 var osReadFile = os.ReadFile
+var getServerStateFunc = getServerState
 
 func main() {
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
@@ -82,10 +85,16 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 	if err != nil {
 		return err
 	}
+	serverState, err := getServerStateFunc(ctx, instanceName)
+	if err != nil {
+		log.Printf("Error getting server state: %v", err)
+		serverState = "UNKNOWN"
+	}
 	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
-		Players:   db.Players{Current: current, Max: max},
-		Timestamp: time.Now(),
-		Uptime:    uptime,
+		Players:     db.Players{Current: current, Max: max},
+		Timestamp:   time.Now(),
+		Uptime:      uptime,
+		ServerState: serverState,
 	})
 }
 
@@ -139,4 +148,25 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d days, %d:%02d", days, hours, minutes)
 	}
 	return fmt.Sprintf("%d:%02d", hours, minutes)
+}
+
+func getServerState(ctx context.Context, instanceName string) (string, error) {
+	c, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer c.Close()
+
+	req := &computepb.GetInstanceRequest{
+		Instance: instanceName,
+		Project:  viper.GetString("GCP_PROJECT"),
+		Zone:     viper.GetString("GCP_ZONE"),
+	}
+
+	resp, err := c.Get(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	return *resp.Status, nil
 }
