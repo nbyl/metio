@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"testing"
 
@@ -27,10 +28,17 @@ func (m *MockDB) GetStatus(ctx context.Context, instanceName string) (db.Status,
 func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
+	oldUptimeFunc := getUptimeFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 5, 20, nil
 	}
-	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
+	getUptimeFunc = func() (string, error) {
+		return "2 days, 3:45", nil
+	}
+	defer func() {
+		getMinecraftPlayerCountFunc = oldGetFunc
+		getUptimeFunc = oldUptimeFunc
+	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
 
@@ -42,10 +50,17 @@ func TestRunStatusUpdate(t *testing.T) {
 func TestRunStatusUpdateError(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
+	oldUptimeFunc := getUptimeFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 10, nil
 	}
-	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
+	getUptimeFunc = func() (string, error) {
+		return "2 days, 3:45", nil
+	}
+	defer func() {
+		getMinecraftPlayerCountFunc = oldGetFunc
+		getUptimeFunc = oldUptimeFunc
+	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
 
@@ -75,5 +90,31 @@ func TestGetMinecraftPlayerCountInvalidOutput(t *testing.T) {
 	defer func() { execCommand = oldExecCommand }()
 
 	_, _, err := getMinecraftPlayerCount()
+	assert.Error(t, err)
+}
+
+func TestGetUptime(t *testing.T) {
+	oldReadFile := osReadFile
+	osReadFile = func(filename string) ([]byte, error) {
+		if filename == "/proc/uptime" {
+			return []byte("172800.00 123456.78"), nil // 2 days in seconds
+		}
+		return nil, fmt.Errorf("file not found")
+	}
+	defer func() { osReadFile = oldReadFile }()
+
+	uptime, err := getUptime()
+	assert.NoError(t, err)
+	assert.Equal(t, "2 days, 0:00", uptime)
+}
+
+func TestGetUptimeInvalidOutput(t *testing.T) {
+	oldReadFile := osReadFile
+	osReadFile = func(filename string) ([]byte, error) {
+		return []byte("invalid"), nil
+	}
+	defer func() { osReadFile = oldReadFile }()
+
+	_, err := getUptime()
 	assert.Error(t, err)
 }

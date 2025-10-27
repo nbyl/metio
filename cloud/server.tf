@@ -122,13 +122,13 @@ resource "google_compute_instance" "minecraft-server" {
     scopes = ["cloud-platform"]
   }
 
-    metadata = {
-      user-data = local.user_data
-    }
+  metadata = {
+    user-data = local.user_data
+  }
 
-    lifecycle {
-      replace_triggered_by = [terraform_data.user-data]
-    }
+  lifecycle {
+    replace_triggered_by = [terraform_data.user-data]
+  }
 }
 
 resource "google_compute_resource_policy" "daily_shutdown" {
