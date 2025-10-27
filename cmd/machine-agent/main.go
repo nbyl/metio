@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
@@ -17,6 +19,7 @@ import (
 var execCommand = exec.Command
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
+var osReadFile = os.ReadFile
 
 func main() {
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
@@ -106,18 +109,34 @@ func getMinecraftPlayerCount() (int, int, error) {
 }
 
 func getUptime() (string, error) {
-	cmd := execCommand("uptime")
-	output, err := cmd.Output()
+	data, err := osReadFile("/proc/uptime")
 	if err != nil {
 		return "", err
 	}
 
-	// Parse output like "14:23:45 up 2 days,  3:45,  1 user,  load average: 0.00, 0.00, 0.00"
-	re := regexp.MustCompile(`up\s+(.+?),\s+\d+\s+user`)
-	matches := re.FindStringSubmatch(string(output))
-	if len(matches) < 2 {
-		return "", fmt.Errorf("could not parse uptime from output: %s", string(output))
+	// Parse uptime in seconds from /proc/uptime (first number)
+	fields := strings.Fields(string(data))
+	if len(fields) < 1 {
+		return "", fmt.Errorf("could not parse uptime from /proc/uptime: %s", string(data))
 	}
 
-	return matches[1], nil
+	uptimeSeconds, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return "", fmt.Errorf("could not parse uptime seconds: %v", err)
+	}
+
+	// Convert to duration and format
+	duration := time.Duration(uptimeSeconds * float64(time.Second))
+	return formatDuration(duration), nil
+}
+
+func formatDuration(d time.Duration) string {
+	days := int(d.Hours() / 24)
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%d days, %d:%02d", days, hours, minutes)
+	}
+	return fmt.Sprintf("%d:%02d", hours, minutes)
 }

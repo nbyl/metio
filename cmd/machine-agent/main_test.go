@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"testing"
 
@@ -93,23 +94,26 @@ func TestGetMinecraftPlayerCountInvalidOutput(t *testing.T) {
 }
 
 func TestGetUptime(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		return exec.Command("echo", "14:23:45 up 2 days, 3:45, 1 user, load average: 0.00, 0.00, 0.00")
+	oldReadFile := osReadFile
+	osReadFile = func(filename string) ([]byte, error) {
+		if filename == "/proc/uptime" {
+			return []byte("172800.00 123456.78"), nil // 2 days in seconds
+		}
+		return nil, fmt.Errorf("file not found")
 	}
-	defer func() { execCommand = oldExecCommand }()
+	defer func() { osReadFile = oldReadFile }()
 
 	uptime, err := getUptime()
 	assert.NoError(t, err)
-	assert.Equal(t, "2 days, 3:45", uptime)
+	assert.Equal(t, "2 days, 0:00", uptime)
 }
 
 func TestGetUptimeInvalidOutput(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		return exec.Command("echo", "Invalid output")
+	oldReadFile := osReadFile
+	osReadFile = func(filename string) ([]byte, error) {
+		return []byte("invalid"), nil
 	}
-	defer func() { execCommand = oldExecCommand }()
+	defer func() { osReadFile = oldReadFile }()
 
 	_, err := getUptime()
 	assert.Error(t, err)
