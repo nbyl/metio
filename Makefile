@@ -18,6 +18,13 @@ build:
 	done
 	@echo "All binaries built successfully"
 
+# Run all tests and create coverage report
+test:
+	@mkdir -p build
+	go test ./... -coverprofile=build/coverage.out -covermode=atomic
+	go tool cover -html=build/coverage.out -o build/coverage.html
+	@echo "Coverage report generated at build/coverage.html"
+
 # Build specific binary (usage: make controller)
 %:
 	@mkdir -p build
