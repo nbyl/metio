@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images help
 
 USERNAME := $(shell whoami)
 
@@ -44,8 +44,9 @@ clean:
 # Build machine-agent Docker image and save tag to file
 build-machine-agent-image:
 	@mkdir -p build
-	@echo "Building Docker image for machine-agent..."
-	@MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local" --polling-interval=3) ;\
+	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
+	echo "Building Docker image for machine-agent with timestamp: $${TIMESTAMP}..." ;\
+	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
 	echo "Build ID: $${MACHINE_AGENT_BUILD_ID}" ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(gcloud builds describe $${MACHINE_AGENT_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
 	echo "Built image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
@@ -55,8 +56,9 @@ build-machine-agent-image:
 # Build controller Docker image and save tag to file
 build-controller-image:
 	@mkdir -p build
-	@echo "Building Docker image for controller..."
-	@CONTROLLER_BUILD_ID=$$(gcloud builds submit . --config cmd/controller/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local" --polling-interval=3) ;\
+	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
+	echo "Building Docker image for controller with timestamp: $${TIMESTAMP}..." ;\
+	CONTROLLER_BUILD_ID=$$(gcloud builds submit . --config cmd/controller/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
 	echo "Build ID: $${CONTROLLER_BUILD_ID}" ;\
 	CONTROLLER_IMAGE_TAG=$$(gcloud builds describe $${CONTROLLER_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
 	echo "Built image: $${CONTROLLER_IMAGE_TAG}" ;\
@@ -135,13 +137,33 @@ deploy-controller: build-controller-image
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	tofu -chdir=cloud apply -target=google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
+# Clean up old local images to prevent registry bloat
+cleanup-old-images:
+	@echo "Cleaning old local machine-agent images..."
+	@PROJECT_ID=$$(gcloud config get-value project) ;\
+	LOCATION="europe-west3" ;\
+	gcloud artifacts docker images list "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio" --filter="tags~$(USERNAME)-local" --format="value(version)" --limit=10 | tail -n +6 | while read -r digest; do \
+		if [ -n "$$digest" ]; then \
+			echo "Deleting old image: $$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/machine-agent@$$digest" ;\
+			gcloud artifacts docker images delete "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/machine-agent@$$digest" --quiet || true ;\
+		fi ;\
+	done
+	@echo "Cleaning old local controller images..."
+	@gcloud artifacts docker images list "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio" --filter="tags~$(USERNAME)-local" --format="value(version)" --limit=10 | tail -n +6 | while read -r digest; do \
+		if [ -n "$$digest" ]; then \
+			echo "Deleting old image: $$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/controller@$$digest" ;\
+			gcloud artifacts docker images delete "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/controller@$$digest" --quiet || true ;\
+		fi ;\
+	done
+	@echo "Cleanup completed"
+
 # Show available targets
 help:
 	@echo "Available targets:"
 	@echo "  build                   - Build all binaries"
 	@echo "  <binary>                - Build specific binary (e.g., make controller)"
-	@echo "  build-machine-agent-image - Build machine-agent Docker image"
-	@echo "  build-controller-image   - Build controller Docker image"
+	@echo "  build-machine-agent-image - Build machine-agent Docker image (with timestamp)"
+	@echo "  build-controller-image   - Build controller Docker image (with timestamp)"
 	@echo "  build-images            - Build both Docker images"
 	@echo ""
 	@echo "Deployment targets:"
@@ -153,10 +175,17 @@ help:
 	@echo ""
 	@echo "Other targets:"
 	@echo "  clean                   - Remove build artifacts"
+	@echo "  cleanup-old-images      - Clean old local images from registry"
 	@echo "  help                    - Show this help"
+	@echo ""
+	@echo "Features:"
+	@echo "  - Images are built with timestamps (YYYYMMDD-HHMMSS) for unique tags"
+	@echo "  - VM recreation is automatically triggered when machine-agent image changes"
+	@echo "  - Use cleanup-old-images to prevent registry bloat"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make deploy-full              # Deploy everything with new images"
 	@echo "  make deploy-infrastructure    # Update infrastructure without rebuilding"
-	@echo "  make deploy-machine-agent     # Update only machine-agent"
+	@echo "  make deploy-machine-agent     # Update only machine-agent (triggers VM recreation)"
 	@echo "  make deploy-controller        # Update only web interface"
+	@echo "  make cleanup-old-images       # Clean old images from registry"
