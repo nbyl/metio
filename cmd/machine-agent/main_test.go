@@ -29,20 +29,15 @@ func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
-	oldServerStateFunc := getServerStateFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 5, 20, nil
 	}
 	getUptimeFunc = func() (string, error) {
 		return "2 days, 3:45", nil
 	}
-	getServerStateFunc = func(ctx context.Context, instanceName string) (string, error) {
-		return "RUNNING", nil
-	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
-		getServerStateFunc = oldServerStateFunc
 	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil).Run(func(args mock.Arguments) {
@@ -61,20 +56,15 @@ func TestRunStatusUpdateError(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
-	oldServerStateFunc := getServerStateFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 10, nil
 	}
 	getUptimeFunc = func() (string, error) {
 		return "2 days, 3:45", nil
 	}
-	getServerStateFunc = func(ctx context.Context, instanceName string) (string, error) {
-		return "RUNNING", nil
-	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
-		getServerStateFunc = oldServerStateFunc
 	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
@@ -134,14 +124,10 @@ func TestGetUptimeInvalidOutput(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestGetServerState(t *testing.T) {
-	// This test would require mocking the GCP compute client
+func TestGetInstanceIP(t *testing.T) {
+	// This test would require mocking the metadata client
 	// For now, we'll test the function structure
-	ctx := context.Background()
-	instanceName := "test-instance"
-
-	// Test that function exists and has correct signature
-	_ = func(context.Context, string) (string, error) {
-		return getServerState(ctx, instanceName)
+	_ = func() (string, error) {
+		return getInstanceIP()
 	}
 }
