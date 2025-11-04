@@ -13,6 +13,10 @@ resource "terraform_data" "user-data" {
   input = local.user_data
 }
 
+resource "terraform_data" "machine_agent_image" {
+  input = var.machine_agent_image
+}
+
 resource "google_service_account" "minecraft-server-sa" {
   account_id   = "${var.environment}-ms"
   display_name = "Custom SA for VM Instance"
@@ -127,7 +131,10 @@ resource "google_compute_instance" "minecraft-server" {
   }
 
   lifecycle {
-    replace_triggered_by = [terraform_data.user-data]
+    replace_triggered_by = [
+      terraform_data.user-data,
+      terraform_data.machine_agent_image
+    ]
   }
 }
 
