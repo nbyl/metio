@@ -162,110 +162,41 @@ func getServerStatus() (*views.ServerStatus, error) {
 	projectID := viper.GetString("GCP_PROJECT")
 	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
 
-	// Try to get all data from DB first
 	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
 	if err != nil {
-		log.Printf("Error connecting to db: %v", err)
-		return getServerStatusFromGCP(ctx, instanceName, projectID, databaseID)
+		return nil, fmt.Errorf("error connecting to database: %w", err)
 	}
 
 	playerStatus, err := dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
-		log.Printf("Error getting status from db: %v", err)
-		return getServerStatusFromGCP(ctx, instanceName, projectID, databaseID)
+		return nil, fmt.Errorf("error getting status from database: %w", err)
 	}
 
-	// If server state is not available in DB, fall back to GCP
-	if playerStatus.ServerState == "" {
-		log.Printf("Server state not available in DB, falling back to GCP")
-		return getServerStatusFromGCP(ctx, instanceName, projectID, databaseID)
-	}
-
-	// Convert server state string to computepb.Instance_State enum
-	serverState := playerStatus.ServerState
-
-	// Get IP from GCP since it's not stored in DB
-	ip, err := getInstanceIP(ctx)
-	if err != nil {
-		log.Printf("Error getting IP from GCP: %v", err)
+	// Handle missing IP with default
+	ip := playerStatus.InstanceIP
+	if ip == "" {
 		ip = "unknown:25565"
 	}
 
+	// Only show player/uptime data when server is running
+	var players, maxPlayers int
+	var uptime string
+	if playerStatus.ServerState == "RUNNING" {
+		players = playerStatus.Players.Current
+		maxPlayers = playerStatus.Players.Max
+		uptime = playerStatus.Uptime
+	} else {
+		players = 0
+		maxPlayers = 0
+		uptime = ""
+	}
+
 	return &views.ServerStatus{
-		Status:     serverState,
-		Players:    playerStatus.Players.Current,
-		MaxPlayers: playerStatus.Players.Max,
-		Uptime:     playerStatus.Uptime,
+		Status:     playerStatus.ServerState,
+		Players:    players,
+		MaxPlayers: maxPlayers,
+		Uptime:     uptime,
 		Version:    "TBD",
 		IP:         ip,
 	}, nil
-}
-
-func getServerStatusFromGCP(ctx context.Context, instanceName, projectID, databaseID string) (*views.ServerStatus, error) {
-	c, err := compute.NewInstancesRESTClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer c.Close()
-
-	req := &computepb.GetInstanceRequest{
-		Instance: instanceName,
-		Project:  projectID,
-		Zone:     viper.GetString("GCP_ZONE"),
-	}
-
-	resp, err := c.Get(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get player data from db
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
-	if err != nil {
-		log.Printf("Error connecting to db: %v", err)
-		return &views.ServerStatus{
-			Status:     *resp.Status,
-			Players:    0,
-			MaxPlayers: 20,
-			Uptime:     "unknown",
-			Version:    "TBD",
-			IP:         fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP),
-		}, nil
-	}
-
-	playerStatus, err := dbConn.GetStatus(ctx, instanceName)
-	if err != nil {
-		log.Printf("Error getting status from db: %v", err)
-		playerStatus = db.Status{Players: db.Players{Current: 0, Max: 20}}
-	}
-
-	return &views.ServerStatus{
-		Status:     *resp.Status,
-		Players:    playerStatus.Players.Current,
-		MaxPlayers: playerStatus.Players.Max,
-		Uptime:     playerStatus.Uptime,
-		Version:    "TBD",
-		IP:         fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP),
-	}, nil
-}
-
-func getInstanceIP(ctx context.Context) (string, error) {
-	c, err := compute.NewInstancesRESTClient(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer c.Close()
-
-	req := &computepb.GetInstanceRequest{
-		Instance: viper.GetString("INSTANCE_NAME"),
-		Project:  viper.GetString("GCP_PROJECT"),
-		Zone:     viper.GetString("GCP_ZONE"),
-	}
-
-	resp, err := c.Get(ctx, req)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP), nil
 }
