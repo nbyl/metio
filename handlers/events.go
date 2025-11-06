@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,23 +24,20 @@ type PubSubMessage struct {
 
 // AuditLogEntry represents the structure of a GCP audit log entry
 type AuditLogEntry struct {
+	LogName      string `json:"logName"`
 	ProtoPayload struct {
 		MethodName         string `json:"methodName"`
 		ResourceName       string `json:"resourceName"`
 		AuthenticationInfo struct {
 			PrincipalEmail string `json:"principalEmail"`
 		} `json:"authenticationInfo"`
-		Request struct {
-			Instance string `json:"instance"`
-			Zone     string `json:"zone"`
-		} `json:"request"`
 	} `json:"protoPayload"`
 	Resource struct {
 		Type   string `json:"type"`
 		Labels struct {
 			InstanceID string `json:"instance_id"`
-			Zone       string `json:"zone"`
 			ProjectID  string `json:"project_id"`
+			Zone       string `json:"zone"`
 		} `json:"labels"`
 	} `json:"resource"`
 	Timestamp string `json:"timestamp"`
@@ -91,32 +87,21 @@ func verifyPubSubAuth(r *http.Request) bool {
 func processAuditLogEvent(data []byte) {
 	ctx := context.Background()
 
-	// Try to decode as base64 first (for manual Pub/Sub messages)
-	auditLogData := data
-	var err error
-	if len(data) > 0 && isBase64(string(data)) {
-		auditLogData, err = decodeBase64(data)
-		if err != nil {
-			log.Printf("Failed to decode audit log data: %v", err)
-			return
-		}
-	}
-
-	// Parse the audit log entry
+	// Parse the audit log entry directly (data is already JSON)
 	var auditLog AuditLogEntry
-	if err := json.Unmarshal(auditLogData, &auditLog); err != nil {
+	if err := json.Unmarshal(data, &auditLog); err != nil {
 		log.Printf("Failed to parse audit log entry: %v", err)
-		log.Printf("Raw data: %s", string(auditLogData))
+		log.Printf("Raw data: %s", string(data))
 		return
 	}
 
 	// Process the event based on the method name
 	switch auditLog.ProtoPayload.MethodName {
-	case "compute.instances.stop":
+	case "v1.compute.instances.stop":
 		handleInstanceStop(ctx, auditLog)
-	case "compute.instances.start":
+	case "v1.compute.instances.start":
 		handleInstanceStart(ctx, auditLog)
-	case "compute.instances.preempted":
+	case "v1.compute.instances.preempted":
 		handleInstancePreempted(ctx, auditLog)
 	default:
 		log.Printf("Ignoring audit log method: %s", auditLog.ProtoPayload.MethodName)
@@ -221,15 +206,4 @@ func updateInstanceState(ctx context.Context, instanceName, state string) error 
 		ServerState: state,
 		InstanceIP:  currentStatus.InstanceIP,
 	})
-}
-
-func decodeBase64(data []byte) ([]byte, error) {
-	// Pub/Sub sends data as base64 encoded string in the JSON
-	// We need to decode it to get the actual audit log entry
-	return base64.StdEncoding.DecodeString(string(data))
-}
-
-func isBase64(s string) bool {
-	_, err := base64.StdEncoding.DecodeString(s)
-	return err == nil
 }
