@@ -82,10 +82,17 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 	if err != nil {
 		return err
 	}
+	instanceIP, err := getInstanceIP()
+	if err != nil {
+		log.Printf("Error getting instance IP: %v", err)
+		instanceIP = "unknown:25565"
+	}
 	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
-		Players:   db.Players{Current: current, Max: max},
-		Timestamp: time.Now(),
-		Uptime:    uptime,
+		Players:     db.Players{Current: current, Max: max},
+		Timestamp:   time.Now(),
+		Uptime:      uptime,
+		ServerState: db.ServerStateRunning,
+		InstanceIP:  instanceIP,
 	})
 }
 
@@ -139,4 +146,12 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d days, %d:%02d", days, hours, minutes)
 	}
 	return fmt.Sprintf("%d:%02d", hours, minutes)
+}
+
+func getInstanceIP() (string, error) {
+	ip, err := metadata.ExternalIP()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s:25565", ip), nil
 }

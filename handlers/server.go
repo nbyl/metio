@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
@@ -48,6 +49,38 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update DB with starting status
+	instanceName := viper.GetString("INSTANCE_NAME")
+	environment := viper.GetString("ENVIRONMENT")
+	region := viper.GetString("REGION")
+	projectID := viper.GetString("GCP_PROJECT")
+	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+
+	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	if err != nil {
+		log.Printf("Error connecting to db for status update: %v", err)
+	} else {
+		// Get current status to preserve player data
+		currentStatus, err := dbConn.GetStatus(ctx, instanceName)
+		if err != nil {
+			log.Printf("Error getting current status from db: %v", err)
+			currentStatus = db.Status{
+				Players: db.Players{Current: 0, Max: 20},
+			}
+		}
+
+		// Update with starting status
+		err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
+			Players:     currentStatus.Players,
+			Timestamp:   time.Now(),
+			Uptime:      currentStatus.Uptime,
+			ServerState: db.ServerStateStarting,
+		})
+		if err != nil {
+			log.Printf("Error updating server state in db: %v", err)
+		}
+	}
+
 	http.Redirect(w, r, "/server", http.StatusSeeOther)
 }
 
@@ -74,6 +107,38 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update DB with stopping status
+	instanceName := viper.GetString("INSTANCE_NAME")
+	environment := viper.GetString("ENVIRONMENT")
+	region := viper.GetString("REGION")
+	projectID := viper.GetString("GCP_PROJECT")
+	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+
+	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	if err != nil {
+		log.Printf("Error connecting to db for status update: %v", err)
+	} else {
+		// Get current status to preserve player data
+		currentStatus, err := dbConn.GetStatus(ctx, instanceName)
+		if err != nil {
+			log.Printf("Error getting current status from db: %v", err)
+			currentStatus = db.Status{
+				Players: db.Players{Current: 0, Max: 20},
+			}
+		}
+
+		// Update with stopping status
+		err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
+			Players:     currentStatus.Players,
+			Timestamp:   time.Now(),
+			Uptime:      currentStatus.Uptime,
+			ServerState: db.ServerStateStopping,
+		})
+		if err != nil {
+			log.Printf("Error updating server state in db: %v", err)
+		}
+	}
+
 	http.Redirect(w, r, "/server", http.StatusSeeOther)
 }
 
@@ -91,50 +156,47 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 
 func getServerStatus() (*views.ServerStatus, error) {
 	ctx := context.Background()
-	c, err := compute.NewInstancesRESTClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer c.Close()
-
-	req := &computepb.GetInstanceRequest{
-		Instance: viper.GetString("INSTANCE_NAME"),
-		Project:  viper.GetString("GCP_PROJECT"),
-		Zone:     viper.GetString("GCP_ZONE"),
-	}
-
-	resp, err := c.Get(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get player data from db
 	instanceName := viper.GetString("INSTANCE_NAME")
 	environment := viper.GetString("ENVIRONMENT")
 	region := viper.GetString("REGION")
 	projectID := viper.GetString("GCP_PROJECT")
 	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+
 	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
 	if err != nil {
-		log.Printf("Error connecting to db: %v", err)
+		return nil, fmt.Errorf("error connecting to database: %w", err)
 	}
-	var playerStatus db.Status
-	if dbConn != nil {
-		playerStatus, err = dbConn.GetStatus(ctx, instanceName)
-		if err != nil {
-			log.Printf("Error getting status from db: %v", err)
-			playerStatus = db.Status{Players: db.Players{Current: 0, Max: 20}}
-		}
+
+	playerStatus, err := dbConn.GetStatus(ctx, instanceName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting status from database: %w", err)
+	}
+
+	// Handle missing IP with default
+	ip := playerStatus.InstanceIP
+	if ip == "" {
+		ip = "unknown:25565"
+	}
+
+	// Only show player/uptime data when server is running
+	var players, maxPlayers int
+	var uptime string
+	if playerStatus.ServerState == db.ServerStateRunning {
+		players = playerStatus.Players.Current
+		maxPlayers = playerStatus.Players.Max
+		uptime = playerStatus.Uptime
 	} else {
-		playerStatus = db.Status{Players: db.Players{Current: 0, Max: 20}}
+		players = 0
+		maxPlayers = 0
+		uptime = ""
 	}
 
 	return &views.ServerStatus{
-		Status:     *resp.Status,
-		Players:    playerStatus.Players.Current,
-		MaxPlayers: playerStatus.Players.Max,
-		Uptime:     playerStatus.Uptime,
+		Status:     playerStatus.ServerState.String(),
+		Players:    players,
+		MaxPlayers: maxPlayers,
+		Uptime:     uptime,
 		Version:    "TBD",
-		IP:         fmt.Sprintf("%s:25565", *resp.NetworkInterfaces[0].AccessConfigs[0].NatIP),
+		IP:         ip,
 	}, nil
 }

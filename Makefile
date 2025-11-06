@@ -1,4 +1,4 @@
-.PHONY: all build clean help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images help
 
 USERNAME := $(shell whoami)
 
@@ -41,23 +41,151 @@ test:
 clean:
 	rm -rf build/
 
-# Deploy Minecraft server: build Docker image and apply OpenTofu
-deploy-minecraft: machine-agent
-	set -e ;\
-	echo "Building Docker image for machine-agent..." ;\
-	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local") ;\
+# Build machine-agent Docker image and save tag to file
+build-machine-agent-image:
+	@mkdir -p build
+	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
+	echo "Building Docker image for machine-agent with timestamp: $${TIMESTAMP}..." ;\
+	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
 	echo "Build ID: $${MACHINE_AGENT_BUILD_ID}" ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(gcloud builds describe $${MACHINE_AGENT_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
 	echo "Built image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
-	echo "Deploying infrastructure with OpenTofu using image $${MACHINE_AGENT_IMAGE_TAG}..." ;\
-	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -auto-approve
+	echo "$${MACHINE_AGENT_IMAGE_TAG}" > build/machine-agent-image.txt ;\
+	echo "Machine agent image tag saved to build/machine-agent-image.txt"
+
+# Build controller Docker image and save tag to file
+build-controller-image:
+	@mkdir -p build
+	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
+	echo "Building Docker image for controller with timestamp: $${TIMESTAMP}..." ;\
+	CONTROLLER_BUILD_ID=$$(gcloud builds submit . --config cmd/controller/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
+	echo "Build ID: $${CONTROLLER_BUILD_ID}" ;\
+	CONTROLLER_IMAGE_TAG=$$(gcloud builds describe $${CONTROLLER_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
+	echo "Built image: $${CONTROLLER_IMAGE_TAG}" ;\
+	echo "$${CONTROLLER_IMAGE_TAG}" > build/controller-image.txt ;\
+	echo "Controller image tag saved to build/controller-image.txt"
+
+# Build both Docker images
+build-images: build-machine-agent-image build-controller-image
+	@echo "All Docker images built successfully"
+
+# Deploy infrastructure: apply OpenTofu with pre-built Docker images
+deploy: deploy-full
+
+# Deploy full system: build both images and deploy all infrastructure
+deploy-full: build-images
+	@set -e ;\
+	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ]; then \
+		echo "Error: Image tag files not found. Run 'make build-images' first." ;\
+		exit 1 ;\
+	fi ;\
+	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
+	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	echo "Deploying full system with OpenTofu..." ;\
+	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
+	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+
+# Deploy infrastructure only: use existing images or defaults
+deploy-infrastructure:
+	@set -e ;\
+	if [ -f "build/machine-agent-image.txt" ]; then \
+		MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
+	else \
+		echo "Machine agent image tag not found, using default" ;\
+		MACHINE_AGENT_IMAGE_TAG="us-central1-docker.pkg.dev/cloudrun/container/hello" ;\
+	fi ;\
+	if [ -f "build/controller-image.txt" ]; then \
+		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	else \
+		echo "Controller image tag not found, using default" ;\
+		CONTROLLER_IMAGE_TAG="us-central1-docker.pkg.dev/cloudrun/container/hello" ;\
+	fi ;\
+	echo "Deploying infrastructure only with OpenTofu..." ;\
+	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
+	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+
+# Deploy machine-agent only: build machine-agent image and deploy infrastructure
+deploy-machine-agent: build-machine-agent-image
+	@set -e ;\
+	if [ ! -f "build/machine-agent-image.txt" ]; then \
+		echo "Error: Machine agent image tag file not found. Run 'make build-machine-agent-image' first." ;\
+		exit 1 ;\
+	fi ;\
+	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
+	if [ -f "build/controller-image.txt" ]; then \
+		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	else \
+		echo "Controller image tag not found, using default" ;\
+		CONTROLLER_IMAGE_TAG="us-central1-docker.pkg.dev/cloudrun/container/hello" ;\
+	fi ;\
+	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
+	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
+	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+
+# Deploy controller only: build controller image and update Cloud Run service
+deploy-controller: build-controller-image
+	@set -e ;\
+	if [ ! -f "build/controller-image.txt" ]; then \
+		echo "Error: Controller image tag file not found. Run 'make build-controller-image' first." ;\
+		exit 1 ;\
+	fi ;\
+	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	echo "Deploying controller only..." ;\
+	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+	tofu -chdir=cloud apply -target=google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+
+# Clean up old local images to prevent registry bloat
+cleanup-old-images:
+	@echo "Cleaning old local machine-agent images..."
+	@PROJECT_ID=$$(gcloud config get-value project) ;\
+	LOCATION="europe-west3" ;\
+	gcloud artifacts docker images list "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio" --filter="tags~$(USERNAME)-local" --format="value(version)" --limit=10 | tail -n +6 | while read -r digest; do \
+		if [ -n "$$digest" ]; then \
+			echo "Deleting old image: $$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/machine-agent@$$digest" ;\
+			gcloud artifacts docker images delete "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/machine-agent@$$digest" --quiet || true ;\
+		fi ;\
+	done
+	@echo "Cleaning old local controller images..."
+	@gcloud artifacts docker images list "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio" --filter="tags~$(USERNAME)-local" --format="value(version)" --limit=10 | tail -n +6 | while read -r digest; do \
+		if [ -n "$$digest" ]; then \
+			echo "Deleting old image: $$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/controller@$$digest" ;\
+			gcloud artifacts docker images delete "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/controller@$$digest" --quiet || true ;\
+		fi ;\
+	done
+	@echo "Cleanup completed"
 
 # Show available targets
 help:
 	@echo "Available targets:"
-	@echo "  all             - Build all binaries (default)"
-	@echo "  build           - Build all binaries"
-	@echo "  <binary>        - Build specific binary (e.g., make controller)"
-	@echo "  deploy-minecraft - Build Docker image and deploy with OpenTofu"
-	@echo "  clean           - Remove build artifacts"
-	@echo "  help            - Show this help"
+	@echo "  build                   - Build all binaries"
+	@echo "  <binary>                - Build specific binary (e.g., make controller)"
+	@echo "  build-machine-agent-image - Build machine-agent Docker image (with timestamp)"
+	@echo "  build-controller-image   - Build controller Docker image (with timestamp)"
+	@echo "  build-images            - Build both Docker images"
+	@echo ""
+	@echo "Deployment targets:"
+	@echo "  deploy                  - Deploy full system (alias for deploy-full)"
+	@echo "  deploy-full             - Build both images and deploy all infrastructure"
+	@echo "  deploy-infrastructure   - Deploy infrastructure only (use existing/default images)"
+	@echo "  deploy-machine-agent    - Build machine-agent image and deploy infrastructure"
+	@echo "  deploy-controller       - Build controller image and update Cloud Run service only"
+	@echo ""
+	@echo "Other targets:"
+	@echo "  clean                   - Remove build artifacts"
+	@echo "  cleanup-old-images      - Clean old local images from registry"
+	@echo "  help                    - Show this help"
+	@echo ""
+	@echo "Features:"
+	@echo "  - Images are built with timestamps (YYYYMMDD-HHMMSS) for unique tags"
+	@echo "  - VM recreation is automatically triggered when machine-agent image changes"
+	@echo "  - Use cleanup-old-images to prevent registry bloat"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make deploy-full              # Deploy everything with new images"
+	@echo "  make deploy-infrastructure    # Update infrastructure without rebuilding"
+	@echo "  make deploy-machine-agent     # Update only machine-agent (triggers VM recreation)"
+	@echo "  make deploy-controller        # Update only web interface"
+	@echo "  make cleanup-old-images       # Clean old images from registry"
