@@ -74,7 +74,7 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 			Players:     currentStatus.Players,
 			Timestamp:   time.Now(),
 			Uptime:      currentStatus.Uptime,
-			ServerState: "STARTING",
+			ServerState: db.ServerStateStarting,
 		})
 		if err != nil {
 			log.Printf("Error updating server state in db: %v", err)
@@ -132,7 +132,7 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 			Players:     currentStatus.Players,
 			Timestamp:   time.Now(),
 			Uptime:      currentStatus.Uptime,
-			ServerState: "STOPPING",
+			ServerState: db.ServerStateStopping,
 		})
 		if err != nil {
 			log.Printf("Error updating server state in db: %v", err)
@@ -181,7 +181,7 @@ func getServerStatus() (*views.ServerStatus, error) {
 	// Only show player/uptime data when server is running
 	var players, maxPlayers int
 	var uptime string
-	if playerStatus.ServerState == "RUNNING" {
+	if playerStatus.ServerState == db.ServerStateRunning {
 		players = playerStatus.Players.Current
 		maxPlayers = playerStatus.Players.Max
 		uptime = playerStatus.Uptime
@@ -192,7 +192,7 @@ func getServerStatus() (*views.ServerStatus, error) {
 	}
 
 	return &views.ServerStatus{
-		Status:     playerStatus.ServerState,
+		Status:     playerStatus.ServerState.String(),
 		Players:    players,
 		MaxPlayers: maxPlayers,
 		Uptime:     uptime,

@@ -119,7 +119,7 @@ func handleInstanceStop(ctx context.Context, auditLog AuditLogEntry) {
 	}
 
 	// Update database with STOPPED state
-	if err := updateInstanceState(ctx, instanceName, "STOPPED"); err != nil {
+	if err := updateInstanceState(ctx, instanceName, db.ServerStateStopped); err != nil {
 		log.Printf("Failed to update instance state to STOPPED: %v", err)
 		return
 	}
@@ -138,7 +138,7 @@ func handleInstanceStart(ctx context.Context, auditLog AuditLogEntry) {
 	}
 
 	// Update database with STARTING state (machine-agent will update to RUNNING)
-	if err := updateInstanceState(ctx, instanceName, "STARTING"); err != nil {
+	if err := updateInstanceState(ctx, instanceName, db.ServerStateStarting); err != nil {
 		log.Printf("Failed to update instance state to STARTING: %v", err)
 		return
 	}
@@ -157,7 +157,7 @@ func handleInstancePreempted(ctx context.Context, auditLog AuditLogEntry) {
 	}
 
 	// Update database with STOPPED state (preemption is effectively a stop)
-	if err := updateInstanceState(ctx, instanceName, "STOPPED"); err != nil {
+	if err := updateInstanceState(ctx, instanceName, db.ServerStateStopped); err != nil {
 		log.Printf("Failed to update instance state to STOPPED (preempted): %v", err)
 		return
 	}
@@ -175,7 +175,7 @@ func extractInstanceName(resourceName string) string {
 	return parts[len(parts)-1]
 }
 
-func updateInstanceState(ctx context.Context, instanceName, state string) error {
+func updateInstanceState(ctx context.Context, instanceName string, state db.ServerState) error {
 	// Get database connection
 	environment := viper.GetString("ENVIRONMENT")
 	region := viper.GetString("REGION")

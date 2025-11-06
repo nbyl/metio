@@ -296,7 +296,7 @@ func TestFirestoreDB_UpdateStatus_WithServerState(t *testing.T) {
 		Players:     Players{Current: 5, Max: 20},
 		Timestamp:   time.Now(),
 		Uptime:      "2h30m",
-		ServerState: "RUNNING",
+		ServerState: ServerStateRunning,
 	}
 
 	// Setup mock expectations
@@ -331,7 +331,7 @@ func TestFirestoreDB_GetStatus_WithServerState(t *testing.T) {
 		Players:     Players{Current: 5, Max: 20},
 		Timestamp:   time.Now(),
 		Uptime:      "2h30m",
-		ServerState: "RUNNING",
+		ServerState: ServerStateRunning,
 	}
 
 	// Setup mock expectations
@@ -348,7 +348,7 @@ func TestFirestoreDB_GetStatus_WithServerState(t *testing.T) {
 	status, err := db.GetStatus(ctx, instanceName)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedStatus, status)
-	assert.Equal(t, "RUNNING", status.ServerState)
+	assert.Equal(t, ServerStateRunning, status.ServerState)
 
 	mockClient.AssertExpectations(t)
 	mockCollection.AssertExpectations(t)
