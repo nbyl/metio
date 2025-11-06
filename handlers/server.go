@@ -192,7 +192,7 @@ func getServerStatus() (*views.ServerStatus, error) {
 	}
 
 	return &views.ServerStatus{
-		Status:     playerStatus.ServerState.String(),
+		Status:     playerStatus.ServerState,
 		Players:    players,
 		MaxPlayers: maxPlayers,
 		Uptime:     uptime,

@@ -5,12 +5,10 @@ import "time"
 type ServerState string
 
 const (
-	ServerStateStopped      ServerState = "STOPPED"
-	ServerStateStarting     ServerState = "STARTING"
-	ServerStateRunning      ServerState = "RUNNING"
-	ServerStateStopping     ServerState = "STOPPING"
-	ServerStateProvisioning ServerState = "PROVISIONING"
-	ServerStateStaging      ServerState = "STAGING"
+	ServerStateStopped  ServerState = "STOPPED"
+	ServerStateStarting ServerState = "STARTING"
+	ServerStateRunning  ServerState = "RUNNING"
+	ServerStateStopping ServerState = "STOPPING"
 )
 
 func (s ServerState) String() string {
