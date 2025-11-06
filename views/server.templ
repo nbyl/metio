@@ -3,16 +3,17 @@ package views
 import (
 	"strconv"
 	"time"
+	"gitlab.com/nbyl/metio/db"
 )
 
 type ServerStatus struct {
-	Status		string     `json:"status"`
-	Players    int       `json:"players"`
-	MaxPlayers int       `json:"maxPlayers"`
-	Uptime     string    `json:"uptime"`
-	Version    string    `json:"version"`
-	IP         string    `json:"ip"`
-	StartTime  time.Time `json:"-"`
+	Status     db.ServerState `json:"status"`
+	Players    int            `json:"players"`
+	MaxPlayers int            `json:"maxPlayers"`
+	Uptime     string         `json:"uptime"`
+	Version    string         `json:"version"`
+	IP         string         `json:"ip"`
+	StartTime  time.Time       `json:"-"`
 }
 
 templ ServerPage(status ServerStatus) {
@@ -111,8 +112,8 @@ templ ServerStatusCard(status ServerStatus) {
 				<i data-lucide="globe"></i>
 				Server Status
 				</span>
-				<span class={ "badge", templ.KV("badge-online", status.Status == "RUNNING"), templ.KV("badge-offline", status.Status == "STOPPED"), templ.KV("badge-transitioning", status.Status != "RUNNING" && status.Status != "STOPPED") }>
-				{ status.Status }
+				<span class={ "badge", templ.KV("badge-online", status.Status.IsRunning()), templ.KV("badge-offline", status.Status.IsStopped()), templ.KV("badge-transitioning", status.Status.IsTransitioning()) }>
+				{ status.Status.String() }
 			</span>
 			</div>
 		</div>
@@ -143,34 +144,37 @@ templ ServerStatusCard(status ServerStatus) {
 			</div>
 			<div class="separator"></div>
 			<div class="controls">
-				if status.Status == "STOPPED" || status.Status == "PROVISIONING" || status.Status == "STAGING" {
+				if status.Status == db.ServerStateStopped {
 					<button
 						class="btn btn-green"
 						hx-post="/server/start"
 						hx-target="#server-status-card"
 						hx-indicator="#start-loading"
-						disabled?={ status.Status != "STOPPED" }
 					>
-						if status.Status == "STOPPED" {
 						<i data-lucide="play"></i>Start Server
-						} else {
-						<i data-lucide="loader" class="animate-spin"></i>
-						Starting...
-						}
 					</button>
-				} else {
+				} else if status.Status == db.ServerStateStarting {
+					<button
+						class="btn btn-green"
+						disabled
+					>
+						<i data-lucide="loader" class="animate-spin"></i>Starting...
+					</button>
+				} else if status.Status == db.ServerStateRunning {
 					<button
 						class="btn btn-red"
 						hx-post="/server/stop"
 						hx-target="#server-status-card"
 						hx-indicator="#stop-loading"
-						disabled?={ status.Status != "RUNNING" }
 					>
-						if status.Status == "RUNNING" {
 						<i data-lucide="square"></i>Stop Server
-						} else {
+					</button>
+				} else if status.Status == db.ServerStateStopping {
+					<button
+						class="btn btn-red"
+						disabled
+					>
 						<i data-lucide="loader" class="animate-spin"></i>Stopping...
-						}
 					</button>
 				}
 				<button
