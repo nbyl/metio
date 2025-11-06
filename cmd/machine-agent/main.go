@@ -87,12 +87,11 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		log.Printf("Error getting instance IP: %v", err)
 		instanceIP = "unknown:25565"
 	}
-	serverState := "RUNNING"
 	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
 		Players:     db.Players{Current: current, Max: max},
 		Timestamp:   time.Now(),
 		Uptime:      uptime,
-		ServerState: serverState,
+		ServerState: db.ServerStateRunning,
 		InstanceIP:  instanceIP,
 	})
 }

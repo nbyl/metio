@@ -99,57 +99,41 @@ func TestExtractInstanceName(t *testing.T) {
 	}
 }
 
-func TestDecodeBase64(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		expected string
-		hasError bool
-	}{
-		{
-			name:     "Valid base64",
-			input:    []byte("SGVsbG8gV29ybGQ="),
-			expected: "Hello World",
-			hasError: false,
-		},
-		{
-			name:     "Invalid base64",
-			input:    []byte("invalid!"),
-			expected: "",
-			hasError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := decodeBase64(tt.input)
-			if tt.hasError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, string(result))
-			}
-		})
-	}
-}
-
 func TestProcessAuditLogEvent(t *testing.T) {
 	// Create a sample audit log entry
 	auditLog := AuditLogEntry{
+		LogName: "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
 		ProtoPayload: struct {
 			MethodName         string `json:"methodName"`
 			ResourceName       string `json:"resourceName"`
 			AuthenticationInfo struct {
 				PrincipalEmail string `json:"principalEmail"`
 			} `json:"authenticationInfo"`
-			Request struct {
-				Instance string `json:"instance"`
-				Zone     string `json:"zone"`
-			} `json:"request"`
 		}{
-			MethodName:   "compute.instances.stop",
+			MethodName:   "v1.compute.instances.stop",
 			ResourceName: "projects/test-project/zones/us-central1-a/instances/test-instance",
 		},
+		Resource: struct {
+			Type   string `json:"type"`
+			Labels struct {
+				InstanceID string `json:"instance_id"`
+				ProjectID  string `json:"project_id"`
+				Zone       string `json:"zone"`
+			} `json:"labels"`
+		}{
+			Type: "gce_instance",
+			Labels: struct {
+				InstanceID string `json:"instance_id"`
+				ProjectID  string `json:"project_id"`
+				Zone       string `json:"zone"`
+			}{
+				InstanceID: "123456789",
+				ProjectID:  "test-project",
+				Zone:       "us-central1-a",
+			},
+		},
+		Timestamp: "2025-11-06T08:06:46.983678Z",
+		Severity:  "NOTICE",
 	}
 
 	// Convert to JSON

@@ -44,7 +44,7 @@ func TestRunStatusUpdate(t *testing.T) {
 		status := args.Get(2).(db.Status)
 		assert.Equal(t, 5, status.Players.Current)
 		assert.Equal(t, 20, status.Players.Max)
-		assert.Equal(t, "RUNNING", status.ServerState)
+		assert.Equal(t, db.ServerStateRunning, status.ServerState)
 	})
 
 	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
