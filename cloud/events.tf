@@ -43,13 +43,13 @@ resource "google_logging_project_sink" "compute_audit_logs" {
   # Filter for compute instance lifecycle events
   filter = "protoPayload.methodName=\"v1.compute.instances.stop\" OR protoPayload.methodName=\"v1.compute.instances.start\" OR protoPayload.methodName=\"v1.compute.instances.preempted\""
 
-  unique_writer_identity = true  
+  unique_writer_identity = true
 }
 
 resource "google_project_iam_binding" "logging_sink_pubsub_publisher" {
   project = var.project_id
   role    = "roles/pubsub.publisher"
   members = [
-     "serviceAccount:service-${data.google_project.current.number}@gcp-sa-logging.iam.gserviceaccount.com"
+    "serviceAccount:service-${data.google_project.current.number}@gcp-sa-logging.iam.gserviceaccount.com"
   ]
 }
