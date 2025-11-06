@@ -18,6 +18,9 @@ func New() *mux.Router {
 	r.HandleFunc("/auth/login", loginHandler).Methods("GET")
 	r.HandleFunc("/auth/callback", callbackHandler).Methods("GET")
 
+	// Events endpoint for Pub/Sub push notifications (no auth required)
+	r.HandleFunc("/events", eventsHandler).Methods("POST")
+
 	serverRouter := r.PathPrefix("/server").Subrouter()
 	serverRouter.Use(authMiddleware)
 

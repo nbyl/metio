@@ -281,3 +281,79 @@ func TestFirestoreDB_GetStatus_DataToError(t *testing.T) {
 	mockSubDoc.AssertExpectations(t)
 	mockSnapshot.AssertExpectations(t)
 }
+
+func TestFirestoreDB_UpdateStatus_WithServerState(t *testing.T) {
+	mockClient := new(MockFirestoreClient)
+	mockCollection := new(MockCollectionRef)
+	mockDoc := new(MockDocumentRef)
+	mockSubCollection := new(MockCollectionRef)
+	mockSubDoc := new(MockDocumentRef)
+
+	db := &FirestoreDB{client: mockClient}
+	ctx := context.Background()
+	instanceName := "test-instance"
+	status := Status{
+		Players:     Players{Current: 5, Max: 20},
+		Timestamp:   time.Now(),
+		Uptime:      "2h30m",
+		ServerState: ServerStateRunning,
+	}
+
+	// Setup mock expectations
+	mockClient.On("Collection", "instances").Return(mockCollection)
+	mockCollection.On("Doc", instanceName).Return(mockDoc)
+	mockDoc.On("Collection", "data").Return(mockSubCollection)
+	mockSubCollection.On("Doc", "status").Return(mockSubDoc)
+	mockSubDoc.On("Set", ctx, status, mock.AnythingOfType("[]firestore.SetOption")).Return(&firestore.WriteResult{}, nil)
+
+	err := db.UpdateStatus(ctx, instanceName, status)
+	assert.NoError(t, err)
+
+	mockClient.AssertExpectations(t)
+	mockCollection.AssertExpectations(t)
+	mockDoc.AssertExpectations(t)
+	mockSubCollection.AssertExpectations(t)
+	mockSubDoc.AssertExpectations(t)
+}
+
+func TestFirestoreDB_GetStatus_WithServerState(t *testing.T) {
+	mockClient := new(MockFirestoreClient)
+	mockCollection := new(MockCollectionRef)
+	mockDoc := new(MockDocumentRef)
+	mockSubCollection := new(MockCollectionRef)
+	mockSubDoc := new(MockDocumentRef)
+	mockSnapshot := new(MockDocumentSnapshot)
+
+	db := &FirestoreDB{client: mockClient}
+	ctx := context.Background()
+	instanceName := "test-instance"
+	expectedStatus := Status{
+		Players:     Players{Current: 5, Max: 20},
+		Timestamp:   time.Now(),
+		Uptime:      "2h30m",
+		ServerState: ServerStateRunning,
+	}
+
+	// Setup mock expectations
+	mockClient.On("Collection", "instances").Return(mockCollection)
+	mockCollection.On("Doc", instanceName).Return(mockDoc)
+	mockDoc.On("Collection", "data").Return(mockSubCollection)
+	mockSubCollection.On("Doc", "status").Return(mockSubDoc)
+	mockSubDoc.On("Get", ctx).Return(mockSnapshot, nil)
+	mockSnapshot.On("DataTo", mock.AnythingOfType("*db.Status")).Return(nil).Run(func(args mock.Arguments) {
+		status := args.Get(0).(*Status)
+		*status = expectedStatus
+	})
+
+	status, err := db.GetStatus(ctx, instanceName)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedStatus, status)
+	assert.Equal(t, ServerStateRunning, status.ServerState)
+
+	mockClient.AssertExpectations(t)
+	mockCollection.AssertExpectations(t)
+	mockDoc.AssertExpectations(t)
+	mockSubCollection.AssertExpectations(t)
+	mockSubDoc.AssertExpectations(t)
+	mockSnapshot.AssertExpectations(t)
+}

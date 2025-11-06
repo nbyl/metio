@@ -40,7 +40,12 @@ func TestRunStatusUpdate(t *testing.T) {
 		getUptimeFunc = oldUptimeFunc
 	}()
 
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil).Run(func(args mock.Arguments) {
+		status := args.Get(2).(db.Status)
+		assert.Equal(t, 5, status.Players.Current)
+		assert.Equal(t, 20, status.Players.Max)
+		assert.Equal(t, db.ServerStateRunning, status.ServerState)
+	})
 
 	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
 	assert.NoError(t, err)
@@ -117,4 +122,12 @@ func TestGetUptimeInvalidOutput(t *testing.T) {
 
 	_, err := getUptime()
 	assert.Error(t, err)
+}
+
+func TestGetInstanceIP(t *testing.T) {
+	// This test would require mocking the metadata client
+	// For now, we'll test the function structure
+	_ = func() (string, error) {
+		return getInstanceIP()
+	}
 }

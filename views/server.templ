@@ -111,7 +111,7 @@ templ ServerStatusCard(status ServerStatus) {
 				<i data-lucide="globe"></i>
 				Server Status
 				</span>
-				<span class={ "badge", templ.KV("badge-online", status.Status == "RUNNING"), templ.KV("badge-offline", status.Status == "TERMINATED"), templ.KV("badge-transitioning", status.Status != "RUNNING" && status.Status != "TERMINATED") }>
+				<span class={ "badge", templ.KV("badge-online", status.Status == "RUNNING"), templ.KV("badge-offline", status.Status == "STOPPED"), templ.KV("badge-transitioning", status.Status != "RUNNING" && status.Status != "STOPPED") }>
 				{ status.Status }
 			</span>
 			</div>
@@ -143,15 +143,15 @@ templ ServerStatusCard(status ServerStatus) {
 			</div>
 			<div class="separator"></div>
 			<div class="controls">
-				if status.Status == "TERMINATED" || status.Status == "PROVISIONING" || status.Status == "STAGING" {
+				if status.Status == "STOPPED" || status.Status == "PROVISIONING" || status.Status == "STAGING" {
 					<button
 						class="btn btn-green"
 						hx-post="/server/start"
 						hx-target="#server-status-card"
 						hx-indicator="#start-loading"
-						disabled?={ status.Status != "TERMINATED" }
+						disabled?={ status.Status != "STOPPED" }
 					>
-						if status.Status == "TERMINATED" {
+						if status.Status == "STOPPED" {
 						<i data-lucide="play"></i>Start Server
 						} else {
 						<i data-lucide="loader" class="animate-spin"></i>
