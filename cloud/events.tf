@@ -43,12 +43,13 @@ resource "google_logging_project_sink" "compute_audit_logs" {
   # Filter for compute instance lifecycle events
   filter = "protoPayload.methodName=\"v1.compute.instances.stop\" OR protoPayload.methodName=\"v1.compute.instances.start\" OR protoPayload.methodName=\"v1.compute.instances.preempted\""
 
-  custom_writer_identity = "serviceAccount:${google_service_account.logging_service_account.email}"
+  unique_writer_identity = true  
 }
 
-# Grant the sink's service account permission to publish to the topic
-resource "google_pubsub_topic_iam_member" "log_sink_publisher" {
-  topic  = google_pubsub_topic.instance_lifecycle.name
-  role   = "roles/pubsub.publisher"
-  member = "serviceAccount:${google_logging_project_sink.compute_audit_logs.writer_identity}"
+resource "google_project_iam_binding" "logging_sink_pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  members = [
+     "serviceAccount:service-${data.google_project.current.number}@gcp-sa-logging.iam.gserviceaccount.com"
+  ]
 }

@@ -24,40 +24,11 @@ resource "google_service_account" "controller_service_account" {
   account_id = "${var.environment}-c-sa"
 }
 
-resource "google_service_account" "logging_service_account" {
-  account_id = "${var.environment}-log-sa"
-}
-
-
 resource "google_project_iam_binding" "controller-role-binding" {
   project = var.project_id
   role    = "projects/${var.project_id}/roles/${google_project_iam_custom_role.controller-role.role_id}"
   members = [
     "serviceAccount:${google_service_account.controller_service_account.email}"
-  ]
-}
-
-resource "google_project_iam_binding" "logging_log_writer" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  members = [
-    "serviceAccount:${google_service_account.logging_service_account.email}"
-  ]
-}
-
-resource "google_project_iam_binding" "logging_pubsub_publisher" {
-  project = var.project_id
-  role    = "roles/pubsub.publisher"
-  members = [
-    "serviceAccount:${google_service_account.logging_service_account.email}"
-  ]
-}
-
-resource "google_service_account_iam_binding" "logging_service_account_token_creator" {
-  service_account_id = google_service_account.logging_service_account.name
-  role               = "roles/iam.serviceAccountTokenCreator"
-  members = [
-    "serviceAccount:service-${data.google_project.current.number}@gcp-sa-logging.iam.gserviceaccount.com"
   ]
 }
 
