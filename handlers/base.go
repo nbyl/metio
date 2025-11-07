@@ -9,6 +9,9 @@ import (
 func New() *mux.Router {
 	r := mux.NewRouter()
 
+	// Add tracing middleware to all routes
+	r.Use(TracingMiddleware)
+
 	// Static files
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 

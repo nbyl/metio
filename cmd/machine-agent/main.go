@@ -14,6 +14,9 @@ import (
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var execCommand = exec.Command
@@ -22,6 +25,12 @@ var getUptimeFunc = getUptime
 var osReadFile = os.ReadFile
 
 func main() {
+	// Initialize OpenTelemetry
+	if err := tracing.InitTracerWithDetails("metio-machine-agent", "1.0.0"); err != nil {
+		log.Printf("Failed to initialize tracer: %v", err)
+	}
+	defer tracing.ShutdownTracer()
+
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
 	viper.AutomaticEnv()
 
@@ -74,26 +83,52 @@ func main() {
 }
 
 func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) error {
+	tracer := otel.Tracer("machine-agent")
+	ctx, span := tracer.Start(ctx, "runStatusUpdate")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("instance.name", instanceName),
+	)
+
 	current, max, err := getMinecraftPlayerCountFunc()
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_player_count_failed"))
 		return err
 	}
 	uptime, err := getUptimeFunc()
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_uptime_failed"))
 		return err
 	}
 	instanceIP, err := getInstanceIP()
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_instance_ip_failed"))
 		log.Printf("Error getting instance IP: %v", err)
 		instanceIP = "unknown:25565"
 	}
-	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
+
+	span.SetAttributes(
+		attribute.Int("players.current", current),
+		attribute.Int("players.max", max),
+		attribute.String("uptime", uptime),
+		attribute.String("instance.ip", instanceIP),
+	)
+
+	err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
 		Players:     db.Players{Current: current, Max: max},
 		Timestamp:   time.Now(),
 		Uptime:      uptime,
 		ServerState: db.ServerStateRunning,
 		InstanceIP:  instanceIP,
 	})
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "update_status_failed"))
+		return err
+	}
+
+	span.SetAttributes(attribute.String("success", "true"))
+	return nil
 }
 
 func getMinecraftPlayerCount() (int, int, error) {

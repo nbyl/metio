@@ -9,9 +9,16 @@ import (
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/handlers"
+	"gitlab.com/nbyl/metio/tracing"
 )
 
 func main() {
+	// Initialize OpenTelemetry
+	if err := tracing.InitTracerWithDetails("metio-controller", "1.0.0"); err != nil {
+		log.Printf("Failed to initialize tracer: %v", err)
+	}
+	defer tracing.ShutdownTracer()
+
 	viper.AutomaticEnv()
 	viper.SetDefault("PORT", "8080")
 
