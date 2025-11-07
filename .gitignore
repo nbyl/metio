@@ -207,3 +207,5 @@ tmp/
 .DS_Store
 views/*_templ.go
 .devcontainer/devcontainer.env
+controller
+machine-agent
