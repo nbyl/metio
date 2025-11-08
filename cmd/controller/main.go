@@ -17,6 +17,9 @@ func main() {
 	if err := tracing.InitTracerWithDetails("metio-controller", "1.0.0"); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
 	}
+	if err := tracing.InitMetrics(); err != nil {
+		log.Printf("Failed to initialize metrics: %v", err)
+	}
 	defer tracing.ShutdownTracer()
 
 	viper.AutomaticEnv()

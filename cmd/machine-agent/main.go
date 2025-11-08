@@ -29,6 +29,9 @@ func main() {
 	if err := tracing.InitTracerWithDetails("metio-machine-agent", "1.0.0"); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
 	}
+	if err := tracing.InitMetrics(); err != nil {
+		log.Printf("Failed to initialize metrics: %v", err)
+	}
 	defer tracing.ShutdownTracer()
 
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
@@ -91,19 +94,25 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		attribute.String("instance.name", instanceName),
 	)
 
+	// Record database operation
+	tracing.RecordDBOperation("status_update")
+
 	current, max, err := getMinecraftPlayerCountFunc()
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_player_count_failed"))
+		tracing.RecordError("get_player_count_failed")
 		return err
 	}
 	uptime, err := getUptimeFunc()
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_uptime_failed"))
+		tracing.RecordError("get_uptime_failed")
 		return err
 	}
 	instanceIP, err := getInstanceIP()
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_instance_ip_failed"))
+		tracing.RecordError("get_instance_ip_failed")
 		log.Printf("Error getting instance IP: %v", err)
 		instanceIP = "unknown:25565"
 	}
@@ -124,8 +133,12 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 	})
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "update_status_failed"))
+		tracing.RecordError("update_status_failed")
 		return err
 	}
+
+	// Record status update metric
+	tracing.RecordStatusUpdate(instanceName, "running")
 
 	span.SetAttributes(attribute.String("success", "true"))
 	return nil
