@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"log"
+	"os"
 
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel"
@@ -19,7 +20,12 @@ func InitTracer() error {
 }
 
 func InitTracerWithDetails(serviceName, serviceVersion string) error {
-	// Detect GCP environment
+	// Detect GCP environment and get project ID
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		log.Printf("Warning: GOOGLE_CLOUD_PROJECT not set, using default detection")
+	}
+
 	res, err := resource.New(context.Background(),
 		resource.WithDetectors(gcp.NewDetector()),
 		resource.WithAttributes(
@@ -31,20 +37,29 @@ func InitTracerWithDetails(serviceName, serviceVersion string) error {
 		return err
 	}
 
-	// Configure OTLP exporter (Google Cloud Trace)
-	exporter, err := otlptracehttp.New(context.Background())
+	// Configure OTLP exporter for Google Cloud Trace with proper headers
+	headers := map[string]string{
+		"X-Goog-User-Project": projectID,
+	}
+
+	exporter, err := otlptracehttp.New(context.Background(),
+		otlptracehttp.WithEndpoint("https://cloudtrace.googleapis.com:443"),
+		otlptracehttp.WithHeaders(headers),
+	)
 	if err != nil {
+		log.Printf("Failed to create Cloud Trace exporter: %v", err)
 		return err
 	}
 
-	// Create tracer provider
+	// Create tracer provider with sampling for production
 	tp = sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 	)
 
 	otel.SetTracerProvider(tp)
-	log.Printf("OpenTelemetry tracer initialized for service: %s", serviceName)
+	log.Printf("OpenTelemetry tracer initialized for service: %s (sending to Google Cloud Trace, project: %s)", serviceName, projectID)
 	return nil
 }
 
