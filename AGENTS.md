@@ -4,10 +4,11 @@
 - **Development server**: `air` (auto-reloads on file changes)
 - **Build single binary**: `make <binary_name>` (e.g., `make controller`)
 - **Build all binaries**: `make` or `make all` (builds all cmd/*/main.go files)
+- **Run tests**: `make test` (generates coverage report at build/coverage.html)
+- **Run single test**: `go test ./path/to/package -run TestName`
 - **Clean build artifacts**: `make clean`
 - **Generate templates/CSS**: `go generate ./...`
 - **Docker build**: `docker build -t <image> .` (builds controller binary)
-- **No test framework configured** - add Go tests as needed
 
 ## Code Style Guidelines
 
@@ -19,6 +20,7 @@
 - **Configuration**: Use `viper` with environment variables (PORT, GCP_PROJECT, etc.)
 - **Routing**: Use `gorilla/mux` with method-specific handlers
 - **Templates**: Use `templ` for HTML generation, run `go generate` after changes
+- **Testing**: Use `testify` for assertions, place tests in `*_test.go` files
 
 ### Frontend
 - **CSS**: Use Tailwind CSS, generate with `npx tailwindcss` via `go generate`
