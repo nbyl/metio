@@ -36,7 +36,7 @@ variable "desired_status" {
 variable "minecraft_version" {
   description = "The version of the Minecraft server to deploy."
   type        = string
-  default     = "1.21.5"
+  default     = "1.21.10"
 }
 
 variable "controller_image" {
