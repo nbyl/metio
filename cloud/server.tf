@@ -60,7 +60,7 @@ resource "google_project_iam_member" "sa_firestore_user" {
 
 resource "google_compute_disk" "primary" {
   name = "${var.environment}-minecraft-data"
-  type = "pd-ssd"
+  type = "pd-standard"
   size = 10
 
   physical_block_size_bytes = 4096
