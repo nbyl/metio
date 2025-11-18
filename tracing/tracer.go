@@ -30,6 +30,13 @@ func InitTracerWithDetails(serviceName, serviceVersion string) error {
 		log.Printf("Warning: GOOGLE_CLOUD_PROJECT not set, using default detection")
 	}
 
+	// Get deployment environment
+	environment := os.Getenv("ENVIRONMENT")
+	if environment == "" {
+		log.Printf("Warning: ENVIRONMENT not set, using default 'development'")
+		environment = "development"
+	}
+
 	// Retrieve and store Google application-default credentials
 	creds, err := oauth.NewApplicationDefault(context.Background())
 	if err != nil {
@@ -42,6 +49,7 @@ func InitTracerWithDetails(serviceName, serviceVersion string) error {
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(serviceVersion),
 			attribute.String("gcp.project_id", projectID),
+			attribute.String("deployment.environment", environment),
 		),
 	)
 	if err != nil {

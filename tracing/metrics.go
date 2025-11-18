@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"log"
+	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,10 +17,19 @@ var (
 	dbOperationCounter     metric.Int64Counter
 	eventProcessingCounter metric.Int64Counter
 	statusUpdateCounter    metric.Int64Counter
+	environmentAttr        attribute.KeyValue
 )
 
 func InitMetrics() error {
 	meter := otel.Meter("metio")
+
+	// Initialize environment attribute
+	environment := os.Getenv("ENVIRONMENT")
+	if environment == "" {
+		log.Printf("Warning: ENVIRONMENT not set, using default 'development'")
+		environment = "development"
+	}
+	environmentAttr = attribute.String("deployment.environment", environment)
 
 	var err error
 	requestCounter, err = meter.Int64Counter(
@@ -81,6 +91,7 @@ func RecordRequest(method, path string) {
 			metric.WithAttributes(
 				attribute.String("http.method", method),
 				attribute.String("http.path", path),
+				environmentAttr,
 			),
 		)
 	}
@@ -91,6 +102,7 @@ func RecordError(operation string) {
 		errorCounter.Add(context.Background(), 1,
 			metric.WithAttributes(
 				attribute.String("error.operation", operation),
+				environmentAttr,
 			),
 		)
 	}
@@ -101,6 +113,7 @@ func RecordDBOperation(operation string) {
 		dbOperationCounter.Add(context.Background(), 1,
 			metric.WithAttributes(
 				attribute.String("db.operation", operation),
+				environmentAttr,
 			),
 		)
 	}
@@ -111,6 +124,7 @@ func RecordEventProcessed(eventType string) {
 		eventProcessingCounter.Add(context.Background(), 1,
 			metric.WithAttributes(
 				attribute.String("event.type", eventType),
+				environmentAttr,
 			),
 		)
 	}
@@ -122,6 +136,7 @@ func RecordStatusUpdate(instanceName, state string) {
 			metric.WithAttributes(
 				attribute.String("instance.name", instanceName),
 				attribute.String("instance.state", state),
+				environmentAttr,
 			),
 		)
 	}
