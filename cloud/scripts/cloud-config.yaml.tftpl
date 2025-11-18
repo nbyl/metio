@@ -93,6 +93,7 @@ write_files:
          -e ENVIRONMENT=${environment} \
          -e REGION=${region} \
          -e INSTANCE_NAME=${instance_name} \
+         -e GCP_PROJECT=${project_id} \
          ${machine_agent_image}
       ExecStop=/usr/bin/docker stop %n
 
