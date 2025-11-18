@@ -25,9 +25,9 @@ func InitTracer() error {
 
 func InitTracerWithDetails(serviceName, serviceVersion string) error {
 	// Detect GCP environment and get project ID
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	projectID := os.Getenv("GCP_PROJECT")
 	if projectID == "" {
-		log.Printf("Warning: GOOGLE_CLOUD_PROJECT not set, using default detection")
+		log.Printf("Warning: GCP_PROJECT not set, using default detection")
 	}
 
 	// Get deployment environment
