@@ -12,9 +12,11 @@ import (
 	"gitlab.com/nbyl/metio/tracing"
 )
 
+var Version = "dev" // default, overridden by ldflags
+
 func main() {
 	// Initialize OpenTelemetry
-	if err := tracing.InitTracerWithDetails("metio-controller", "1.0.0"); err != nil {
+	if err := tracing.InitTracerWithDetails("metio-controller", Version); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
 	}
 	if err := tracing.InitMetrics(); err != nil {

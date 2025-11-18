@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-f', 'cmd/controller/Dockerfile', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/controller:$COMMIT_SHA', '.']
+  args: ['build', '--build-arg', 'VERSION=$COMMIT_SHA', '-f', 'cmd/controller/Dockerfile', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/controller:$COMMIT_SHA', '.']
 images:
 - '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/controller:$COMMIT_SHA'
 options:

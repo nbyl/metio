@@ -19,6 +19,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+var Version = "dev" // default, overridden by ldflags
+
 var execCommand = exec.Command
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
@@ -26,7 +28,7 @@ var osReadFile = os.ReadFile
 
 func main() {
 	// Initialize OpenTelemetry
-	if err := tracing.InitTracerWithDetails("metio-machine-agent", "1.0.0"); err != nil {
+	if err := tracing.InitTracerWithDetails("metio-machine-agent", Version); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
 	}
 	if err := tracing.InitMetrics(); err != nil {
