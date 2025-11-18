@@ -17,6 +17,7 @@ resource "google_project_iam_custom_role" "controller-role" {
     "datastore.entities.update",
     "logging.logEntries.create",
     "monitoring.timeSeries.create",
+    "telemetry.traces.write",
   ]
 }
 
