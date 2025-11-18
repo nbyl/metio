@@ -46,6 +46,12 @@ resource "google_project_iam_member" "sa_logging_metric_writer" {
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
+resource "google_project_iam_member" "sa_trace_writer" {
+  project = var.project_id
+  role    = "roles/cloudtrace.agent"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
 resource "google_project_iam_member" "sa_container_registry_reader" {
   project = var.project_id
   role    = "roles/artifactregistry.reader"
