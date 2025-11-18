@@ -5,10 +5,12 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 RUN mkdir /app/build
 
+RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o build/machine-agent ./cmd/machine-agent
+ARG VERSION=local
+RUN go build -ldflags "-X main.Version=${VERSION}" -o build/machine-agent ./cmd/machine-agent
 
 # Runtime stage
 FROM debian:11-slim
