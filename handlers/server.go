@@ -17,15 +17,21 @@ import (
 )
 
 func serverHandler(w http.ResponseWriter, r *http.Request) {
-	serverStatus, err := getServerStatus()
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "serverHandler")
+	defer span.End()
+
+	serverStatus, err := getServerStatus(ctx)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_status_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	component := views.ServerPage(*serverStatus)
-	component.Render(r.Context(), w)
+	component.Render(ctx, w)
 }
 
 func startServerHandler(w http.ResponseWriter, r *http.Request) {
@@ -175,19 +181,24 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	serverStatus, err := getServerStatus()
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "statusHandler")
+	defer span.End()
+
+	serverStatus, err := getServerStatus(ctx)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_status_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	component := views.ServerStatusCard(*serverStatus)
-	component.Render(r.Context(), w)
+	component.Render(ctx, w)
 }
 
-func getServerStatus() (*views.ServerStatus, error) {
-	ctx := context.Background()
+func getServerStatus(ctx context.Context) (*views.ServerStatus, error) {
 	tracer := otel.Tracer("server-handler")
 	ctx, span := tracer.Start(ctx, "getServerStatus")
 	defer span.End()
