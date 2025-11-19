@@ -8,7 +8,15 @@
 - **Run single test**: `go test ./path/to/package -run TestName`
 - **Clean build artifacts**: `make clean`
 - **Generate templates/CSS**: `go generate ./...`
-- **Docker build**: `docker build -t <image> .` (builds controller binary)
+- **Docker build Controller**: `make build-controller-image`
+- **Docker build machine-agent**: `make build-machine-agent-image`
+- **No test framework configured** - add Go tests as needed
+
+## Local Deployment Command
+- **Full system**: `make deploy`
+- **Controller**: `make deploy-controller` (includes rebuild of controller image)
+- **Machine-Agent**: `make deploy-machine-agent` (includes rebuild of machine agent image)
+- **Server & Infrastructure**: `make deploy-infrastructure` (does not trigger rebuild of images)
 
 ## Code Style Guidelines
 
@@ -33,3 +41,11 @@
 ### General
 - **No linting configured** - consider adding `golangci-lint`
 - **No Cursor/Copilot rules** - follow Go community standards
+
+## Development Workflow & Infrastructure
+
+- **Issues and Ticket system:** Issues and features are stored in Linear, to retrieve them use the linear tool.
+- **Branch Naming:** Use the generated branch name from linear.
+- **Testing:** Before comitting, deploy the full system at least once using `make deploy-full`. Check the controller website and ssh into the machine using `gcloud compute ssh --zone "europe-west3-a" $SERVERNAME --project "minecraftbyl"`.
+- **Commit Messages:** Follow the Conventional Commits specification. (e.g., \`feat: add user profile page\`)
+- **Pull Requests:** Once the ticket is ready, push the code to the gitlab repository and create a merge request for it. When done, set the linear issue to "in review".
