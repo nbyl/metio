@@ -34,11 +34,8 @@ test:
       - coverage.html
     expire_in: 1 week
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-    - if: $CI_OPEN_MERGE_REQUESTS
-      when: never
-    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
 build-controller:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
@@ -50,11 +47,8 @@ build-controller:
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
       - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
-      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-      - if: $CI_OPEN_MERGE_REQUESTS
-        when: never
-      - if: $CI_COMMIT_BRANCH
+      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
 build-machine-agent:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
@@ -66,11 +60,8 @@ build-machine-agent:
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
       - gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
-      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-      - if: $CI_OPEN_MERGE_REQUESTS
-        when: never
-      - if: $CI_COMMIT_BRANCH
+      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
 include:
    - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
@@ -80,11 +71,9 @@ include:
       state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
       stage_build: plan
-      apply_rules:
-        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-        - if: $CI_OPEN_MERGE_REQUESTS  # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
-          when: never
-        - if: $CI_COMMIT_BRANCH        # If there's no open merge request, add it to a *branch* pipeline instead.
+       apply_rules:
+         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+         - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
       destroy_rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: never
