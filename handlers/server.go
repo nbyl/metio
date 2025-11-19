@@ -14,6 +14,8 @@ import (
 	"gitlab.com/nbyl/metio/views"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func serverHandler(w http.ResponseWriter, r *http.Request) {
@@ -222,8 +224,21 @@ func getServerStatus(ctx context.Context) (*views.ServerStatus, error) {
 
 	playerStatus, err := dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
-		span.SetAttributes(attribute.String("error", "get_status_failed"))
-		return nil, fmt.Errorf("error getting status from database: %w", err)
+		// Check if this is a "not found" error (fresh deployment with no data)
+		if status.Code(err) == codes.NotFound {
+			// For fresh deployments, treat missing data as stopped server
+			span.SetAttributes(attribute.String("status", "not_found_treated_as_stopped"))
+			playerStatus = db.Status{
+				Players:     db.Players{Current: 0, Max: 20},
+				Timestamp:   time.Now(),
+				Uptime:      "",
+				ServerState: db.ServerStateStopped,
+				InstanceIP:  "",
+			}
+		} else {
+			span.SetAttributes(attribute.String("error", "get_status_failed"))
+			return nil, fmt.Errorf("error getting status from database: %w", err)
+		}
 	}
 
 	// Handle missing IP with default
