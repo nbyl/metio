@@ -10,6 +10,12 @@
 - **Docker build machine-agent**: `make build-machine-agent-image`
 - **No test framework configured** - add Go tests as needed
 
+## Local Deployment Command
+- **Full system**: `make deploy`
+- **Controller**: `make deploy-controller` (includes rebuild of controller image)
+- **Machine-Agent**: `make deploy-machine-agent` (includes rebuild of machine agent image)
+- **Server & Infrastructure**: `make deploy-infrastructure` (does not trigger rebuild of images)
+
 ## Code Style Guidelines
 
 ### Go Code
