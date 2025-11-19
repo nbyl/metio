@@ -12,3 +12,4 @@ Implement the currently discussed and planned changes. Follow this workflows:
 * Run local tests.
 * If all tests are good, create a git commit.
 * Push the branch to GitLab. Create a merge request if none exists, otherwise create one.
+* Update the linear ticket to "in Review".
