@@ -11,6 +11,9 @@ import (
 
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // PubSubMessage represents the structure of a Pub/Sub push message
@@ -45,13 +48,25 @@ type AuditLogEntry struct {
 }
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tracer := otel.Tracer("events-handler")
+	ctx, span := tracer.Start(ctx, "eventsHandler")
+	defer span.End()
+
+	// Record request metric
+	tracing.RecordRequest(r.Method, r.URL.Path)
+
 	if r.Method != http.MethodPost {
+		span.SetAttributes(attribute.String("error", "method_not_allowed"))
+		tracing.RecordError("method_not_allowed")
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Verify the request is from Pub/Sub
 	if !verifyPubSubAuth(r) {
+		span.SetAttributes(attribute.String("error", "unauthorized"))
+		tracing.RecordError("unauthorized")
 		log.Print("Unauthorized event request")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -60,10 +75,17 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse Pub/Sub message
 	var pubsubMessage PubSubMessage
 	if err := json.NewDecoder(r.Body).Decode(&pubsubMessage); err != nil {
+		span.SetAttributes(attribute.String("error", "invalid_json"))
+		tracing.RecordError("invalid_json")
 		log.Printf("Invalid JSON in event request: %v", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
+
+	span.SetAttributes(
+		attribute.String("pubsub.message_id", pubsubMessage.Message.ID),
+		attribute.String("pubsub.subscription", pubsubMessage.Subscription),
+	)
 
 	// Process the audit log event asynchronously
 	go processAuditLogEvent(pubsubMessage.Message.Data)
@@ -86,14 +108,34 @@ func verifyPubSubAuth(r *http.Request) bool {
 
 func processAuditLogEvent(data []byte) {
 	ctx := context.Background()
+	tracer := otel.Tracer("events-handler")
+	ctx, span := tracer.Start(ctx, "processAuditLogEvent")
+	defer span.End()
 
 	// Parse the audit log entry directly (data is already JSON)
 	var auditLog AuditLogEntry
 	if err := json.Unmarshal(data, &auditLog); err != nil {
+		span.SetAttributes(
+			attribute.String("error", "failed_to_parse_audit_log"),
+			attribute.String("raw_data", string(data)),
+		)
+		tracing.RecordError("failed_to_parse_audit_log")
 		log.Printf("Failed to parse audit log entry: %v", err)
 		log.Printf("Raw data: %s", string(data))
 		return
 	}
+
+	span.SetAttributes(
+		attribute.String("audit.method", auditLog.ProtoPayload.MethodName),
+		attribute.String("audit.resource", auditLog.ProtoPayload.ResourceName),
+		attribute.String("audit.principal", auditLog.ProtoPayload.AuthenticationInfo.PrincipalEmail),
+		attribute.String("audit.instance_id", auditLog.Resource.Labels.InstanceID),
+		attribute.String("audit.project_id", auditLog.Resource.Labels.ProjectID),
+		attribute.String("audit.zone", auditLog.Resource.Labels.Zone),
+	)
+
+	// Record event processed metric
+	tracing.RecordEventProcessed(auditLog.ProtoPayload.MethodName)
 
 	// Process the event based on the method name
 	switch auditLog.ProtoPayload.MethodName {
@@ -104,6 +146,7 @@ func processAuditLogEvent(data []byte) {
 	case "v1.compute.instances.preempted":
 		handleInstancePreempted(ctx, auditLog)
 	default:
+		span.SetAttributes(attribute.String("error", "unhandled_method"))
 		log.Printf("Ignoring audit log method: %s", auditLog.ProtoPayload.MethodName)
 	}
 }
@@ -176,6 +219,18 @@ func extractInstanceName(resourceName string) string {
 }
 
 func updateInstanceState(ctx context.Context, instanceName string, state db.ServerState) error {
+	tracer := otel.Tracer("events-handler")
+	ctx, span := tracer.Start(ctx, "updateInstanceState")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("instance.name", instanceName),
+		attribute.String("instance.state", string(state)),
+	)
+
+	// Record database operation metric
+	tracing.RecordDBOperation("update_instance_state")
+
 	// Get database connection
 	environment := viper.GetString("ENVIRONMENT")
 	region := viper.GetString("REGION")
@@ -184,12 +239,16 @@ func updateInstanceState(ctx context.Context, instanceName string, state db.Serv
 
 	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "database_connection_failed"))
+		tracing.RecordError("database_connection_failed")
 		return fmt.Errorf("error connecting to database: %w", err)
 	}
 
 	// Get current status to preserve existing data
 	currentStatus, err := dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_status_failed"))
+		tracing.RecordError("get_status_failed")
 		log.Printf("Error getting current status from db: %v", err)
 		// Use default values if we can't get current status
 		currentStatus = db.Status{
@@ -199,11 +258,22 @@ func updateInstanceState(ctx context.Context, instanceName string, state db.Serv
 	}
 
 	// Update with new state, preserving other fields
-	return dbConn.UpdateStatus(ctx, instanceName, db.Status{
+	err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
 		Players:     currentStatus.Players,
 		Timestamp:   time.Now(),
 		Uptime:      currentStatus.Uptime,
 		ServerState: state,
 		InstanceIP:  currentStatus.InstanceIP,
 	})
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "update_status_failed"))
+		tracing.RecordError("update_status_failed")
+		return err
+	}
+
+	// Record status update metric
+	tracing.RecordStatusUpdate(instanceName, string(state))
+
+	span.SetAttributes(attribute.String("success", "true"))
+	return nil
 }

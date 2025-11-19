@@ -79,22 +79,22 @@ write_files:
       Description=Metio Machine Agent
       After=docker.service
       Requires=docker.service
-
-      [Service]
-      User=metio
-      WorkingDirectory=/home/metio
-      TimeoutStartSec=0
-      Restart=always
-      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries europe-west3-docker.pkg.dev
-      ExecStartPre=-/usr/bin/docker stop %n
-      ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/usr/bin/docker pull ${machine_agent_image}
-      ExecStart=/usr/bin/docker run --rm --name %n \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        -e ENVIRONMENT=${environment} \
-        -e REGION=${region} \
-        -e INSTANCE_NAME=${instance_name} \
-        ${machine_agent_image}
+       [Service]
+       User=metio
+       WorkingDirectory=/home/metio
+       TimeoutStartSec=0
+       Restart=always
+       ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${region}-docker.pkg.dev
+       ExecStartPre=-/usr/bin/docker stop %n
+       ExecStartPre=-/usr/bin/docker rm %n
+       ExecStartPre=/usr/bin/docker pull ${machine_agent_image}
+       ExecStart=/usr/bin/docker run --rm --name %n \
+         -v /var/run/docker.sock:/var/run/docker.sock \
+         -e ENVIRONMENT=${environment} \
+         -e REGION=${region} \
+         -e INSTANCE_NAME=${instance_name} \
+         -e GCP_PROJECT=${project_id} \
+         ${machine_agent_image}
       ExecStop=/usr/bin/docker stop %n
 
       [Install]

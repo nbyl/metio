@@ -12,24 +12,47 @@ import (
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/views"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func serverHandler(w http.ResponseWriter, r *http.Request) {
-	serverStatus, err := getServerStatus()
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "serverHandler")
+	defer span.End()
+
+	serverStatus, err := getServerStatus(ctx)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_status_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	component := views.ServerPage(*serverStatus)
-	component.Render(r.Context(), w)
+	component.Render(ctx, w)
 }
 
 func startServerHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "startServerHandler")
+	defer span.End()
+
+	instanceName := viper.GetString("INSTANCE_NAME")
+	projectID := viper.GetString("GCP_PROJECT")
+	zone := viper.GetString("GCP_ZONE")
+
+	span.SetAttributes(
+		attribute.String("instance.name", instanceName),
+		attribute.String("instance.project", projectID),
+		attribute.String("instance.zone", zone),
+	)
+
 	c, err := compute.NewInstancesRESTClient(ctx)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "compute_client_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -37,28 +60,28 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	req := &computepb.StartInstanceRequest{
-		Instance: viper.GetString("INSTANCE_NAME"),
-		Project:  viper.GetString("GCP_PROJECT"),
-		Zone:     viper.GetString("GCP_ZONE"),
+		Instance: instanceName,
+		Project:  projectID,
+		Zone:     zone,
 	}
 
 	_, err = c.Start(ctx, req)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "start_instance_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Update DB with starting status
-	instanceName := viper.GetString("INSTANCE_NAME")
 	environment := viper.GetString("ENVIRONMENT")
 	region := viper.GetString("REGION")
-	projectID := viper.GetString("GCP_PROJECT")
 	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
 
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
-	if err != nil {
-		log.Printf("Error connecting to db for status update: %v", err)
+	dbConn, dbErr := db.NewConnection(ctx, projectID, databaseID)
+	if dbErr != nil {
+		span.SetAttributes(attribute.String("error", "db_connection_failed"))
+		log.Printf("Error connecting to db for status update: %v", dbErr)
 	} else {
 		// Get current status to preserve player data
 		currentStatus, err := dbConn.GetStatus(ctx, instanceName)
@@ -85,9 +108,24 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func stopServerHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "stopServerHandler")
+	defer span.End()
+
+	instanceName := viper.GetString("INSTANCE_NAME")
+	projectID := viper.GetString("GCP_PROJECT")
+	zone := viper.GetString("GCP_ZONE")
+
+	span.SetAttributes(
+		attribute.String("instance.name", instanceName),
+		attribute.String("instance.project", projectID),
+		attribute.String("instance.zone", zone),
+	)
+
 	c, err := compute.NewInstancesRESTClient(ctx)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "compute_client_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -95,28 +133,28 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	req := &computepb.StopInstanceRequest{
-		Instance: viper.GetString("INSTANCE_NAME"),
-		Project:  viper.GetString("GCP_PROJECT"),
-		Zone:     viper.GetString("GCP_ZONE"),
+		Instance: instanceName,
+		Project:  projectID,
+		Zone:     zone,
 	}
 
 	_, err = c.Stop(ctx, req)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "stop_instance_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Update DB with stopping status
-	instanceName := viper.GetString("INSTANCE_NAME")
 	environment := viper.GetString("ENVIRONMENT")
 	region := viper.GetString("REGION")
-	projectID := viper.GetString("GCP_PROJECT")
 	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
 
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
-	if err != nil {
-		log.Printf("Error connecting to db for status update: %v", err)
+	dbConn, dbErr := db.NewConnection(ctx, projectID, databaseID)
+	if dbErr != nil {
+		span.SetAttributes(attribute.String("error", "db_connection_failed"))
+		log.Printf("Error connecting to db for status update: %v", dbErr)
 	} else {
 		// Get current status to preserve player data
 		currentStatus, err := dbConn.GetStatus(ctx, instanceName)
@@ -143,32 +181,48 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
-	serverStatus, err := getServerStatus()
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "statusHandler")
+	defer span.End()
+
+	serverStatus, err := getServerStatus(ctx)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_status_failed"))
 		log.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	component := views.ServerStatusCard(*serverStatus)
-	component.Render(r.Context(), w)
+	component.Render(ctx, w)
 }
 
-func getServerStatus() (*views.ServerStatus, error) {
-	ctx := context.Background()
+func getServerStatus(ctx context.Context) (*views.ServerStatus, error) {
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "getServerStatus")
+	defer span.End()
+
 	instanceName := viper.GetString("INSTANCE_NAME")
 	environment := viper.GetString("ENVIRONMENT")
 	region := viper.GetString("REGION")
 	projectID := viper.GetString("GCP_PROJECT")
 	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
 
+	span.SetAttributes(
+		attribute.String("instance.name", instanceName),
+		attribute.String("database.id", databaseID),
+	)
+
 	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		return nil, fmt.Errorf("error connecting to database: %w", err)
 	}
 
 	playerStatus, err := dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_status_failed"))
 		return nil, fmt.Errorf("error getting status from database: %w", err)
 	}
 
