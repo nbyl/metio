@@ -1,5 +1,5 @@
 ---
-description: Implement the planned changes using a fully featured workflow.
+description: Implement the planned changes using a single-shot workflow.
 agent: build
 ---
 
