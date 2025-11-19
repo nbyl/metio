@@ -6,6 +6,7 @@ locals {
     region              = var.region
     environment         = var.environment
     instance_name       = "${var.environment}-minecraft-server"
+    project_id          = var.project_id
   })
 }
 
@@ -46,6 +47,12 @@ resource "google_project_iam_member" "sa_logging_metric_writer" {
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
+resource "google_project_iam_member" "sa_trace_writer" {
+  project = var.project_id
+  role    = "roles/cloudtrace.agent"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
 resource "google_project_iam_member" "sa_container_registry_reader" {
   project = var.project_id
   role    = "roles/artifactregistry.reader"
@@ -55,6 +62,12 @@ resource "google_project_iam_member" "sa_container_registry_reader" {
 resource "google_project_iam_member" "sa_firestore_user" {
   project = var.project_id
   role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
+resource "google_project_iam_member" "sa_serviceusage_consumer" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
