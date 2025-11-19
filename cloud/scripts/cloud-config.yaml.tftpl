@@ -27,12 +27,12 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/usr/bin/docker pull itzg/minecraft-server:stable-java21
+      ExecStartPre=/bin/bash -c "echo '[$(date)] Pulling Minecraft image...' && docker pull itzg/minecraft-server:stable-java21"
       ExecStart=/usr/bin/docker run --rm --name %n \
         -p 25565:25565 \
         -p 127.0.0.1:25575:25575 \
         -e EULA=TRUE \
-        -e VERSION=${minecraft_version} \
+        -e VERSION=1.21.10 \
         -e MAX_MEMORY=3G \
         -e USE_MEOWICE_FLAGS=true \
         -e RCON_PASSWORD=minecraft2025 \
@@ -62,7 +62,7 @@ write_files:
         --network host \
         -e BACKUP_METHOD=restic \
         -e BACKUP_INTERVAL=1h \
-        -e RESTIC_REPOSITORY=gs:${backup_bucket}:/ \
+        -e RESTIC_REPOSITORY=gs:development-minecraft-backups-bucket:/ \
         -e RESTIC_PASSWORD=minecraft2025 \
         -e RCON_HOST=127.0.0.1 \
         -e RCON_PASSWORD=minecraft2025 \
@@ -100,6 +100,6 @@ write_files:
       [Install]
       WantedBy=default.target
 runcmd:
-  - systemctl daemon-reload
-  - systemctl enable minecraft minecraft-backup metio-machine-agent
-  - systemctl start minecraft minecraft-backup metio-machine-agent
+- systemctl daemon-reload
+- systemctl enable minecraft minecraft-backup metio-machine-agent
+- systemctl start minecraft minecraft-backup metio-machine-agent

@@ -14,14 +14,14 @@ resource "random_id" "random" {
 resource "google_iam_workload_identity_pool" "gitlab-pool" {
   provider                  = google-beta
   workload_identity_pool_id = "gitlab-pool-${random_id.random.hex}"
-  project = var.gcp_project_name
+  project                   = var.gcp_project_name
 }
 
 resource "google_iam_workload_identity_pool_provider" "gitlab-provider-jwt" {
   provider                           = google-beta
   workload_identity_pool_id          = google_iam_workload_identity_pool.gitlab-pool.workload_identity_pool_id
   workload_identity_pool_provider_id = "gitlab-jwt-${random_id.random.hex}"
-  project = var.gcp_project_name
+  project                            = var.gcp_project_name
   attribute_condition                = "assertion.namespace_path.startsWith(\"${var.gitlab_namespace_path}\")"
   attribute_mapping = {
     "google.subject"           = "assertion.sub", # Required
@@ -63,4 +63,3 @@ output "GCP_WORKLOAD_IDENTITY_PROVIDER" {
 output "GCP_SERVICE_ACCOUNT" {
   value = google_service_account.gitlab-runner.email
 }
-

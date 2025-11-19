@@ -46,7 +46,7 @@ build-controller:
     identity: google_cloud
     resource_group: cloudbuild
     script:
-      - gcloud config set project "${TF_VAR_project_id}"  
+      - gcloud config set project "${TF_VAR_project_id}"
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
       - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
@@ -62,7 +62,7 @@ build-machine-agent:
     identity: google_cloud
     resource_group: cloudbuild
     script:
-      - gcloud config set project "${TF_VAR_project_id}"  
+      - gcloud config set project "${TF_VAR_project_id}"
       - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
       - gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
     rules:
