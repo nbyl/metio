@@ -11,8 +11,9 @@ build:
 	@for dir in cmd/*/; do \
 		if [ -f "$$dir/main.go" ]; then \
 			binary=$$(basename "$$dir"); \
-			echo "Building $$binary..."; \
-			go build -o "build/$$binary" "./$$dir"; \
+			version=$$(git rev-parse --short HEAD 2>/dev/null || echo "local"); \
+			echo "Building $$binary with version $$version..."; \
+			go build -ldflags "-X main.Version=$$version" -o "build/$$binary" "./$$dir"; \
 			echo "Built build/$$binary"; \
 		fi; \
 	done
@@ -29,8 +30,9 @@ test:
 %:
 	@mkdir -p build
 	@if [ -f "cmd/$@/main.go" ]; then \
-		echo "Building $@..."; \
-		go build -o "build/$@" "./cmd/$@"; \
+		version=$$(git rev-parse --short HEAD 2>/dev/null || echo "local"); \
+		echo "Building $@ with version $$version..."; \
+		go build -ldflags "-X main.Version=$$version" -o "build/$@" "./cmd/$@"; \
 		echo "Built build/$@"; \
 	else \
 		echo "Error: cmd/$@/main.go not found"; \
