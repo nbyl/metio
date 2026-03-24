@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gorilla/sessions"
@@ -44,7 +45,7 @@ var googleOauthConfig *oauth2.Config
 
 func getGoogleOauthConfig() *oauth2.Config {
 	if googleOauthConfig == nil {
-		baseUrl := viper.GetString("BASE_URL")
+		baseUrl := strings.TrimSuffix(viper.GetString("BASE_URL"), "/")
 		redirectUrl := fmt.Sprintf("%s/auth/callback", baseUrl)
 
 		googleOauthConfig = &oauth2.Config{
