@@ -15,6 +15,7 @@ resource "google_project_iam_custom_role" "controller-role" {
     "datastore.entities.get",
     "datastore.entities.list",
     "datastore.entities.update",
+    "iam.serviceAccounts.signBlob",
     "logging.logEntries.create",
     "monitoring.timeSeries.create",
     "serviceusage.services.use",
