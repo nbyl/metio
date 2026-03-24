@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images build-frontend help
 
 USERNAME := $(shell whoami)
 
@@ -42,6 +42,11 @@ test:
 # Clean build artifacts
 clean:
 	rm -rf build/
+	rm -rf static/dist/
+
+# Build frontend assets
+build-frontend:
+	cd frontend && npm ci && npm run build
 
 # Build machine-agent Docker image and save tag to file
 build-machine-agent-image:
