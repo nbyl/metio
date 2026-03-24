@@ -39,6 +39,8 @@ export async function initializeFirebase(): Promise<{
 
   // Initialize Firebase app
   app = initializeApp({
+    apiKey: appConfig.firebaseApiKey,
+    authDomain: appConfig.firebaseAuthDomain,
     projectId: appConfig.gcpProject,
   });
 
