@@ -26,6 +26,9 @@ func New() *mux.Router {
 	// Config endpoint (no auth required - needed for frontend Firebase initialization)
 	r.HandleFunc("/api/config", configHandler).Methods("GET")
 
+	// Auth status endpoint (no auth required - used by frontend to check auth state)
+	r.HandleFunc("/api/auth/me", meHandler).Methods("GET")
+
 	// API routes (protected)
 	apiRouter := r.PathPrefix("/api").Subrouter()
 	apiRouter.Use(authMiddleware)

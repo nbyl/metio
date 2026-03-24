@@ -1,4 +1,7 @@
+import { Routes, Route } from 'react-router-dom';
 import { useServerStatus } from './hooks/useServerStatus';
+import { useAuth } from './hooks/useAuth';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import type { ServerState } from './types/firestore';
 
 /**
@@ -75,18 +78,39 @@ async function handleCopyIP(ip: string) {
   }
 }
 
-function App() {
+/**
+ * Header component with user info and logout
+ */
+function Header({ email }: { email: string }) {
+  return (
+    <div className="page-header">
+      <div>
+        <h1 className="title">Metio</h1>
+        <p className="subtitle">Minecraft Server Controller</p>
+      </div>
+      <div className="header-user">
+        <span className="user-email">{email}</span>
+        <a href="/auth/logout" className="btn btn-outline btn-sm">
+          Logout
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dashboard component - main server control panel
+ */
+function Dashboard() {
   const { status, loading, error } = useServerStatus();
+  const { user } = useAuth();
 
   // Loading state
   if (loading) {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
+          <Header email={user?.email || ''} />
           <div className="card">
             <div className="card-content">
               <p className="text-muted">Loading server status...</p>
@@ -102,10 +126,7 @@ function App() {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
+          <Header email={user?.email || ''} />
           <div className="card">
             <div className="card-content">
               <p className="text-red-500">Error: {error.message}</p>
@@ -121,10 +142,7 @@ function App() {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
+          <Header email={user?.email || ''} />
           <div className="card">
             <div className="card-content">
               <p className="text-muted">No server status available</p>
@@ -148,10 +166,7 @@ function App() {
   return (
     <div className="dark min-h-screen bg-background p-8">
       <div className="container">
-        <div className="page-header">
-          <h1 className="title">Metio</h1>
-          <p className="subtitle">Minecraft Server Controller</p>
-        </div>
+        <Header email={user?.email || ''} />
 
         <div className="card">
           <div className="card-header">
@@ -213,6 +228,24 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Main App component with routing
+ */
+function App() {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 

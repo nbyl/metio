@@ -27,6 +27,7 @@ type User struct {
 
 const sessionName = "metio"
 const userKey = "user"
+const emailKey = "email"
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
@@ -96,6 +97,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := getSessionStore().Get(r, sessionName)
 
 	session.Values[userKey] = user.ID
+	session.Values[emailKey] = user.Email
 	err = session.Save(r, w)
 	if err != nil {
 		log.Println("Error saving session:", err)
@@ -191,4 +193,29 @@ func firebaseTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": token})
+}
+
+// AuthMeResponse represents the /api/auth/me response
+type AuthMeResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	Email         string `json:"email,omitempty"`
+}
+
+// meHandler returns the current user's authentication status
+// Returns 200 with user data if authenticated, 401 if not
+func meHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	session, err := getSessionStore().Get(r, sessionName)
+	if err != nil || session.IsNew || session.Values[userKey] == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(AuthMeResponse{Authenticated: false})
+		return
+	}
+
+	email, _ := session.Values[emailKey].(string)
+	json.NewEncoder(w).Encode(AuthMeResponse{
+		Authenticated: true,
+		Email:         email,
+	})
 }
