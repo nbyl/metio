@@ -6,7 +6,7 @@ USERNAME := $(shell whoami)
 all: build
 
 # Build all binaries from cmd/*/main.go
-build:
+build: build-frontend
 	@mkdir -p build
 	@for dir in cmd/*/; do \
 		if [ -f "$$dir/main.go" ]; then \
