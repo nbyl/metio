@@ -29,7 +29,10 @@ func main() {
 
 	r := handlers.New()
 
+	// Wrap router with CORS middleware (only enabled in dev mode)
+	handler := handlers.CORSMiddleware(r)
+
 	port := viper.GetString("PORT")
 	log.Printf("Server starting on :%s", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), gorillahandlers.LoggingHandler(os.Stdout, r)))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), gorillahandlers.LoggingHandler(os.Stdout, handler)))
 }
