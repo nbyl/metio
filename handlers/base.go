@@ -23,12 +23,16 @@ func New() *mux.Router {
 	// Events endpoint for Pub/Sub push notifications (no auth required)
 	r.HandleFunc("/events", eventsHandler).Methods("POST")
 
+	// Config endpoint (no auth required - needed for frontend Firebase initialization)
+	r.HandleFunc("/api/config", configHandler).Methods("GET")
+
 	// API routes (protected)
 	apiRouter := r.PathPrefix("/api").Subrouter()
 	apiRouter.Use(authMiddleware)
 	apiRouter.HandleFunc("/server/start", startServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/status", statusHandler).Methods("GET")
+	apiRouter.HandleFunc("/auth/firebase-token", firebaseTokenHandler).Methods("GET")
 
 	// SPA fallback - serve React app for all other routes
 	r.PathPrefix("/").Handler(spaHandler())

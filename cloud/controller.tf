@@ -15,6 +15,7 @@ resource "google_project_iam_custom_role" "controller-role" {
     "datastore.entities.get",
     "datastore.entities.list",
     "datastore.entities.update",
+    "iam.serviceAccounts.signBlob",
     "logging.logEntries.create",
     "monitoring.timeSeries.create",
     "serviceusage.services.use",
@@ -142,6 +143,15 @@ resource "google_cloud_run_v2_service" "controller" {
           }
         }
       }
+      env {
+        name = "FIREBASE_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.firebase_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
 
     }
   }
@@ -177,4 +187,25 @@ resource "google_secret_manager_secret_iam_member" "secret-access-base_url" {
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.base_url]
+}
+
+resource "google_secret_manager_secret" "firebase_api_key" {
+  secret_id = "${var.environment}-firebase_api_key"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "firebase_api_key_dummy" {
+  secret                 = google_secret_manager_secret.firebase_api_key.id
+  secret_data_wo_version = 0
+  secret_data            = "dummy"
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_key" {
+  secret_id  = google_secret_manager_secret.firebase_api_key.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.firebase_api_key]
 }
