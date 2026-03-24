@@ -33,6 +33,8 @@ export interface AppConfig {
   gcpProject: string;
   firestoreDatabase: string;
   instanceName: string;
+  firebaseApiKey: string;
+  firebaseAuthDomain: string;
 }
 
 /**
