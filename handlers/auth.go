@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/firebase"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -163,4 +164,31 @@ func getUserDataFromGoogle(code string) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+// firebaseTokenHandler generates a Firebase custom token for the authenticated user
+// This allows the frontend to authenticate with Firebase using the existing session
+func firebaseTokenHandler(w http.ResponseWriter, r *http.Request) {
+	session, err := getSessionStore().Get(r, sessionName)
+	if err != nil {
+		log.Printf("Error getting session: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
+	}
+
+	userID, ok := session.Values[userKey].(string)
+	if !ok || userID == "" {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	token, err := firebase.CreateCustomToken(r.Context(), userID)
+	if err != nil {
+		log.Printf("Error creating Firebase token: %v", err)
+		http.Error(w, "Failed to create Firebase token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": token})
 }
