@@ -207,3 +207,6 @@ tmp/
 .DS_Store
 views/*_templ.go
 .devcontainer/devcontainer.env
+
+# Frontend build output
+static/dist/
