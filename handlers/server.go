@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,29 +12,20 @@ import (
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/db"
-	"gitlab.com/nbyl/metio/views"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func serverHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tracer := otel.Tracer("server-handler")
-	ctx, span := tracer.Start(ctx, "serverHandler")
-	defer span.End()
-
-	serverStatus, err := getServerStatus(ctx)
-	if err != nil {
-		span.SetAttributes(attribute.String("error", "get_server_status_failed"))
-		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	component := views.ServerPage(*serverStatus)
-	component.Render(ctx, w)
+// ServerStatus represents the server status for JSON API responses
+type ServerStatus struct {
+	Status     db.ServerState `json:"status"`
+	Players    int            `json:"players"`
+	MaxPlayers int            `json:"maxPlayers"`
+	Uptime     string         `json:"uptime"`
+	Version    string         `json:"version"`
+	IP         string         `json:"ip"`
 }
 
 func startServerHandler(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +98,9 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, "/server", http.StatusSeeOther)
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "starting"})
 }
 
 func stopServerHandler(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +173,9 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, "/server", http.StatusSeeOther)
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "stopping"})
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
@@ -192,15 +188,17 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_server_status_failed"))
 		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
-	component := views.ServerStatusCard(*serverStatus)
-	component.Render(ctx, w)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(serverStatus)
 }
 
-func getServerStatus(ctx context.Context) (*views.ServerStatus, error) {
+func getServerStatus(ctx context.Context) (*ServerStatus, error) {
 	tracer := otel.Tracer("server-handler")
 	ctx, span := tracer.Start(ctx, "getServerStatus")
 	defer span.End()
@@ -260,7 +258,7 @@ func getServerStatus(ctx context.Context) (*views.ServerStatus, error) {
 		uptime = ""
 	}
 
-	return &views.ServerStatus{
+	return &ServerStatus{
 		Status:     playerStatus.ServerState,
 		Players:    players,
 		MaxPlayers: maxPlayers,
