@@ -35,7 +35,6 @@ func New() *mux.Router {
 	apiRouter.HandleFunc("/server/start", startServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/status", statusHandler).Methods("GET")
-	apiRouter.HandleFunc("/auth/firebase-token", firebaseTokenHandler).Methods("GET")
 
 	// SPA fallback - serve React app for all other routes
 	r.PathPrefix("/").Handler(spaHandler())

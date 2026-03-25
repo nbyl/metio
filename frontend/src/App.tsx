@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import { useServerStatus } from './hooks/useServerStatus';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import type { ServerState } from './types/firestore';
+import type { ServerState } from './types/server';
 
 /**
  * Maps server state to badge CSS class and label
@@ -158,10 +158,10 @@ function Dashboard() {
     );
   }
 
-  const badge = getStatusBadge(status.server_state);
-  const isRunning = status.server_state === 'RUNNING';
-  const isStopped = status.server_state === 'STOPPED';
-  const isTransitioning = status.server_state === 'STARTING' || status.server_state === 'STOPPING';
+  const badge = getStatusBadge(status.status);
+  const isRunning = status.status === 'RUNNING';
+  const isStopped = status.status === 'STOPPED';
+  const isTransitioning = status.status === 'STARTING' || status.status === 'STOPPING';
 
   return (
     <div className="dark min-h-screen bg-background p-8">
@@ -179,12 +179,12 @@ function Dashboard() {
             <div className="stats-grid">
               <div className="stat">
                 <span className="stat-label">Status</span>
-                <span className="stat-value">{formatServerState(status.server_state)}</span>
+                <span className="stat-value">{formatServerState(status.status)}</span>
               </div>
               <div className="stat">
                 <span className="stat-label">Players</span>
                 <span className="stat-value">
-                  {status.players.current}/{status.players.max}
+                  {status.players}/{status.maxPlayers}
                 </span>
               </div>
               <div className="stat">
@@ -193,7 +193,7 @@ function Dashboard() {
               </div>
               <div className="stat">
                 <span className="stat-label">IP</span>
-                <span className="stat-value">{status.instance_ip || '-'}</span>
+                <span className="stat-value">{status.ip || '-'}</span>
               </div>
             </div>
 
@@ -212,13 +212,13 @@ function Dashboard() {
               )}
               {isTransitioning && (
                 <button className="btn btn-outline" disabled>
-                  {status.server_state === 'STARTING' ? 'Starting...' : 'Stopping...'}
+                  {status.status === 'STARTING' ? 'Starting...' : 'Stopping...'}
                 </button>
               )}
-              {status.instance_ip && (
+              {status.ip && (
                 <button
                   className="btn btn-outline"
-                  onClick={() => handleCopyIP(status.instance_ip)}
+                  onClick={() => handleCopyIP(status.ip)}
                 >
                   Copy IP
                 </button>
