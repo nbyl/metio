@@ -1,6 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { ServerActionResponse, APIError } from '../types/server';
+import type { ServerActionResponse, ServerStatus, APIError } from '../types/server';
+
+/** Context for mutation rollback */
+interface MutationContext {
+  previousStatus: ServerStatus | undefined;
+}
 
 /**
  * Sends a POST request to start the server
@@ -62,11 +67,32 @@ export function useStartServer() {
 
   return useMutation({
     mutationFn: startServer,
+    onMutate: async (): Promise<MutationContext> => {
+      // Cancel outgoing refetches to prevent race conditions
+      await queryClient.cancelQueries({ queryKey: ['serverStatus'] });
+
+      // Snapshot previous value for rollback
+      const previousStatus = queryClient.getQueryData<ServerStatus>(['serverStatus']);
+
+      // Optimistically update to STARTING
+      if (previousStatus) {
+        queryClient.setQueryData<ServerStatus>(['serverStatus'], {
+          ...previousStatus,
+          status: 'STARTING',
+        });
+      }
+
+      return { previousStatus };
+    },
     onSuccess: () => {
       toast.success('Server starting...');
       queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables: void, context: MutationContext | undefined) => {
+      // Rollback on error
+      if (context?.previousStatus) {
+        queryClient.setQueryData(['serverStatus'], context.previousStatus);
+      }
       toast.error(error.message);
     },
   });
@@ -94,11 +120,32 @@ export function useStopServer() {
 
   return useMutation({
     mutationFn: stopServer,
+    onMutate: async (): Promise<MutationContext> => {
+      // Cancel outgoing refetches to prevent race conditions
+      await queryClient.cancelQueries({ queryKey: ['serverStatus'] });
+
+      // Snapshot previous value for rollback
+      const previousStatus = queryClient.getQueryData<ServerStatus>(['serverStatus']);
+
+      // Optimistically update to STOPPING
+      if (previousStatus) {
+        queryClient.setQueryData<ServerStatus>(['serverStatus'], {
+          ...previousStatus,
+          status: 'STOPPING',
+        });
+      }
+
+      return { previousStatus };
+    },
     onSuccess: () => {
       toast.success('Server stopping...');
       queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables: void, context: MutationContext | undefined) => {
+      // Rollback on error
+      if (context?.previousStatus) {
+        queryClient.setQueryData(['serverStatus'], context.previousStatus);
+      }
       toast.error(error.message);
     },
   });
