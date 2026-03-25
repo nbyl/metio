@@ -1,6 +1,8 @@
 import { toast } from 'sonner';
+import { Copy, Check } from 'lucide-react';
 import { useServerStatus } from '../../hooks/useServerStatus';
 import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -53,18 +55,6 @@ function getStatusLabel(state: ServerState): string {
 }
 
 /**
- * Copies the server IP to clipboard with toast feedback
- */
-async function handleCopyIP(ip: string) {
-  try {
-    await navigator.clipboard.writeText(ip);
-    toast.success('IP copied to clipboard');
-  } catch {
-    toast.error('Failed to copy IP');
-  }
-}
-
-/**
  * Loading skeleton for the server status card.
  * Shows placeholder content while data is being fetched.
  */
@@ -110,8 +100,21 @@ export function ServerStatusCard({ className }: ServerStatusCardProps) {
   const { data: status, isLoading, error, refetch } = useServerStatus();
   const startMutation = useStartServer();
   const stopMutation = useStopServer();
+  const { copy, copied } = useCopyToClipboard();
 
   const isMutating = startMutation.isPending || stopMutation.isPending;
+
+  /**
+   * Handles copying the server IP to clipboard with toast feedback
+   */
+  const handleCopyIP = async (ip: string) => {
+    const success = await copy(ip);
+    if (success) {
+      toast.success('IP copied to clipboard!');
+    } else {
+      toast.error('Failed to copy IP');
+    }
+  };
 
   // Loading state - show skeleton
   if (isLoading) {
@@ -216,9 +219,19 @@ export function ServerStatusCard({ className }: ServerStatusCardProps) {
               {status.status === 'STARTING' ? 'Starting...' : 'Stopping...'}
             </Button>
           )}
-          {status.ip && (
+          {isRunning && status.ip && (
             <Button variant="outline" onClick={() => handleCopyIP(status.ip)}>
-              Copy IP
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copy IP
+                </>
+              )}
             </Button>
           )}
         </div>
