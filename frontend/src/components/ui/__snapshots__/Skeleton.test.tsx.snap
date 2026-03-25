@@ -1,0 +1,8 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Skeleton > matches snapshot 1`] = `
+<div
+  class="skeleton animate-pulse rounded h-4 w-full"
+  data-testid="skeleton"
+/>
+`;
