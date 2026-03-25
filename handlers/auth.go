@@ -10,11 +10,11 @@ import (
 	"math/rand"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/spf13/viper"
-	"gitlab.com/nbyl/metio/firebase"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -27,6 +27,7 @@ type User struct {
 
 const sessionName = "metio"
 const userKey = "user"
+const emailKey = "email"
 
 const oauthGoogleUrlAPI = "https://www.googleapis.com/oauth2/v2/userinfo?access_token="
 
@@ -43,7 +44,7 @@ var googleOauthConfig *oauth2.Config
 
 func getGoogleOauthConfig() *oauth2.Config {
 	if googleOauthConfig == nil {
-		baseUrl := viper.GetString("BASE_URL")
+		baseUrl := strings.TrimSuffix(viper.GetString("BASE_URL"), "/")
 		redirectUrl := fmt.Sprintf("%s/auth/callback", baseUrl)
 
 		googleOauthConfig = &oauth2.Config{
@@ -72,7 +73,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Read oauthState from Cookie
-	oauthState, _ := r.Cookie("oauthstate")
+	oauthState, err := r.Cookie("oauthstate")
+	if err != nil || oauthState == nil {
+		log.Println("oauth state cookie not found")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
 
 	if r.FormValue("state") != oauthState.Value {
 		log.Println("invalid oauth google state")
@@ -96,6 +102,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := getSessionStore().Get(r, sessionName)
 
 	session.Values[userKey] = user.ID
+	session.Values[emailKey] = user.Email
 	err = session.Save(r, w)
 	if err != nil {
 		log.Println("Error saving session:", err)
@@ -166,29 +173,27 @@ func getUserDataFromGoogle(code string) (*User, error) {
 	return &user, nil
 }
 
-// firebaseTokenHandler generates a Firebase custom token for the authenticated user
-// This allows the frontend to authenticate with Firebase using the existing session
-func firebaseTokenHandler(w http.ResponseWriter, r *http.Request) {
-	session, err := getSessionStore().Get(r, sessionName)
-	if err != nil {
-		log.Printf("Error getting session: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
+// AuthMeResponse represents the /api/auth/me response
+type AuthMeResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	Email         string `json:"email,omitempty"`
+}
 
-	userID, ok := session.Values[userKey].(string)
-	if !ok || userID == "" {
-		http.Error(w, "User not authenticated", http.StatusUnauthorized)
-		return
-	}
-
-	token, err := firebase.CreateCustomToken(r.Context(), userID)
-	if err != nil {
-		log.Printf("Error creating Firebase token: %v", err)
-		http.Error(w, "Failed to create Firebase token", http.StatusInternalServerError)
-		return
-	}
-
+// meHandler returns the current user's authentication status
+// Returns 200 with user data if authenticated, 401 if not
+func meHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+
+	session, err := getSessionStore().Get(r, sessionName)
+	if err != nil || session.IsNew || session.Values[userKey] == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(AuthMeResponse{Authenticated: false})
+		return
+	}
+
+	email, _ := session.Values[emailKey].(string)
+	json.NewEncoder(w).Encode(AuthMeResponse{
+		Authenticated: true,
+		Email:         email,
+	})
 }
