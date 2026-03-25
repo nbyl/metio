@@ -1,8 +1,10 @@
 import { Routes, Route } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useServerStatus } from './hooks/useServerStatus';
+import { useStartServer, useStopServer } from './hooks/useServerMutations';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import type { ServerState, ServerActionResponse, APIError } from './types/server';
+import type { ServerState } from './types/server';
 
 /**
  * Maps server state to badge CSS class and label
@@ -40,63 +42,14 @@ function formatServerState(state: ServerState): string {
 }
 
 /**
- * Handles server start action
- */
-async function handleStartServer(): Promise<void> {
-  try {
-    const response = await fetch('/api/server/start', { method: 'POST' });
-    if (response.status === 401) {
-      // Session expired, redirect to login
-      window.location.href = '/auth/login';
-      return;
-    }
-    if (!response.ok) {
-      const error: APIError = await response.json();
-      console.error('Failed to start server:', error.error);
-      return;
-    }
-    const data: ServerActionResponse = await response.json();
-    if (!data.success) {
-      console.error('Server start returned unsuccessful');
-    }
-  } catch (err) {
-    console.error('Error starting server:', err);
-  }
-}
-
-/**
- * Handles server stop action
- */
-async function handleStopServer(): Promise<void> {
-  try {
-    const response = await fetch('/api/server/stop', { method: 'POST' });
-    if (response.status === 401) {
-      // Session expired, redirect to login
-      window.location.href = '/auth/login';
-      return;
-    }
-    if (!response.ok) {
-      const error: APIError = await response.json();
-      console.error('Failed to stop server:', error.error);
-      return;
-    }
-    const data: ServerActionResponse = await response.json();
-    if (!data.success) {
-      console.error('Server stop returned unsuccessful');
-    }
-  } catch (err) {
-    console.error('Error stopping server:', err);
-  }
-}
-
-/**
- * Copies the server IP to clipboard
+ * Copies the server IP to clipboard with toast feedback
  */
 async function handleCopyIP(ip: string) {
   try {
     await navigator.clipboard.writeText(ip);
-  } catch (err) {
-    console.error('Failed to copy IP:', err);
+    toast.success('IP copied to clipboard');
+  } catch {
+    toast.error('Failed to copy IP');
   }
 }
 
@@ -124,11 +77,15 @@ function Header({ email }: { email: string }) {
  * Dashboard component - main server control panel
  */
 function Dashboard() {
-  const { status, loading, error } = useServerStatus();
+  const { data: status, isLoading, error } = useServerStatus();
   const { user } = useAuth();
+  const startMutation = useStartServer();
+  const stopMutation = useStopServer();
+
+  const isMutating = startMutation.isPending || stopMutation.isPending;
 
   // Loading state
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
@@ -169,8 +126,12 @@ function Dashboard() {
             <div className="card-content">
               <p className="text-muted">No server status available</p>
               <div className="controls mt-4">
-                <button className="btn btn-green" onClick={handleStartServer}>
-                  Start Server
+                <button
+                  className="btn btn-green"
+                  onClick={() => startMutation.mutate()}
+                  disabled={isMutating}
+                >
+                  {startMutation.isPending ? 'Starting...' : 'Start Server'}
                 </button>
               </div>
             </div>
@@ -223,13 +184,21 @@ function Dashboard() {
 
             <div className="controls">
               {isRunning && (
-                <button className="btn btn-red" onClick={handleStopServer}>
-                  Stop Server
+                <button
+                  className="btn btn-red"
+                  onClick={() => stopMutation.mutate()}
+                  disabled={isMutating}
+                >
+                  {stopMutation.isPending ? 'Stopping...' : 'Stop Server'}
                 </button>
               )}
               {isStopped && (
-                <button className="btn btn-green" onClick={handleStartServer}>
-                  Start Server
+                <button
+                  className="btn btn-green"
+                  onClick={() => startMutation.mutate()}
+                  disabled={isMutating}
+                >
+                  {startMutation.isPending ? 'Starting...' : 'Start Server'}
                 </button>
               )}
               {isTransitioning && (
