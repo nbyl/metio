@@ -212,6 +212,12 @@ describe('ServerStatusCard', () => {
       ).toBeInTheDocument();
     });
 
+    it('does not render copy IP button', () => {
+      render(<ServerStatusCard />, { wrapper: createWrapper() });
+
+      expect(screen.queryByRole('button', { name: /Copy IP/i })).not.toBeInTheDocument();
+    });
+
     it('matches stopped snapshot', () => {
       const { container } = render(<ServerStatusCard />, {
         wrapper: createWrapper(),
@@ -283,7 +289,7 @@ describe('ServerStatusCard', () => {
       render(<ServerStatusCard />, { wrapper: createWrapper() });
 
       expect(
-        screen.getByRole('button', { name: 'Copy IP' })
+        screen.getByRole('button', { name: /Copy IP/i })
       ).toBeInTheDocument();
     });
 
@@ -292,10 +298,39 @@ describe('ServerStatusCard', () => {
 
       render(<ServerStatusCard />, { wrapper: createWrapper() });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Copy IP' }));
+      fireEvent.click(screen.getByRole('button', { name: /Copy IP/i }));
 
       await waitFor(() => {
         expect(mockClipboard.writeText).toHaveBeenCalledWith('192.168.1.100');
+      });
+    });
+
+    it('copy IP button shows visual feedback after copying', async () => {
+      mockClipboard.writeText.mockResolvedValue(undefined);
+
+      render(<ServerStatusCard />, { wrapper: createWrapper() });
+
+      // Initially shows "Copy IP"
+      expect(screen.getByRole('button', { name: /Copy IP/i })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Copy IP/i }));
+
+      // After click, should show "Copied!"
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Copied!/i })).toBeInTheDocument();
+      });
+    });
+
+    it('shows success toast when copy succeeds', async () => {
+      const { toast } = await import('sonner');
+      mockClipboard.writeText.mockResolvedValue(undefined);
+
+      render(<ServerStatusCard />, { wrapper: createWrapper() });
+
+      fireEvent.click(screen.getByRole('button', { name: /Copy IP/i }));
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('IP copied to clipboard!');
       });
     });
 
@@ -337,6 +372,12 @@ describe('ServerStatusCard', () => {
       const button = screen.getByRole('button', { name: 'Starting...' });
       expect(button).toBeDisabled();
     });
+
+    it('does not render copy IP button', () => {
+      render(<ServerStatusCard />, { wrapper: createWrapper() });
+
+      expect(screen.queryByRole('button', { name: /Copy IP/i })).not.toBeInTheDocument();
+    });
   });
 
   describe('Stopping State', () => {
@@ -362,6 +403,12 @@ describe('ServerStatusCard', () => {
 
       const button = screen.getByRole('button', { name: 'Stopping...' });
       expect(button).toBeDisabled();
+    });
+
+    it('does not render copy IP button', () => {
+      render(<ServerStatusCard />, { wrapper: createWrapper() });
+
+      expect(screen.queryByRole('button', { name: /Copy IP/i })).not.toBeInTheDocument();
     });
   });
 
@@ -400,7 +447,7 @@ describe('ServerStatusCard', () => {
 
       render(<ServerStatusCard />, { wrapper: createWrapper() });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Copy IP' }));
+      fireEvent.click(screen.getByRole('button', { name: /Copy IP/i }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith('Failed to copy IP');
