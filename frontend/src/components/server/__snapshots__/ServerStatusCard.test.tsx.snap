@@ -1,0 +1,242 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ServerStatusCard > Error State > matches error snapshot 1`] = `
+<div
+  class="card"
+>
+  <div
+    class="card-content"
+  >
+    <p
+      class="text-red-500"
+    >
+      Error: 
+      Connection failed
+    </p>
+    <div
+      class="controls mt-4"
+    >
+      <button
+        class="btn btn-outline"
+      >
+        Retry
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`ServerStatusCard > Loading State > matches loading snapshot 1`] = `
+<div
+  class="card"
+>
+  <div
+    class="card-header"
+  >
+    <h2
+      class="card-title"
+    >
+      <div
+        class="skeleton animate-pulse rounded h-6 w-32"
+      />
+      <div
+        class="skeleton animate-pulse rounded h-5 w-16"
+      />
+    </h2>
+  </div>
+  <div
+    class="card-content"
+  >
+    <div
+      class="stats-grid"
+    >
+      <div
+        class="stat"
+      >
+        <div
+          class="skeleton animate-pulse rounded h-4 w-16"
+        />
+        <div
+          class="skeleton animate-pulse rounded h-5 w-20 mt-1"
+        />
+      </div>
+      <div
+        class="stat"
+      >
+        <div
+          class="skeleton animate-pulse rounded h-4 w-16"
+        />
+        <div
+          class="skeleton animate-pulse rounded h-5 w-20 mt-1"
+        />
+      </div>
+      <div
+        class="stat"
+      >
+        <div
+          class="skeleton animate-pulse rounded h-4 w-16"
+        />
+        <div
+          class="skeleton animate-pulse rounded h-5 w-20 mt-1"
+        />
+      </div>
+      <div
+        class="stat"
+      >
+        <div
+          class="skeleton animate-pulse rounded h-4 w-16"
+        />
+        <div
+          class="skeleton animate-pulse rounded h-5 w-20 mt-1"
+        />
+      </div>
+    </div>
+    <div
+      class="separator"
+      role="separator"
+    />
+  </div>
+</div>
+`;
+
+exports[`ServerStatusCard > Running State > matches running snapshot 1`] = `
+<div
+  class="card"
+>
+  <div
+    class="card-header"
+  >
+    <h2
+      class="card-title"
+    >
+      Server Status
+      <span
+        class="badge badge-online"
+      >
+        Online
+      </span>
+    </h2>
+  </div>
+  <div
+    class="card-content"
+  >
+    <div
+      class="stats-grid"
+    >
+      <div
+        class="stat"
+      >
+        <span
+          class="stat-label"
+        >
+          Version
+        </span>
+        <span
+          class="stat-value"
+        >
+          1.20.4
+        </span>
+      </div>
+      <div
+        class="stat"
+      >
+        <span
+          class="stat-label"
+        >
+          Players
+        </span>
+        <span
+          class="stat-value"
+        >
+          5/20
+        </span>
+      </div>
+      <div
+        class="stat"
+      >
+        <span
+          class="stat-label"
+        >
+          Uptime
+        </span>
+        <span
+          class="stat-value"
+        >
+          3h 45m
+        </span>
+      </div>
+      <div
+        class="stat"
+      >
+        <span
+          class="stat-label"
+        >
+          IP
+        </span>
+        <span
+          class="stat-value"
+        >
+          192.168.1.100
+        </span>
+      </div>
+    </div>
+    <div
+      class="separator"
+      role="separator"
+    />
+    <div
+      class="controls"
+    >
+      <button
+        class="btn btn-red"
+      >
+        Stop Server
+      </button>
+      <button
+        class="btn btn-outline"
+      >
+        Copy IP
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`ServerStatusCard > Stopped State > matches stopped snapshot 1`] = `
+<div
+  class="card"
+>
+  <div
+    class="card-header"
+  >
+    <h2
+      class="card-title"
+    >
+      Server Status
+      <span
+        class="badge badge-offline"
+      >
+        Offline
+      </span>
+    </h2>
+  </div>
+  <div
+    class="card-content"
+  >
+    <div
+      class="controls"
+    >
+      <button
+        class="btn btn-green"
+      >
+        Start Server
+      </button>
+      <button
+        class="btn btn-outline"
+      >
+        Copy IP
+      </button>
+    </div>
+  </div>
+</div>
+`;
