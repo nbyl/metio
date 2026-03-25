@@ -28,6 +28,19 @@ type ServerStatus struct {
 	IP         string         `json:"ip"`
 }
 
+// ServerActionResponse represents the response for start/stop actions
+type ServerActionResponse struct {
+	Success bool           `json:"success"`
+	State   db.ServerState `json:"state"`
+}
+
+// writeJSONError writes a JSON error response with the given message and status code
+func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
 func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tracer := otel.Tracer("server-handler")
@@ -48,7 +61,7 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "compute_client_failed"))
 		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, "failed to create compute client", http.StatusInternalServerError)
 		return
 	}
 	defer c.Close()
@@ -63,7 +76,7 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "start_instance_failed"))
 		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, "failed to start instance", http.StatusInternalServerError)
 		return
 	}
 
@@ -100,7 +113,10 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "starting"})
+	json.NewEncoder(w).Encode(ServerActionResponse{
+		Success: true,
+		State:   db.ServerStateStarting,
+	})
 }
 
 func stopServerHandler(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +139,7 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "compute_client_failed"))
 		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, "failed to create compute client", http.StatusInternalServerError)
 		return
 	}
 	defer c.Close()
@@ -138,7 +154,7 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "stop_instance_failed"))
 		log.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, "failed to stop instance", http.StatusInternalServerError)
 		return
 	}
 
@@ -175,7 +191,10 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "stopping"})
+	json.NewEncoder(w).Encode(ServerActionResponse{
+		Success: true,
+		State:   db.ServerStateStopping,
+	})
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {

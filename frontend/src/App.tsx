@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import { useServerStatus } from './hooks/useServerStatus';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import type { ServerState } from './types/server';
+import type { ServerState, ServerActionResponse, APIError } from './types/server';
 
 /**
  * Maps server state to badge CSS class and label
@@ -42,11 +42,22 @@ function formatServerState(state: ServerState): string {
 /**
  * Handles server start action
  */
-async function handleStartServer() {
+async function handleStartServer(): Promise<void> {
   try {
     const response = await fetch('/api/server/start', { method: 'POST' });
+    if (response.status === 401) {
+      // Session expired, redirect to login
+      window.location.href = '/auth/login';
+      return;
+    }
     if (!response.ok) {
-      console.error('Failed to start server');
+      const error: APIError = await response.json();
+      console.error('Failed to start server:', error.error);
+      return;
+    }
+    const data: ServerActionResponse = await response.json();
+    if (!data.success) {
+      console.error('Server start returned unsuccessful');
     }
   } catch (err) {
     console.error('Error starting server:', err);
@@ -56,11 +67,22 @@ async function handleStartServer() {
 /**
  * Handles server stop action
  */
-async function handleStopServer() {
+async function handleStopServer(): Promise<void> {
   try {
     const response = await fetch('/api/server/stop', { method: 'POST' });
+    if (response.status === 401) {
+      // Session expired, redirect to login
+      window.location.href = '/auth/login';
+      return;
+    }
     if (!response.ok) {
-      console.error('Failed to stop server');
+      const error: APIError = await response.json();
+      console.error('Failed to stop server:', error.error);
+      return;
+    }
+    const data: ServerActionResponse = await response.json();
+    if (!data.success) {
+      console.error('Server stop returned unsuccessful');
     }
   } catch (err) {
     console.error('Error stopping server:', err);
