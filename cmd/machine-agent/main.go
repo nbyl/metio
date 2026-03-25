@@ -64,9 +64,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	// TODO: Switch back to named database once Firebase SDK issue is resolved
-	// databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
-	databaseID := "(default)"
+	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
 	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
 	if err != nil {
 		log.Fatalf("Error creating Firestore client: %v", err)
