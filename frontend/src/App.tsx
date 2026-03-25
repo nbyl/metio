@@ -4,22 +4,49 @@ import { useServerStatus } from './hooks/useServerStatus';
 import { useStartServer, useStopServer } from './hooks/useServerMutations';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { Layout } from './components/layout/Layout';
+import { Header } from './components/layout/Header';
+import { StatsGrid, type StatItem } from './components/layout/StatsGrid';
+import { Card, CardHeader, CardTitle, CardContent } from './components/ui/Card';
+import { Button } from './components/ui/Button';
+import { Badge } from './components/ui/Badge';
+import { Separator } from './components/ui/Separator';
 import type { ServerState } from './types/server';
 
 /**
- * Maps server state to badge CSS class and label
+ * Maps server state to badge variant
  */
-function getStatusBadge(state: ServerState): { className: string; label: string } {
+function getStatusBadgeVariant(
+  state: ServerState
+): 'online' | 'offline' | 'transitioning' {
   switch (state) {
     case 'RUNNING':
-      return { className: 'badge-online', label: 'Online' };
+      return 'online';
     case 'STOPPED':
-      return { className: 'badge-offline', label: 'Offline' };
+      return 'offline';
     case 'STARTING':
     case 'STOPPING':
-      return { className: 'badge-transitioning', label: state === 'STARTING' ? 'Starting...' : 'Stopping...' };
+      return 'transitioning';
     default:
-      return { className: 'badge-offline', label: 'Unknown' };
+      return 'offline';
+  }
+}
+
+/**
+ * Maps server state to display label
+ */
+function getStatusLabel(state: ServerState): string {
+  switch (state) {
+    case 'RUNNING':
+      return 'Online';
+    case 'STOPPED':
+      return 'Offline';
+    case 'STARTING':
+      return 'Starting...';
+    case 'STOPPING':
+      return 'Stopping...';
+    default:
+      return 'Unknown';
   }
 }
 
@@ -54,26 +81,6 @@ async function handleCopyIP(ip: string) {
 }
 
 /**
- * Header component with user info and logout
- */
-function Header({ email }: { email: string }) {
-  return (
-    <div className="page-header">
-      <div>
-        <h1 className="title">Metio</h1>
-        <p className="subtitle">Minecraft Server Controller</p>
-      </div>
-      <div className="header-user">
-        <span className="user-email">{email}</span>
-        <a href="/auth/logout" className="btn btn-outline btn-sm">
-          Logout
-        </a>
-      </div>
-    </div>
-  );
-}
-
-/**
  * Dashboard component - main server control panel
  */
 function Dashboard() {
@@ -87,138 +94,120 @@ function Dashboard() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="dark min-h-screen bg-background p-8">
-        <div className="container">
-          <Header email={user?.email || ''} />
-          <div className="card">
-            <div className="card-content">
-              <p className="text-muted">Loading server status...</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Layout>
+        <Header email={user?.email} showUser />
+        <Card>
+          <CardContent>
+            <p className="text-muted">Loading server status...</p>
+          </CardContent>
+        </Card>
+      </Layout>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="dark min-h-screen bg-background p-8">
-        <div className="container">
-          <Header email={user?.email || ''} />
-          <div className="card">
-            <div className="card-content">
-              <p className="text-red-500">Error: {error.message}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Layout>
+        <Header email={user?.email} showUser />
+        <Card>
+          <CardContent>
+            <p className="text-red-500">Error: {error.message}</p>
+          </CardContent>
+        </Card>
+      </Layout>
     );
   }
 
   // No status available
   if (!status) {
     return (
-      <div className="dark min-h-screen bg-background p-8">
-        <div className="container">
-          <Header email={user?.email || ''} />
-          <div className="card">
-            <div className="card-content">
-              <p className="text-muted">No server status available</p>
-              <div className="controls mt-4">
-                <button
-                  className="btn btn-green"
-                  onClick={() => startMutation.mutate()}
-                  disabled={isMutating}
-                >
-                  {startMutation.isPending ? 'Starting...' : 'Start Server'}
-                </button>
-              </div>
+      <Layout>
+        <Header email={user?.email} showUser />
+        <Card>
+          <CardContent>
+            <p className="text-muted">No server status available</p>
+            <div className="controls mt-4">
+              <Button
+                variant="primary"
+                onClick={() => startMutation.mutate()}
+                disabled={isMutating}
+                loading={startMutation.isPending}
+              >
+                Start Server
+              </Button>
             </div>
-          </div>
-        </div>
-      </div>
+          </CardContent>
+        </Card>
+      </Layout>
     );
   }
 
-  const badge = getStatusBadge(status.status);
   const isRunning = status.status === 'RUNNING';
   const isStopped = status.status === 'STOPPED';
-  const isTransitioning = status.status === 'STARTING' || status.status === 'STOPPING';
+  const isTransitioning =
+    status.status === 'STARTING' || status.status === 'STOPPING';
+
+  const stats: StatItem[] = [
+    { label: 'Status', value: formatServerState(status.status) },
+    { label: 'Players', value: `${status.players}/${status.maxPlayers}` },
+    { label: 'Uptime', value: status.uptime || '-' },
+    { label: 'IP', value: status.ip || '-' },
+  ];
 
   return (
-    <div className="dark min-h-screen bg-background p-8">
-      <div className="container">
-        <Header email={user?.email || ''} />
+    <Layout>
+      <Header email={user?.email} showUser />
 
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">
-              Server Status
-              <span className={`badge ${badge.className}`}>{badge.label}</span>
-            </h2>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Server Status
+            <Badge variant={getStatusBadgeVariant(status.status)}>
+              {getStatusLabel(status.status)}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StatsGrid stats={stats} />
+
+          <Separator />
+
+          <div className="controls">
+            {isRunning && (
+              <Button
+                variant="danger"
+                onClick={() => stopMutation.mutate()}
+                disabled={isMutating}
+                loading={stopMutation.isPending}
+              >
+                Stop Server
+              </Button>
+            )}
+            {isStopped && (
+              <Button
+                variant="primary"
+                onClick={() => startMutation.mutate()}
+                disabled={isMutating}
+                loading={startMutation.isPending}
+              >
+                Start Server
+              </Button>
+            )}
+            {isTransitioning && (
+              <Button variant="outline" disabled>
+                {status.status === 'STARTING' ? 'Starting...' : 'Stopping...'}
+              </Button>
+            )}
+            {status.ip && (
+              <Button variant="outline" onClick={() => handleCopyIP(status.ip)}>
+                Copy IP
+              </Button>
+            )}
           </div>
-          <div className="card-content">
-            <div className="stats-grid">
-              <div className="stat">
-                <span className="stat-label">Status</span>
-                <span className="stat-value">{formatServerState(status.status)}</span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Players</span>
-                <span className="stat-value">
-                  {status.players}/{status.maxPlayers}
-                </span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">Uptime</span>
-                <span className="stat-value">{status.uptime || '-'}</span>
-              </div>
-              <div className="stat">
-                <span className="stat-label">IP</span>
-                <span className="stat-value">{status.ip || '-'}</span>
-              </div>
-            </div>
-
-            <div className="separator" />
-
-            <div className="controls">
-              {isRunning && (
-                <button
-                  className="btn btn-red"
-                  onClick={() => stopMutation.mutate()}
-                  disabled={isMutating}
-                >
-                  {stopMutation.isPending ? 'Stopping...' : 'Stop Server'}
-                </button>
-              )}
-              {isStopped && (
-                <button
-                  className="btn btn-green"
-                  onClick={() => startMutation.mutate()}
-                  disabled={isMutating}
-                >
-                  {startMutation.isPending ? 'Starting...' : 'Start Server'}
-                </button>
-              )}
-              {isTransitioning && (
-                <button className="btn btn-outline" disabled>
-                  {status.status === 'STARTING' ? 'Starting...' : 'Stopping...'}
-                </button>
-              )}
-              {status.ip && (
-                <button
-                  className="btn btn-outline"
-                  onClick={() => handleCopyIP(status.ip)}
-                >
-                  Copy IP
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </Layout>
   );
 }
 
