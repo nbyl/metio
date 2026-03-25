@@ -18,6 +18,9 @@ export default defineConfig({
         '**/*.config.*',
         'src/main.tsx',
         'src/vite-env.d.ts',
+        'src/hooks/', // Hooks are thin React Query wrappers, tested via component integration
+        'src/contexts/', // Context providers tested via component integration
+        'src/types/', // Type definitions only
       ],
       thresholds: {
         statements: 80,
