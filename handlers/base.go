@@ -29,9 +29,9 @@ func New() *mux.Router {
 	// Auth status endpoint (no auth required - used by frontend to check auth state)
 	r.HandleFunc("/api/auth/me", meHandler).Methods("GET")
 
-	// API routes (protected)
+	// API routes (protected with JSON 401 responses)
 	apiRouter := r.PathPrefix("/api").Subrouter()
-	apiRouter.Use(authMiddleware)
+	apiRouter.Use(apiAuthMiddleware)
 	apiRouter.HandleFunc("/server/start", startServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/status", statusHandler).Methods("GET")
