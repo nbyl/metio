@@ -17,6 +17,22 @@ export interface ServerStatus {
 }
 
 /**
+ * Response from /api/server/start and /api/server/stop endpoints
+ * Matches Go handlers.ServerActionResponse struct
+ */
+export interface ServerActionResponse {
+  success: boolean;
+  state: ServerState;
+}
+
+/**
+ * Error response from API endpoints
+ */
+export interface APIError {
+  error: string;
+}
+
+/**
  * Application configuration from backend /api/config endpoint
  */
 export interface AppConfig {
