@@ -251,4 +251,9 @@
   .badge-transitioning {
     @apply text-primary-foreground bg-yellow-600 hover:bg-yellow-700;
   }
+
+  /* Skeleton */
+  .skeleton {
+    @apply bg-slate-700;
+  }
 }

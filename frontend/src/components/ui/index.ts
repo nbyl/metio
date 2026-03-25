@@ -11,3 +11,4 @@ export {
   type CardContentProps,
 } from './Card';
 export { Separator, type SeparatorProps } from './Separator';
+export { Skeleton, type SkeletonProps } from './Skeleton';
