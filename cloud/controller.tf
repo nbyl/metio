@@ -35,6 +35,14 @@ resource "google_project_iam_binding" "controller-role-binding" {
   ]
 }
 
+# Grant the controller service account the ability to create Firebase custom tokens
+# This allows it to sign tokens using its own identity
+resource "google_service_account_iam_member" "controller_token_creator" {
+  service_account_id = google_service_account.controller_service_account.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.controller_service_account.email}"
+}
+
 resource "google_secret_manager_secret" "client_id" {
   secret_id = "${var.environment}-client_id"
 

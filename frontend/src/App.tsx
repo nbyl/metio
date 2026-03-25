@@ -1,5 +1,8 @@
+import { Routes, Route } from 'react-router-dom';
 import { useServerStatus } from './hooks/useServerStatus';
-import type { ServerState } from './types/firestore';
+import { useAuth } from './hooks/useAuth';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import type { ServerState } from './types/server';
 
 /**
  * Maps server state to badge CSS class and label
@@ -75,18 +78,39 @@ async function handleCopyIP(ip: string) {
   }
 }
 
-function App() {
+/**
+ * Header component with user info and logout
+ */
+function Header({ email }: { email: string }) {
+  return (
+    <div className="page-header">
+      <div>
+        <h1 className="title">Metio</h1>
+        <p className="subtitle">Minecraft Server Controller</p>
+      </div>
+      <div className="header-user">
+        <span className="user-email">{email}</span>
+        <a href="/auth/logout" className="btn btn-outline btn-sm">
+          Logout
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dashboard component - main server control panel
+ */
+function Dashboard() {
   const { status, loading, error } = useServerStatus();
+  const { user } = useAuth();
 
   // Loading state
   if (loading) {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
+          <Header email={user?.email || ''} />
           <div className="card">
             <div className="card-content">
               <p className="text-muted">Loading server status...</p>
@@ -102,10 +126,7 @@ function App() {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
+          <Header email={user?.email || ''} />
           <div className="card">
             <div className="card-content">
               <p className="text-red-500">Error: {error.message}</p>
@@ -121,10 +142,7 @@ function App() {
     return (
       <div className="dark min-h-screen bg-background p-8">
         <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
+          <Header email={user?.email || ''} />
           <div className="card">
             <div className="card-content">
               <p className="text-muted">No server status available</p>
@@ -140,18 +158,15 @@ function App() {
     );
   }
 
-  const badge = getStatusBadge(status.server_state);
-  const isRunning = status.server_state === 'RUNNING';
-  const isStopped = status.server_state === 'STOPPED';
-  const isTransitioning = status.server_state === 'STARTING' || status.server_state === 'STOPPING';
+  const badge = getStatusBadge(status.status);
+  const isRunning = status.status === 'RUNNING';
+  const isStopped = status.status === 'STOPPED';
+  const isTransitioning = status.status === 'STARTING' || status.status === 'STOPPING';
 
   return (
     <div className="dark min-h-screen bg-background p-8">
       <div className="container">
-        <div className="page-header">
-          <h1 className="title">Metio</h1>
-          <p className="subtitle">Minecraft Server Controller</p>
-        </div>
+        <Header email={user?.email || ''} />
 
         <div className="card">
           <div className="card-header">
@@ -164,12 +179,12 @@ function App() {
             <div className="stats-grid">
               <div className="stat">
                 <span className="stat-label">Status</span>
-                <span className="stat-value">{formatServerState(status.server_state)}</span>
+                <span className="stat-value">{formatServerState(status.status)}</span>
               </div>
               <div className="stat">
                 <span className="stat-label">Players</span>
                 <span className="stat-value">
-                  {status.players.current}/{status.players.max}
+                  {status.players}/{status.maxPlayers}
                 </span>
               </div>
               <div className="stat">
@@ -178,7 +193,7 @@ function App() {
               </div>
               <div className="stat">
                 <span className="stat-label">IP</span>
-                <span className="stat-value">{status.instance_ip || '-'}</span>
+                <span className="stat-value">{status.ip || '-'}</span>
               </div>
             </div>
 
@@ -197,13 +212,13 @@ function App() {
               )}
               {isTransitioning && (
                 <button className="btn btn-outline" disabled>
-                  {status.server_state === 'STARTING' ? 'Starting...' : 'Stopping...'}
+                  {status.status === 'STARTING' ? 'Starting...' : 'Stopping...'}
                 </button>
               )}
-              {status.instance_ip && (
+              {status.ip && (
                 <button
                   className="btn btn-outline"
-                  onClick={() => handleCopyIP(status.instance_ip)}
+                  onClick={() => handleCopyIP(status.ip)}
                 >
                   Copy IP
                 </button>
@@ -213,6 +228,24 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Main App component with routing
+ */
+function App() {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 
