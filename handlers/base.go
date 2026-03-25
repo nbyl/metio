@@ -82,14 +82,3 @@ func spaHandler() http.Handler {
 		fileServer.ServeHTTP(w, r)
 	})
 }
-
-// homeHandler is no longer needed - SPA handles routing
-// Keeping for reference during migration, can be removed later
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	if !isUserAuthenticated(r) {
-		http.Redirect(w, r, "/auth/login", http.StatusTemporaryRedirect)
-		return
-	}
-
-	http.Redirect(w, r, "/server/", http.StatusTemporaryRedirect)
-}
