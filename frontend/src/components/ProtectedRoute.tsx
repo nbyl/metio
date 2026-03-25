@@ -1,5 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { Layout } from './layout/Layout';
+import { Header } from './layout/Header';
+import { Card, CardContent } from './ui/Card';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -13,28 +16,37 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
 
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      window.location.href = '/auth/login';
+    }
+  }, [isLoading, isAuthenticated]);
+
   if (isLoading) {
     return (
-      <div className="dark min-h-screen bg-background p-8">
-        <div className="container">
-          <div className="page-header">
-            <h1 className="title">Metio</h1>
-            <p className="subtitle">Minecraft Server Controller</p>
-          </div>
-          <div className="card">
-            <div className="card-content">
-              <p className="text-muted">Checking authentication...</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Layout>
+        <Header />
+        <Card>
+          <CardContent>
+            <p className="text-muted">Checking authentication...</p>
+          </CardContent>
+        </Card>
+      </Layout>
     );
   }
 
   if (!isAuthenticated) {
-    // Redirect to Go backend login endpoint
-    window.location.href = '/auth/login';
-    return null;
+    // Show loading while redirect is happening
+    return (
+      <Layout>
+        <Header />
+        <Card>
+          <CardContent>
+            <p className="text-muted">Redirecting to login...</p>
+          </CardContent>
+        </Card>
+      </Layout>
+    );
   }
 
   return <>{children}</>;
