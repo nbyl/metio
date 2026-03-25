@@ -135,6 +135,22 @@ func authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// apiAuthMiddleware returns 401 JSON for unauthenticated API requests
+// instead of redirecting to login page (used for JSON API endpoints)
+func apiAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isUserAuthenticated(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+
+		// User is authenticated, proceed to the next handler
+		next.ServeHTTP(w, r)
+	})
+}
+
 func generateStateOauthCookie(w http.ResponseWriter) string {
 	var expiration = time.Now().Add(20 * time.Minute)
 
