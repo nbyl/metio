@@ -266,15 +266,17 @@ func getServerStatus(ctx context.Context) (*ServerStatus, error) {
 
 	// Only show player/uptime data when server is running
 	var players, maxPlayers int
-	var uptime string
+	var uptime, version string
 	if playerStatus.ServerState == db.ServerStateRunning {
 		players = playerStatus.Players.Current
 		maxPlayers = playerStatus.Players.Max
 		uptime = playerStatus.Uptime
+		version = playerStatus.Version
 	} else {
 		players = 0
 		maxPlayers = 0
 		uptime = ""
+		version = ""
 	}
 
 	return &ServerStatus{
@@ -282,7 +284,7 @@ func getServerStatus(ctx context.Context) (*ServerStatus, error) {
 		Players:    players,
 		MaxPlayers: maxPlayers,
 		Uptime:     uptime,
-		Version:    "TBD",
+		Version:    version,
 		IP:         ip,
 	}, nil
 }
