@@ -8,7 +8,7 @@ import {
   useStartServer,
   useStopServer,
 } from '../../hooks/useServerMutations';
-import type { ServerStatus } from '../../types/server';
+import type { ServerStatus, ServerState } from '../../types/server';
 
 // Mock the hooks
 vi.mock('../../hooks/useServerStatus');
@@ -458,7 +458,7 @@ describe('ServerStatusCard', () => {
   describe('Unknown Server State', () => {
     beforeEach(() => {
       mockUseServerStatus.mockReturnValue({
-        data: { ...mockStatus, status: 'UNKNOWN' as any },
+        data: { ...mockStatus, status: 'UNKNOWN' as ServerState },
         isLoading: false,
         error: null,
         refetch: mockRefetch,
