@@ -21,19 +21,31 @@ import (
 
 // ServerStatus represents the server status for JSON API responses
 type ServerStatus struct {
-	Status           db.ServerState `json:"status"`
-	Players          int            `json:"players"`
-	MaxPlayers       int            `json:"maxPlayers"`
-	Uptime           string         `json:"uptime"`
-	Version          string         `json:"version"`
-	IP               string         `json:"ip"`
-	WhitelistEnabled bool           `json:"whitelistEnabled"`
+	Status            db.ServerState `json:"status"`
+	Players           int            `json:"players"`
+	MaxPlayers        int            `json:"maxPlayers"`
+	Uptime            string         `json:"uptime"`
+	Version           string         `json:"version"`
+	IP                string         `json:"ip"`
+	WhitelistEnabled  bool           `json:"whitelistEnabled"`
+	ScheduledShutdown *string        `json:"scheduledShutdown,omitempty"`
 }
 
 // ServerActionResponse represents the response for start/stop actions
 type ServerActionResponse struct {
 	Success bool           `json:"success"`
 	State   db.ServerState `json:"state"`
+}
+
+// ScheduleShutdownRequest represents the request to schedule a shutdown
+type ScheduleShutdownRequest struct {
+	ShutdownTime string `json:"shutdownTime"` // RFC3339 format
+}
+
+// ScheduleShutdownResponse represents the response for scheduling a shutdown
+type ScheduleShutdownResponse struct {
+	Success           bool    `json:"success"`
+	ScheduledShutdown *string `json:"scheduledShutdown,omitempty"`
 }
 
 // writeJSONError writes a JSON error response with the given message and status code
@@ -267,13 +279,142 @@ func getServerStatus(ctx context.Context) (*ServerStatus, error) {
 		version = ""
 	}
 
+	// Format scheduled shutdown time for response
+	var scheduledShutdown *string
+	if playerStatus.ScheduledShutdown != nil {
+		formatted := playerStatus.ScheduledShutdown.Format(time.RFC3339)
+		scheduledShutdown = &formatted
+	}
+
 	return &ServerStatus{
-		Status:           playerStatus.ServerState,
-		Players:          players,
-		MaxPlayers:       maxPlayers,
-		Uptime:           uptime,
-		Version:          version,
-		IP:               ip,
-		WhitelistEnabled: playerStatus.WhitelistEnabled,
+		Status:            playerStatus.ServerState,
+		Players:           players,
+		MaxPlayers:        maxPlayers,
+		Uptime:            uptime,
+		Version:           version,
+		IP:                ip,
+		WhitelistEnabled:  playerStatus.WhitelistEnabled,
+		ScheduledShutdown: scheduledShutdown,
 	}, nil
+}
+
+func scheduleShutdownHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "scheduleShutdownHandler")
+	defer span.End()
+
+	// Parse request body
+	var req ScheduleShutdownRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		span.SetAttributes(attribute.String("error", "invalid_json"))
+		writeJSONError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Parse shutdown time
+	shutdownTime, err := time.Parse(time.RFC3339, req.ShutdownTime)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "invalid_time_format"))
+		writeJSONError(w, "invalid time format, expected RFC3339", http.StatusBadRequest)
+		return
+	}
+
+	// Validate shutdown time is in the future
+	if shutdownTime.Before(time.Now()) {
+		span.SetAttributes(attribute.String("error", "time_in_past"))
+		writeJSONError(w, "shutdown time must be in the future", http.StatusBadRequest)
+		return
+	}
+
+	cfg := config.Load()
+	span.SetAttributes(
+		attribute.String("instance.name", cfg.InstanceName),
+		attribute.String("shutdown.time", shutdownTime.Format(time.RFC3339)),
+	)
+
+	// Get database connection
+	dbConn, err := cfg.NewDBConnection(ctx)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "database_connection_failed"))
+		log.Printf("Error connecting to database: %v", err)
+		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
+		return
+	}
+
+	// Get current status to preserve other fields
+	currentStatus, err := dbConn.GetStatus(ctx, cfg.InstanceName)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_status_failed"))
+		log.Printf("Error getting current status: %v", err)
+		writeJSONError(w, "failed to get current status", http.StatusInternalServerError)
+		return
+	}
+
+	// Update status with scheduled shutdown
+	currentStatus.ScheduledShutdown = &shutdownTime
+	currentStatus.Timestamp = time.Now()
+
+	err = dbConn.UpdateStatus(ctx, cfg.InstanceName, currentStatus)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "update_status_failed"))
+		log.Printf("Error updating scheduled shutdown: %v", err)
+		writeJSONError(w, "failed to schedule shutdown", http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response
+	formattedTime := shutdownTime.Format(time.RFC3339)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ScheduleShutdownResponse{
+		Success:           true,
+		ScheduledShutdown: &formattedTime,
+	})
+}
+
+func cancelScheduledShutdownHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "cancelScheduledShutdownHandler")
+	defer span.End()
+
+	cfg := config.Load()
+	span.SetAttributes(attribute.String("instance.name", cfg.InstanceName))
+
+	// Get database connection
+	dbConn, err := cfg.NewDBConnection(ctx)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "database_connection_failed"))
+		log.Printf("Error connecting to database: %v", err)
+		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
+		return
+	}
+
+	// Get current status to preserve other fields
+	currentStatus, err := dbConn.GetStatus(ctx, cfg.InstanceName)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_status_failed"))
+		log.Printf("Error getting current status: %v", err)
+		writeJSONError(w, "failed to get current status", http.StatusInternalServerError)
+		return
+	}
+
+	// Clear scheduled shutdown
+	currentStatus.ScheduledShutdown = nil
+	currentStatus.Timestamp = time.Now()
+
+	err = dbConn.UpdateStatus(ctx, cfg.InstanceName, currentStatus)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "update_status_failed"))
+		log.Printf("Error clearing scheduled shutdown: %v", err)
+		writeJSONError(w, "failed to cancel scheduled shutdown", http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ScheduleShutdownResponse{
+		Success:           true,
+		ScheduledShutdown: nil,
+	})
 }
