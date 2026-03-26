@@ -20,12 +20,13 @@ import (
 
 // ServerStatus represents the server status for JSON API responses
 type ServerStatus struct {
-	Status     db.ServerState `json:"status"`
-	Players    int            `json:"players"`
-	MaxPlayers int            `json:"maxPlayers"`
-	Uptime     string         `json:"uptime"`
-	Version    string         `json:"version"`
-	IP         string         `json:"ip"`
+	Status           db.ServerState `json:"status"`
+	Players          int            `json:"players"`
+	MaxPlayers       int            `json:"maxPlayers"`
+	Uptime           string         `json:"uptime"`
+	Version          string         `json:"version"`
+	IP               string         `json:"ip"`
+	WhitelistEnabled bool           `json:"whitelistEnabled"`
 }
 
 // ServerActionResponse represents the response for start/stop actions
@@ -280,11 +281,12 @@ func getServerStatus(ctx context.Context) (*ServerStatus, error) {
 	}
 
 	return &ServerStatus{
-		Status:     playerStatus.ServerState,
-		Players:    players,
-		MaxPlayers: maxPlayers,
-		Uptime:     uptime,
-		Version:    version,
-		IP:         ip,
+		Status:           playerStatus.ServerState,
+		Players:          players,
+		MaxPlayers:       maxPlayers,
+		Uptime:           uptime,
+		Version:          version,
+		IP:               ip,
+		WhitelistEnabled: playerStatus.WhitelistEnabled,
 	}, nil
 }
