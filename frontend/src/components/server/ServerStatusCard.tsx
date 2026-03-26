@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, Check, ChevronDown, ChevronRight, X, Loader2 } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  X,
+  Loader2,
+  Clock,
+} from 'lucide-react';
 import { useServerStatus } from '../../hooks/useServerStatus';
 import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
 import {
@@ -9,6 +17,10 @@ import {
   useRemovePlayer,
   useToggleWhitelist,
 } from '../../hooks/useWhitelist';
+import {
+  useScheduleShutdown,
+  useCancelScheduledShutdown,
+} from '../../hooks/useScheduledShutdown';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -225,6 +237,152 @@ function WhitelistSection({ isRunning }: WhitelistSectionProps) {
 }
 
 /**
+ * ScheduledShutdownSection displays scheduled shutdown controls
+ */
+interface ScheduledShutdownSectionProps {
+  isRunning: boolean;
+  scheduledShutdown?: string;
+}
+
+function ScheduledShutdownSection({
+  isRunning,
+  scheduledShutdown,
+}: ScheduledShutdownSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [shutdownTime, setShutdownTime] = useState('');
+
+  const scheduleShutdownMutation = useScheduleShutdown();
+  const cancelShutdownMutation = useCancelScheduledShutdown();
+
+  if (!isRunning) {
+    return null;
+  }
+
+  const hasScheduledShutdown = !!scheduledShutdown;
+
+  const handleScheduleShutdown = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shutdownTime) return;
+
+    // Convert the time input to a full ISO datetime for today
+    const today = new Date();
+    const [hours, minutes] = shutdownTime.split(':').map(Number);
+    const scheduledDate = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      hours,
+      minutes,
+      0,
+      0
+    );
+
+    scheduleShutdownMutation.mutate(scheduledDate.toISOString(), {
+      onSuccess: () => setShutdownTime(''),
+    });
+  };
+
+  const handleCancelShutdown = () => {
+    cancelShutdownMutation.mutate();
+  };
+
+  const formatScheduledTime = (isoString: string): string => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getTimeUntilShutdown = (isoString: string): string => {
+    const shutdownDate = new Date(isoString);
+    const now = new Date();
+    const diffMs = shutdownDate.getTime() - now.getTime();
+
+    if (diffMs <= 0) return 'imminent';
+
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 60) {
+      return `${diffMinutes} min`;
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    const remainingMinutes = diffMinutes % 60;
+    return `${diffHours}h ${remainingMinutes}m`;
+  };
+
+  const isScheduling = scheduleShutdownMutation.isPending;
+  const isCancelling = cancelShutdownMutation.isPending;
+
+  return (
+    <div className="whitelist-section">
+      <div className="whitelist-header">
+        <button
+          type="button"
+          className="whitelist-title"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          <Clock className="h-4 w-4" />
+          Scheduled Shutdown
+        </button>
+        {hasScheduledShutdown && (
+          <Badge variant="transitioning">
+            {getTimeUntilShutdown(scheduledShutdown)}
+          </Badge>
+        )}
+      </div>
+
+      {isExpanded && (
+        <div>
+          {hasScheduledShutdown ? (
+            <div className="scheduled-shutdown-active">
+              <p className="scheduled-shutdown-info">
+                Server will shut down at{' '}
+                <strong>{formatScheduledTime(scheduledShutdown)}</strong>
+              </p>
+              <p className="scheduled-shutdown-warning">
+                Players will receive warnings at 5 minutes and 1 minute before
+                shutdown.
+              </p>
+              <Button
+                variant="outline"
+                onClick={handleCancelShutdown}
+                disabled={isCancelling}
+                loading={isCancelling}
+                className="btn-sm mt-2"
+              >
+                Cancel Shutdown
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleScheduleShutdown} className="whitelist-form">
+              <input
+                type="time"
+                value={shutdownTime}
+                onChange={(e) => setShutdownTime(e.target.value)}
+                className="whitelist-input"
+                disabled={isScheduling}
+              />
+              <Button
+                type="submit"
+                variant="danger"
+                disabled={isScheduling || !shutdownTime}
+                loading={isScheduling}
+                className="btn-sm"
+              >
+                Schedule
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * ServerStatusCard displays real-time server information.
  *
  * States:
@@ -379,6 +537,10 @@ export function ServerStatusCard({ className }: ServerStatusCardProps) {
         </div>
 
         <WhitelistSection isRunning={isRunning} />
+        <ScheduledShutdownSection
+          isRunning={isRunning}
+          scheduledShutdown={status.scheduledShutdown}
+        />
       </CardContent>
     </Card>
   );
