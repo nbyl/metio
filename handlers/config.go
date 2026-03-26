@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/config"
 )
 
 // AppConfig represents the configuration exposed to the frontend
@@ -16,13 +16,13 @@ type AppConfig struct {
 // configHandler returns application configuration for the frontend
 // This endpoint does not require authentication as the config is not sensitive
 func configHandler(w http.ResponseWriter, r *http.Request) {
-	gcpProject := viper.GetString("GCP_PROJECT")
+	cfg := config.Load()
 
-	config := AppConfig{
-		GCPProject:   gcpProject,
-		InstanceName: viper.GetString("INSTANCE_NAME"),
+	appConfig := AppConfig{
+		GCPProject:   cfg.ProjectID,
+		InstanceName: cfg.InstanceName,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	json.NewEncoder(w).Encode(appConfig)
 }

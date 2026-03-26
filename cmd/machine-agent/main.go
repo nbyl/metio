@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -13,10 +14,13 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/tracing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var Version = "dev" // default, overridden by ldflags
@@ -26,8 +30,14 @@ var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
 var getMinecraftVersionFunc = getMinecraftVersion
 var osReadFile = os.ReadFile
+var syncWhitelistFunc = syncWhitelist
+var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
 
 func main() {
+	// Initialize viper first so config is available for tracing
+	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
+	viper.AutomaticEnv()
+
 	// Initialize OpenTelemetry
 	if err := tracing.InitTracerWithDetails("metio-machine-agent", Version); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
@@ -37,48 +47,36 @@ func main() {
 	}
 	defer tracing.ShutdownTracer()
 
-	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
-	viper.AutomaticEnv()
-
 	intervalStr := viper.GetString("MINECRAFT_CHECK_INTERVAL")
 	interval, err := time.ParseDuration(intervalStr)
 	if err != nil {
 		log.Fatalf("Invalid interval format: %v", err)
 	}
 
-	environment := viper.GetString("ENVIRONMENT")
-	if environment == "" {
-		environment = "dev"
-	}
-	region := viper.GetString("REGION")
-	if region == "" {
-		region = "us-central1"
-	}
-	instanceName := viper.GetString("INSTANCE_NAME")
-	if instanceName == "" {
-		instanceName = "minecraft-server"
-	}
-
-	projectID, err := metadata.ProjectID()
+	cfg, err := config.LoadWithMetadata()
 	if err != nil {
-		log.Fatalf("Error getting project ID: %v", err)
+		log.Fatalf("Error loading config: %v", err)
 	}
 
 	ctx := context.Background()
-	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
 		log.Fatalf("Error creating Firestore client: %v", err)
 	}
 
 	fmt.Printf("Machine agent started with check interval: %v\n", interval)
 
+	// Import whitelist on startup if Firestore is empty
+	if err := importWhitelistIfEmptyFunc(ctx, dbConn, cfg.InstanceName); err != nil {
+		log.Printf("Error during initial whitelist import: %v", err)
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	go func() {
 		for range ticker.C {
-			if err := runStatusUpdate(ctx, dbConn, instanceName); err != nil {
+			if err := runStatusUpdate(ctx, dbConn, cfg.InstanceName); err != nil {
 				log.Printf("Error in status update: %v", err)
 			}
 		}
@@ -139,13 +137,23 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		attribute.String("version", version),
 	)
 
+	// Sync whitelist from Firestore to Minecraft
+	whitelistEnabled, err := syncWhitelistFunc(ctx, dbConn, instanceName)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "sync_whitelist_failed"))
+		log.Printf("Error syncing whitelist: %v", err)
+		// Don't fail the entire update, just log the error
+	}
+	span.SetAttributes(attribute.Bool("whitelist.enabled", whitelistEnabled))
+
 	err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
-		Players:     db.Players{Current: current, Max: max},
-		Timestamp:   time.Now(),
-		Uptime:      uptime,
-		ServerState: db.ServerStateRunning,
-		InstanceIP:  instanceIP,
-		Version:     version,
+		Players:          db.Players{Current: current, Max: max},
+		Timestamp:        time.Now(),
+		Uptime:           uptime,
+		ServerState:      db.ServerStateRunning,
+		InstanceIP:       instanceIP,
+		Version:          version,
+		WhitelistEnabled: whitelistEnabled,
 	})
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "update_status_failed"))
@@ -252,4 +260,218 @@ func getMinecraftVersion() (version string, rawOutput string, err error) {
 
 	// Both regexes failed - return "Unknown" with raw output for debugging
 	return "Unknown", outputStr, nil
+}
+
+// MinecraftWhitelistEntry represents an entry in Minecraft's whitelist.json
+type MinecraftWhitelistEntry struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
+// importWhitelistIfEmpty imports whitelist.json from Minecraft if Firestore whitelist is empty
+func importWhitelistIfEmpty(ctx context.Context, dbConn db.DB, instanceName string) error {
+	// Check if Firestore whitelist has any entries
+	entries, err := dbConn.GetWhitelistEntries(ctx, instanceName)
+	if err != nil {
+		log.Printf("Error checking whitelist entries: %v", err)
+		// Continue with import attempt
+	}
+
+	if len(entries) > 0 {
+		log.Printf("Firestore whitelist already has %d entries, skipping import", len(entries))
+		return nil
+	}
+
+	log.Println("Firestore whitelist is empty, attempting to import from whitelist.json")
+
+	// Read whitelist.json from Minecraft container
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "cat", "/data/whitelist.json")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to read whitelist.json: %w", err)
+	}
+
+	var mcEntries []MinecraftWhitelistEntry
+	if err := json.Unmarshal(output, &mcEntries); err != nil {
+		return fmt.Errorf("failed to parse whitelist.json: %w", err)
+	}
+
+	if len(mcEntries) == 0 {
+		log.Println("whitelist.json is empty, nothing to import")
+		return nil
+	}
+
+	// Convert and import entries to Firestore
+	for _, mcEntry := range mcEntries {
+		entry := db.WhitelistEntry{
+			Username: mcEntry.Name,
+			UUID:     mcEntry.UUID,
+			AddedAt:  time.Now(),
+			AddedBy:  "imported",
+		}
+		if err := dbConn.AddWhitelistEntry(ctx, instanceName, entry); err != nil {
+			log.Printf("Error importing whitelist entry %s: %v", mcEntry.Name, err)
+			continue
+		}
+		log.Printf("Imported whitelist entry: %s (%s)", mcEntry.Name, mcEntry.UUID)
+	}
+
+	// Also check if whitelist is enabled via server.properties or by trying whitelist list
+	whitelistEnabled := getWhitelistEnabledStatus()
+	if err := dbConn.SetWhitelistConfig(ctx, instanceName, db.WhitelistConfig{Enabled: whitelistEnabled}); err != nil {
+		log.Printf("Error setting whitelist config: %v", err)
+	}
+
+	log.Printf("Imported %d whitelist entries from whitelist.json", len(mcEntries))
+	return nil
+}
+
+// syncWhitelist syncs the whitelist from Firestore to Minecraft
+// Returns whether whitelist enforcement is enabled
+func syncWhitelist(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
+	// Get whitelist config from Firestore
+	config, err := dbConn.GetWhitelistConfig(ctx, instanceName)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			config = db.WhitelistConfig{Enabled: false}
+		} else {
+			return false, fmt.Errorf("failed to get whitelist config: %w", err)
+		}
+	}
+
+	// Get whitelist entries from Firestore
+	firestoreEntries, err := dbConn.GetWhitelistEntries(ctx, instanceName)
+	if err != nil {
+		return config.Enabled, fmt.Errorf("failed to get whitelist entries: %w", err)
+	}
+
+	// Get current whitelist from Minecraft
+	minecraftEntries, err := getMinecraftWhitelist()
+	if err != nil {
+		return config.Enabled, fmt.Errorf("failed to get minecraft whitelist: %w", err)
+	}
+
+	// Build maps for comparison
+	firestoreMap := make(map[string]db.WhitelistEntry)
+	for _, entry := range firestoreEntries {
+		firestoreMap[entry.UUID] = entry
+	}
+
+	minecraftMap := make(map[string]bool)
+	for _, entry := range minecraftEntries {
+		minecraftMap[entry.UUID] = true
+	}
+
+	// Add missing players to Minecraft
+	for uuid, entry := range firestoreMap {
+		if !minecraftMap[uuid] {
+			if err := addPlayerToMinecraftWhitelist(entry.Username); err != nil {
+				log.Printf("Error adding %s to Minecraft whitelist: %v", entry.Username, err)
+			} else {
+				log.Printf("Added %s to Minecraft whitelist", entry.Username)
+			}
+		}
+	}
+
+	// Remove extra players from Minecraft
+	for _, mcEntry := range minecraftEntries {
+		if _, exists := firestoreMap[mcEntry.UUID]; !exists {
+			if err := removePlayerFromMinecraftWhitelist(mcEntry.Name); err != nil {
+				log.Printf("Error removing %s from Minecraft whitelist: %v", mcEntry.Name, err)
+			} else {
+				log.Printf("Removed %s from Minecraft whitelist", mcEntry.Name)
+			}
+		}
+	}
+
+	// Sync whitelist enabled status
+	currentEnabled := getWhitelistEnabledStatus()
+	if config.Enabled != currentEnabled {
+		if err := setWhitelistEnabled(config.Enabled); err != nil {
+			log.Printf("Error setting whitelist enabled to %v: %v", config.Enabled, err)
+		} else {
+			log.Printf("Set whitelist enabled to %v", config.Enabled)
+		}
+	}
+
+	return config.Enabled, nil
+}
+
+// getMinecraftWhitelist gets the current whitelist from Minecraft via RCON
+func getMinecraftWhitelist() ([]MinecraftWhitelistEntry, error) {
+	// Read whitelist.json directly as RCON whitelist list doesn't give UUIDs
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "cat", "/data/whitelist.json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read whitelist.json: %w", err)
+	}
+
+	var entries []MinecraftWhitelistEntry
+	if err := json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse whitelist.json: %w", err)
+	}
+
+	return entries, nil
+}
+
+// addPlayerToMinecraftWhitelist adds a player to the Minecraft whitelist via RCON
+func addPlayerToMinecraftWhitelist(username string) error {
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "whitelist", "add", username)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("rcon whitelist add failed: %w, output: %s", err, string(output))
+	}
+	return nil
+}
+
+// removePlayerFromMinecraftWhitelist removes a player from the Minecraft whitelist via RCON
+func removePlayerFromMinecraftWhitelist(username string) error {
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "whitelist", "remove", username)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("rcon whitelist remove failed: %w, output: %s", err, string(output))
+	}
+	return nil
+}
+
+// getWhitelistEnabledStatus checks if whitelist enforcement is enabled
+func getWhitelistEnabledStatus() bool {
+	// Check via RCON - "whitelist list" will indicate if whitelist is on
+	// If whitelist is off, players can still join without being whitelisted
+	// We'll read server.properties for the authoritative value
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "cat", "/data/server.properties")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("Error reading server.properties: %v", err)
+		return false
+	}
+
+	// Look for "white-list=true" or "enforce-whitelist=true"
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "white-list=") {
+			return strings.TrimPrefix(line, "white-list=") == "true"
+		}
+		if strings.HasPrefix(line, "enforce-whitelist=") {
+			return strings.TrimPrefix(line, "enforce-whitelist=") == "true"
+		}
+	}
+
+	return false
+}
+
+// setWhitelistEnabled enables or disables whitelist enforcement via RCON
+func setWhitelistEnabled(enabled bool) error {
+	var cmd *exec.Cmd
+	if enabled {
+		cmd = execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "whitelist", "on")
+	} else {
+		cmd = execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "whitelist", "off")
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("rcon whitelist on/off failed: %w, output: %s", err, string(output))
+	}
+	return nil
 }
