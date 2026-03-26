@@ -71,6 +71,12 @@ resource "google_project_iam_member" "sa_serviceusage_consumer" {
   member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
 }
 
+resource "google_project_iam_member" "sa_compute_instance_admin" {
+  project = var.project_id
+  role    = "roles/compute.instanceAdmin.v1"
+  member  = "serviceAccount:${google_service_account.minecraft-server-sa.email}"
+}
+
 resource "google_compute_disk" "primary" {
   name = "${var.environment}-minecraft-data"
   type = "pd-standard"
