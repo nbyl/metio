@@ -14,10 +14,17 @@ variables:
 test:
   stage: validate
   image: golang:1.24-alpine
+  cache:
+    - key:
+        files:
+          - frontend/package-lock.json
+      paths:
+        - frontend/node_modules/
+      policy: pull-push
   before_script:
     - apk add --no-cache nodejs npm
   script:
-    - cd frontend && npm ci && npm run lint && npm run build && cd ..
+    - cd frontend && npm ci && npm run lint && npm run test:run && npm run build && cd ..
     - go mod tidy
     - go mod verify
     - go fmt ./...
@@ -31,6 +38,7 @@ test:
         path: coverage.out
     paths:
       - coverage.html
+      - frontend/coverage/
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
