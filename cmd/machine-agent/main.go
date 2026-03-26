@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	compute "cloud.google.com/go/compute/apiv1"
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/config"
@@ -34,9 +36,17 @@ var syncWhitelistFunc = syncWhitelist
 var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
 var checkScheduledShutdownFunc = checkScheduledShutdown
 
+// WarningState represents the state of shutdown warnings sent
+type WarningState int
+
+const (
+	WarningStateNone    WarningState = iota // No warnings sent
+	WarningStateFiveMin                     // 5-minute warning sent
+	WarningStateOneMin                      // 1-minute warning sent
+)
+
 // shutdownWarningState tracks which warnings have been sent for the current scheduled shutdown
-// 0 = no warnings sent, 1 = 5-minute warning sent, 2 = 1-minute warning sent
-var shutdownWarningState int
+var shutdownWarningState WarningState
 
 // lastScheduledShutdownTime tracks the last scheduled shutdown time to detect changes
 var lastScheduledShutdownTime *time.Time
@@ -245,6 +255,66 @@ func getInstanceIP() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s:25565", ip), nil
+}
+
+// getProjectID returns the GCP project ID from instance metadata
+func getProjectID() (string, error) {
+	return metadata.ProjectID()
+}
+
+// getZone returns the GCP zone from instance metadata
+func getZone() (string, error) {
+	return metadata.Zone()
+}
+
+// getInstanceName returns the instance name from metadata
+func getInstanceName() (string, error) {
+	return metadata.InstanceName()
+}
+
+// stopInstance stops the current VM instance via GCP Compute API
+func stopInstance(ctx context.Context) error {
+	project, err := getProjectID()
+	if err != nil {
+		return fmt.Errorf("failed to get project ID: %w", err)
+	}
+
+	zone, err := getZone()
+	if err != nil {
+		return fmt.Errorf("failed to get zone: %w", err)
+	}
+
+	instance, err := getInstanceName()
+	if err != nil {
+		return fmt.Errorf("failed to get instance name: %w", err)
+	}
+
+	client, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create compute client: %w", err)
+	}
+	defer client.Close()
+
+	log.Printf("Stopping instance %s in project %s, zone %s", instance, project, zone)
+
+	req := &computepb.StopInstanceRequest{
+		Project:  project,
+		Zone:     zone,
+		Instance: instance,
+	}
+
+	op, err := client.Stop(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to stop instance: %w", err)
+	}
+
+	// Wait for operation to complete (will be interrupted when VM stops)
+	if err := op.Wait(ctx); err != nil {
+		// This error is expected as the VM will be stopped
+		log.Printf("Stop operation wait ended: %v", err)
+	}
+
+	return nil
 }
 
 func getMinecraftVersion() (version string, rawOutput string, err error) {
@@ -508,7 +578,7 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 		// Reset warning state if shutdown was cancelled
 		if lastScheduledShutdownTime != nil {
 			log.Println("Scheduled shutdown was cancelled, resetting warning state")
-			shutdownWarningState = 0
+			shutdownWarningState = WarningStateNone
 			lastScheduledShutdownTime = nil
 		}
 		return nil
@@ -519,7 +589,7 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 	// Check if this is a new/different scheduled shutdown
 	if lastScheduledShutdownTime == nil || !lastScheduledShutdownTime.Equal(shutdownTime) {
 		log.Printf("New scheduled shutdown detected: %v", shutdownTime)
-		shutdownWarningState = 0
+		shutdownWarningState = WarningStateNone
 		lastScheduledShutdownTime = &shutdownTime
 	}
 
@@ -532,20 +602,20 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 	}
 
 	// Send warnings based on remaining time
-	if remaining <= 1*time.Minute && shutdownWarningState < 2 {
+	if remaining <= 1*time.Minute && shutdownWarningState < WarningStateOneMin {
 		if err := sendMinecraftMessage("Server will shut down in 1 minute! Save your progress!"); err != nil {
 			log.Printf("Error sending 1-minute warning: %v", err)
 		} else {
 			log.Println("Sent 1-minute shutdown warning")
 		}
-		shutdownWarningState = 2
-	} else if remaining <= 5*time.Minute && shutdownWarningState < 1 {
+		shutdownWarningState = WarningStateOneMin
+	} else if remaining <= 5*time.Minute && shutdownWarningState < WarningStateFiveMin {
 		if err := sendMinecraftMessage("Server will shut down in 5 minutes!"); err != nil {
 			log.Printf("Error sending 5-minute warning: %v", err)
 		} else {
 			log.Println("Sent 5-minute shutdown warning")
 		}
-		shutdownWarningState = 1
+		shutdownWarningState = WarningStateFiveMin
 	}
 
 	return nil
@@ -598,18 +668,16 @@ func initiateScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName s
 	}
 
 	// Reset local state
-	shutdownWarningState = 0
+	shutdownWarningState = WarningStateNone
 	lastScheduledShutdownTime = nil
 
 	// Wait a moment for the save to complete
 	time.Sleep(5 * time.Second)
 
-	// Initiate VM shutdown
-	log.Println("Initiating VM shutdown...")
-	cmd := execCommand("sudo", "shutdown", "-h", "now")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("shutdown command failed: %w, output: %s", err, string(output))
+	// Initiate VM shutdown via GCP Compute API
+	log.Println("Initiating VM shutdown via GCP Compute API...")
+	if err := stopInstance(ctx); err != nil {
+		return fmt.Errorf("failed to stop instance: %w", err)
 	}
 
 	return nil
