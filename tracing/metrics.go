@@ -3,11 +3,12 @@ package tracing
 import (
 	"context"
 	"log"
-	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+
+	"gitlab.com/nbyl/metio/config"
 )
 
 var (
@@ -23,13 +24,9 @@ var (
 func InitMetrics() error {
 	meter := otel.Meter("metio")
 
-	// Initialize environment attribute
-	environment := os.Getenv("ENVIRONMENT")
-	if environment == "" {
-		log.Printf("Warning: ENVIRONMENT not set, using default 'development'")
-		environment = "development"
-	}
-	environmentAttr = attribute.String("deployment.environment", environment)
+	// Initialize environment attribute from config
+	cfg := config.Load()
+	environmentAttr = attribute.String("deployment.environment", cfg.Environment)
 
 	var err error
 	requestCounter, err = meter.Int64Counter(

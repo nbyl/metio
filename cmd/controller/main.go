@@ -15,6 +15,10 @@ import (
 var Version = "dev" // default, overridden by ldflags
 
 func main() {
+	// Initialize viper first so config is available for tracing
+	viper.AutomaticEnv()
+	viper.SetDefault("PORT", "8080")
+
 	// Initialize OpenTelemetry
 	if err := tracing.InitTracerWithDetails("metio-controller", Version); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
@@ -23,9 +27,6 @@ func main() {
 		log.Printf("Failed to initialize metrics: %v", err)
 	}
 	defer tracing.ShutdownTracer()
-
-	viper.AutomaticEnv()
-	viper.SetDefault("PORT", "8080")
 
 	r := handlers.New()
 

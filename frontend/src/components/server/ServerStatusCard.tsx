@@ -193,14 +193,13 @@ function WhitelistSection({ isRunning }: WhitelistSectionProps) {
                   {whitelist.players.map((player) => (
                     <div key={player.uuid} className="whitelist-player">
                       <div>
-                        <Tooltip content={`UUID: ${player.uuid}`}>
+                        <Tooltip
+                          content={`UUID: ${player.uuid}\nAdded by: ${player.addedBy}`}
+                        >
                           <span className="whitelist-player-name">
                             {player.username}
                           </span>
                         </Tooltip>
-                        <div className="whitelist-player-meta">
-                          Added by {player.addedBy}
-                        </div>
                       </div>
                       <Button
                         variant="outline"

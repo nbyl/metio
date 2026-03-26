@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -47,18 +47,14 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "getWhitelistHandler")
 	defer span.End()
 
-	instanceName := viper.GetString("INSTANCE_NAME")
-	environment := viper.GetString("ENVIRONMENT")
-	region := viper.GetString("REGION")
-	projectID := viper.GetString("GCP_PROJECT")
-	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+	cfg := config.Load()
 
 	span.SetAttributes(
-		attribute.String("instance.name", instanceName),
-		attribute.String("database.id", databaseID),
+		attribute.String("instance.name", cfg.InstanceName),
+		attribute.String("database.id", cfg.DatabaseID()),
 	)
 
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -67,11 +63,11 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get whitelist config
-	config, err := dbConn.GetWhitelistConfig(ctx, instanceName)
+	whitelistConfig, err := dbConn.GetWhitelistConfig(ctx, cfg.InstanceName)
 	if err != nil {
 		// If not found, use default (disabled)
 		if status.Code(err) == codes.NotFound {
-			config = db.WhitelistConfig{Enabled: false}
+			whitelistConfig = db.WhitelistConfig{Enabled: false}
 		} else {
 			span.SetAttributes(attribute.String("error", "get_config_failed"))
 			log.Printf("Error getting whitelist config: %v", err)
@@ -81,7 +77,7 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get whitelist entries
-	entries, err := dbConn.GetWhitelistEntries(ctx, instanceName)
+	entries, err := dbConn.GetWhitelistEntries(ctx, cfg.InstanceName)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_entries_failed"))
 		log.Printf("Error getting whitelist entries: %v", err)
@@ -101,13 +97,13 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	span.SetAttributes(
-		attribute.Bool("whitelist.enabled", config.Enabled),
+		attribute.Bool("whitelist.enabled", whitelistConfig.Enabled),
 		attribute.Int("whitelist.player_count", len(players)),
 	)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(WhitelistResponse{
-		Enabled: config.Enabled,
+		Enabled: whitelistConfig.Enabled,
 		Players: players,
 	})
 }
@@ -161,13 +157,9 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		userEmail = "unknown"
 	}
 
-	instanceName := viper.GetString("INSTANCE_NAME")
-	environment := viper.GetString("ENVIRONMENT")
-	region := viper.GetString("REGION")
-	projectID := viper.GetString("GCP_PROJECT")
-	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+	cfg := config.Load()
 
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -183,7 +175,7 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		AddedBy:  userEmail,
 	}
 
-	if err := dbConn.AddWhitelistEntry(ctx, instanceName, entry); err != nil {
+	if err := dbConn.AddWhitelistEntry(ctx, cfg.InstanceName, entry); err != nil {
 		span.SetAttributes(attribute.String("error", "add_entry_failed"))
 		log.Printf("Error adding whitelist entry: %v", err)
 		writeJSONError(w, "failed to add player to whitelist", http.StatusInternalServerError)
@@ -220,13 +212,9 @@ func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.String("uuid", uuid))
 
-	instanceName := viper.GetString("INSTANCE_NAME")
-	environment := viper.GetString("ENVIRONMENT")
-	region := viper.GetString("REGION")
-	projectID := viper.GetString("GCP_PROJECT")
-	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+	cfg := config.Load()
 
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -234,7 +222,7 @@ func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := dbConn.RemoveWhitelistEntry(ctx, instanceName, uuid); err != nil {
+	if err := dbConn.RemoveWhitelistEntry(ctx, cfg.InstanceName, uuid); err != nil {
 		span.SetAttributes(attribute.String("error", "remove_entry_failed"))
 		log.Printf("Error removing whitelist entry: %v", err)
 		writeJSONError(w, "failed to remove player from whitelist", http.StatusInternalServerError)
@@ -264,13 +252,9 @@ func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.Bool("enabled", req.Enabled))
 
-	instanceName := viper.GetString("INSTANCE_NAME")
-	environment := viper.GetString("ENVIRONMENT")
-	region := viper.GetString("REGION")
-	projectID := viper.GetString("GCP_PROJECT")
-	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
+	cfg := config.Load()
 
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -278,8 +262,8 @@ func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	config := db.WhitelistConfig{Enabled: req.Enabled}
-	if err := dbConn.SetWhitelistConfig(ctx, instanceName, config); err != nil {
+	whitelistConfig := db.WhitelistConfig{Enabled: req.Enabled}
+	if err := dbConn.SetWhitelistConfig(ctx, cfg.InstanceName, whitelistConfig); err != nil {
 		span.SetAttributes(attribute.String("error", "set_config_failed"))
 		log.Printf("Error setting whitelist config: %v", err)
 		writeJSONError(w, "failed to update whitelist config", http.StatusInternalServerError)
