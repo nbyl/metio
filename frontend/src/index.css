@@ -345,4 +345,17 @@
   .whitelist-empty {
     @apply text-sm text-slate-400 text-center py-2;
   }
+
+  /* Scheduled Shutdown */
+  .scheduled-shutdown-active {
+    @apply py-2;
+  }
+
+  .scheduled-shutdown-info {
+    @apply text-sm text-white;
+  }
+
+  .scheduled-shutdown-warning {
+    @apply text-xs text-slate-400 mt-1;
+  }
 }

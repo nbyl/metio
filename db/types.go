@@ -33,13 +33,14 @@ type Players struct {
 }
 
 type Status struct {
-	Players          Players     `firestore:"players"`
-	Timestamp        time.Time   `firestore:"timestamp"`
-	Uptime           string      `firestore:"uptime"`
-	ServerState      ServerState `firestore:"server_state"`
-	InstanceIP       string      `firestore:"instance_ip"`
-	Version          string      `firestore:"version"`
-	WhitelistEnabled bool        `firestore:"whitelist_enabled"`
+	Players           Players     `firestore:"players"`
+	Timestamp         time.Time   `firestore:"timestamp"`
+	Uptime            string      `firestore:"uptime"`
+	ServerState       ServerState `firestore:"server_state"`
+	InstanceIP        string      `firestore:"instance_ip"`
+	Version           string      `firestore:"version"`
+	WhitelistEnabled  bool        `firestore:"whitelist_enabled"`
+	ScheduledShutdown *time.Time  `firestore:"scheduled_shutdown,omitempty"`
 }
 
 // WhitelistEntry represents a player in the whitelist

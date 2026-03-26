@@ -15,6 +15,7 @@ export interface ServerStatus {
   version: string;
   ip: string;
   whitelistEnabled: boolean;
+  scheduledShutdown?: string; // RFC3339 datetime or undefined
 }
 
 /**
@@ -24,6 +25,21 @@ export interface ServerStatus {
 export interface ServerActionResponse {
   success: boolean;
   state: ServerState;
+}
+
+/**
+ * Request for scheduling a shutdown
+ */
+export interface ScheduleShutdownRequest {
+  shutdownTime: string; // RFC3339 format
+}
+
+/**
+ * Response from /api/server/shutdown/schedule endpoints
+ */
+export interface ScheduleShutdownResponse {
+  success: boolean;
+  scheduledShutdown?: string; // RFC3339 datetime or undefined
 }
 
 /**
