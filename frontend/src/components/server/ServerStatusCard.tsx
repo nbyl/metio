@@ -1,15 +1,25 @@
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronRight, X, Loader2 } from 'lucide-react';
 import { useServerStatus } from '../../hooks/useServerStatus';
 import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
+import {
+  useWhitelist,
+  useAddPlayer,
+  useRemovePlayer,
+  useToggleWhitelist,
+} from '../../hooks/useWhitelist';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Separator } from '../ui/Separator';
 import { Skeleton } from '../ui/Skeleton';
+import { Tooltip } from '../ui/Tooltip';
+import { Switch } from '../ui/Switch';
 import { StatsGrid, type StatItem } from '../layout/StatsGrid';
 import type { ServerState } from '../../types/server';
+import type { WhitelistPlayer } from '../../types/whitelist';
 import { cn } from '../../lib/utils';
 
 export interface ServerStatusCardProps {
@@ -79,6 +89,138 @@ function ServerStatusCardSkeleton({ className }: { className?: string }) {
         <Separator />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * WhitelistSection displays whitelist management controls
+ */
+interface WhitelistSectionProps {
+  isRunning: boolean;
+}
+
+function WhitelistSection({ isRunning }: WhitelistSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+
+  const { data: whitelist, isLoading } = useWhitelist();
+  const addPlayerMutation = useAddPlayer();
+  const removePlayerMutation = useRemovePlayer();
+  const toggleWhitelistMutation = useToggleWhitelist();
+
+  if (!isRunning) {
+    return null;
+  }
+
+  const handleAddPlayer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUsername.trim()) return;
+
+    addPlayerMutation.mutate(newUsername.trim(), {
+      onSuccess: () => setNewUsername(''),
+    });
+  };
+
+  const handleToggle = (enabled: boolean) => {
+    toggleWhitelistMutation.mutate(enabled);
+  };
+
+  const handleRemovePlayer = (player: WhitelistPlayer) => {
+    removePlayerMutation.mutate(player.uuid);
+  };
+
+  const isToggling = toggleWhitelistMutation.isPending;
+  const isAdding = addPlayerMutation.isPending;
+
+  return (
+    <div className="whitelist-section">
+      <div className="whitelist-header">
+        <button
+          type="button"
+          className="whitelist-title"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          Whitelist
+          {whitelist && (
+            <span className="text-slate-500">({whitelist.players.length})</span>
+          )}
+        </button>
+        {whitelist && (
+          <Switch
+            checked={whitelist.enabled}
+            onChange={handleToggle}
+            disabled={isToggling}
+            aria-label="Toggle whitelist"
+          />
+        )}
+      </div>
+
+      {isExpanded && (
+        <div>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <>
+              <form onSubmit={handleAddPlayer} className="whitelist-form">
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="Minecraft username"
+                  className="whitelist-input"
+                  disabled={isAdding}
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isAdding || !newUsername.trim()}
+                  loading={isAdding}
+                  className="btn-sm"
+                >
+                  Add
+                </Button>
+              </form>
+
+              {whitelist && whitelist.players.length > 0 ? (
+                <div className="space-y-1">
+                  {whitelist.players.map((player) => (
+                    <div key={player.uuid} className="whitelist-player">
+                      <div>
+                        <Tooltip
+                          content={`UUID: ${player.uuid}\nAdded by: ${player.addedBy}`}
+                        >
+                          <span className="whitelist-player-name">
+                            {player.username}
+                          </span>
+                        </Tooltip>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="btn-sm"
+                        onClick={() => handleRemovePlayer(player)}
+                        disabled={removePlayerMutation.isPending}
+                        aria-label={`Remove ${player.username}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="whitelist-empty">No players in whitelist</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -235,6 +377,8 @@ export function ServerStatusCard({ className }: ServerStatusCardProps) {
             </Button>
           )}
         </div>
+
+        <WhitelistSection isRunning={isRunning} />
       </CardContent>
     </Card>
   );
