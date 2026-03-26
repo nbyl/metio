@@ -14,6 +14,7 @@ export interface ServerStatus {
   uptime: string;
   version: string;
   ip: string;
+  whitelistEnabled: boolean;
 }
 
 /**

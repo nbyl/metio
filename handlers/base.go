@@ -35,6 +35,10 @@ func New() *mux.Router {
 	apiRouter.HandleFunc("/server/start", startServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/stop", stopServerHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/status", statusHandler).Methods("GET")
+	apiRouter.HandleFunc("/server/whitelist", getWhitelistHandler).Methods("GET")
+	apiRouter.HandleFunc("/server/whitelist", addWhitelistHandler).Methods("POST")
+	apiRouter.HandleFunc("/server/whitelist/{uuid}", removeWhitelistHandler).Methods("DELETE")
+	apiRouter.HandleFunc("/server/whitelist/enabled", setWhitelistEnabledHandler).Methods("PUT")
 
 	// SPA fallback - serve React app for all other routes
 	r.PathPrefix("/").Handler(spaHandler())

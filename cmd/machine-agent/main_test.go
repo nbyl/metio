@@ -25,11 +25,42 @@ func (m *MockDB) GetStatus(ctx context.Context, instanceName string) (db.Status,
 	return args.Get(0).(db.Status), args.Error(1)
 }
 
+func (m *MockDB) GetWhitelistConfig(ctx context.Context, instanceName string) (db.WhitelistConfig, error) {
+	args := m.Called(ctx, instanceName)
+	return args.Get(0).(db.WhitelistConfig), args.Error(1)
+}
+
+func (m *MockDB) SetWhitelistConfig(ctx context.Context, instanceName string, config db.WhitelistConfig) error {
+	args := m.Called(ctx, instanceName, config)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetWhitelistEntries(ctx context.Context, instanceName string) ([]db.WhitelistEntry, error) {
+	args := m.Called(ctx, instanceName)
+	return args.Get(0).([]db.WhitelistEntry), args.Error(1)
+}
+
+func (m *MockDB) AddWhitelistEntry(ctx context.Context, instanceName string, entry db.WhitelistEntry) error {
+	args := m.Called(ctx, instanceName, entry)
+	return args.Error(0)
+}
+
+func (m *MockDB) RemoveWhitelistEntry(ctx context.Context, instanceName string, uuid string) error {
+	args := m.Called(ctx, instanceName, uuid)
+	return args.Error(0)
+}
+
+func (m *MockDB) SetWhitelistEntries(ctx context.Context, instanceName string, entries []db.WhitelistEntry) error {
+	args := m.Called(ctx, instanceName, entries)
+	return args.Error(0)
+}
+
 func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
+	oldSyncWhitelistFunc := syncWhitelistFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 5, 20, nil
 	}
@@ -39,10 +70,14 @@ func TestRunStatusUpdate(t *testing.T) {
 	getMinecraftVersionFunc = func() (string, string, error) {
 		return "1.21.4", "", nil
 	}
+	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
+		return true, nil
+	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
 		getMinecraftVersionFunc = oldVersionFunc
+		syncWhitelistFunc = oldSyncWhitelistFunc
 	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil).Run(func(args mock.Arguments) {
@@ -51,6 +86,7 @@ func TestRunStatusUpdate(t *testing.T) {
 		assert.Equal(t, 20, status.Players.Max)
 		assert.Equal(t, db.ServerStateRunning, status.ServerState)
 		assert.Equal(t, "1.21.4", status.Version)
+		assert.True(t, status.WhitelistEnabled)
 	})
 
 	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
@@ -63,6 +99,7 @@ func TestRunStatusUpdateError(t *testing.T) {
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
+	oldSyncWhitelistFunc := syncWhitelistFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 10, nil
 	}
@@ -72,10 +109,14 @@ func TestRunStatusUpdateError(t *testing.T) {
 	getMinecraftVersionFunc = func() (string, string, error) {
 		return "1.21.4", "", nil
 	}
+	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
+		return false, nil
+	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
 		getMinecraftVersionFunc = oldVersionFunc
+		syncWhitelistFunc = oldSyncWhitelistFunc
 	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
