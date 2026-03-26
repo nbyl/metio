@@ -256,4 +256,93 @@
   .skeleton {
     @apply bg-slate-700;
   }
+
+  /* Tooltip */
+  .tooltip-wrapper {
+    @apply relative inline-block;
+  }
+
+  .tooltip {
+    @apply absolute z-50 px-2 py-1 text-xs text-white bg-slate-900 rounded shadow-lg whitespace-pre-line;
+    @apply bottom-full left-1/2 -translate-x-1/2 mb-1;
+    @apply pointer-events-none;
+  }
+
+  /* Collapsible */
+  .collapsible-trigger {
+    @apply flex items-center justify-between w-full py-2 text-left cursor-pointer;
+  }
+
+  .collapsible-content {
+    @apply overflow-hidden;
+  }
+
+  .collapsible-content[data-state='closed'] {
+    @apply hidden;
+  }
+
+  /* Switch */
+  .switch {
+    @apply relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .switch[data-state='checked'] {
+    @apply bg-green-600;
+  }
+
+  .switch[data-state='unchecked'] {
+    @apply bg-slate-600;
+  }
+
+  .switch-thumb {
+    @apply pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform;
+  }
+
+  .switch[data-state='checked'] .switch-thumb {
+    @apply translate-x-4;
+  }
+
+  .switch[data-state='unchecked'] .switch-thumb {
+    @apply translate-x-0;
+  }
+
+  /* Whitelist */
+  .whitelist-section {
+    @apply border-t border-slate-700 pt-3;
+  }
+
+  .whitelist-header {
+    @apply flex items-center justify-between mb-3;
+  }
+
+  .whitelist-title {
+    @apply flex items-center gap-2 text-sm font-medium text-slate-300 cursor-pointer;
+  }
+
+  .whitelist-form {
+    @apply flex gap-2 mb-3;
+  }
+
+  .whitelist-input {
+    @apply flex-1 px-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400;
+    @apply focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent;
+  }
+
+  .whitelist-player {
+    @apply flex items-center justify-between py-1.5 px-2 rounded hover:bg-slate-700/50;
+  }
+
+  .whitelist-player-name {
+    @apply text-sm text-white cursor-help;
+  }
+
+  .whitelist-player-meta {
+    @apply text-xs text-slate-400;
+  }
+
+  .whitelist-empty {
+    @apply text-sm text-slate-400 text-center py-2;
+  }
 }
