@@ -14,6 +14,7 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/tracing"
 	"go.opentelemetry.io/otel"
@@ -33,6 +34,10 @@ var syncWhitelistFunc = syncWhitelist
 var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
 
 func main() {
+	// Initialize viper first so config is available for tracing
+	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
+	viper.AutomaticEnv()
+
 	// Initialize OpenTelemetry
 	if err := tracing.InitTracerWithDetails("metio-machine-agent", Version); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
@@ -42,36 +47,19 @@ func main() {
 	}
 	defer tracing.ShutdownTracer()
 
-	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
-	viper.AutomaticEnv()
-
 	intervalStr := viper.GetString("MINECRAFT_CHECK_INTERVAL")
 	interval, err := time.ParseDuration(intervalStr)
 	if err != nil {
 		log.Fatalf("Invalid interval format: %v", err)
 	}
 
-	environment := viper.GetString("ENVIRONMENT")
-	if environment == "" {
-		environment = "dev"
-	}
-	region := viper.GetString("REGION")
-	if region == "" {
-		region = "us-central1"
-	}
-	instanceName := viper.GetString("INSTANCE_NAME")
-	if instanceName == "" {
-		instanceName = "minecraft-server"
-	}
-
-	projectID, err := metadata.ProjectID()
+	cfg, err := config.LoadWithMetadata()
 	if err != nil {
-		log.Fatalf("Error getting project ID: %v", err)
+		log.Fatalf("Error loading config: %v", err)
 	}
 
 	ctx := context.Background()
-	databaseID := fmt.Sprintf("%s-%s-metio-db", environment, region)
-	dbConn, err := db.NewConnection(ctx, projectID, databaseID)
+	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
 		log.Fatalf("Error creating Firestore client: %v", err)
 	}
@@ -79,7 +67,7 @@ func main() {
 	fmt.Printf("Machine agent started with check interval: %v\n", interval)
 
 	// Import whitelist on startup if Firestore is empty
-	if err := importWhitelistIfEmptyFunc(ctx, dbConn, instanceName); err != nil {
+	if err := importWhitelistIfEmptyFunc(ctx, dbConn, cfg.InstanceName); err != nil {
 		log.Printf("Error during initial whitelist import: %v", err)
 	}
 
@@ -88,7 +76,7 @@ func main() {
 
 	go func() {
 		for range ticker.C {
-			if err := runStatusUpdate(ctx, dbConn, instanceName); err != nil {
+			if err := runStatusUpdate(ctx, dbConn, cfg.InstanceName); err != nil {
 				log.Printf("Error in status update: %v", err)
 			}
 		}

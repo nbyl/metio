@@ -3,7 +3,6 @@ package tracing
 import (
 	"context"
 	"log"
-	"os"
 
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/otel"
@@ -13,6 +12,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
+	"gitlab.com/nbyl/metio/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/oauth"
 )
@@ -24,18 +24,14 @@ func InitTracer() error {
 }
 
 func InitTracerWithDetails(serviceName, serviceVersion string) error {
-	// Detect GCP environment and get project ID
-	projectID := os.Getenv("GCP_PROJECT")
+	cfg := config.Load()
+
+	projectID := cfg.ProjectID
 	if projectID == "" {
 		log.Printf("Warning: GCP_PROJECT not set, using default detection")
 	}
 
-	// Get deployment environment
-	environment := os.Getenv("ENVIRONMENT")
-	if environment == "" {
-		log.Printf("Warning: ENVIRONMENT not set, using default 'development'")
-		environment = "development"
-	}
+	environment := cfg.Environment
 
 	// Retrieve and store Google application-default credentials
 	creds, err := oauth.NewApplicationDefault(context.Background())
