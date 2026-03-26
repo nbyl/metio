@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	compute "cloud.google.com/go/compute/apiv1"
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/config"
@@ -32,6 +34,22 @@ var getMinecraftVersionFunc = getMinecraftVersion
 var osReadFile = os.ReadFile
 var syncWhitelistFunc = syncWhitelist
 var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
+var checkScheduledShutdownFunc = checkScheduledShutdown
+
+// WarningState represents the state of shutdown warnings sent
+type WarningState int
+
+const (
+	WarningStateNone    WarningState = iota // No warnings sent
+	WarningStateFiveMin                     // 5-minute warning sent
+	WarningStateOneMin                      // 1-minute warning sent
+)
+
+// shutdownWarningState tracks which warnings have been sent for the current scheduled shutdown
+var shutdownWarningState WarningState
+
+// lastScheduledShutdownTime tracks the last scheduled shutdown time to detect changes
+var lastScheduledShutdownTime *time.Time
 
 func main() {
 	// Initialize viper first so config is available for tracing
@@ -95,6 +113,13 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		attribute.String("instance.name", instanceName),
 	)
 
+	// Check for scheduled shutdown first (before any other processing)
+	if err := checkScheduledShutdownFunc(ctx, dbConn, instanceName); err != nil {
+		span.SetAttributes(attribute.String("error", "check_scheduled_shutdown_failed"))
+		log.Printf("Error checking scheduled shutdown: %v", err)
+		// Don't fail the entire update, just log the error
+	}
+
 	// Record database operation
 	tracing.RecordDBOperation("status_update")
 
@@ -146,14 +171,18 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 	}
 	span.SetAttributes(attribute.Bool("whitelist.enabled", whitelistEnabled))
 
+	// Get current status to preserve scheduled shutdown
+	currentStatus, _ := dbConn.GetStatus(ctx, instanceName)
+
 	err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
-		Players:          db.Players{Current: current, Max: max},
-		Timestamp:        time.Now(),
-		Uptime:           uptime,
-		ServerState:      db.ServerStateRunning,
-		InstanceIP:       instanceIP,
-		Version:          version,
-		WhitelistEnabled: whitelistEnabled,
+		Players:           db.Players{Current: current, Max: max},
+		Timestamp:         time.Now(),
+		Uptime:            uptime,
+		ServerState:       db.ServerStateRunning,
+		InstanceIP:        instanceIP,
+		Version:           version,
+		WhitelistEnabled:  whitelistEnabled,
+		ScheduledShutdown: currentStatus.ScheduledShutdown,
 	})
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "update_status_failed"))
@@ -226,6 +255,66 @@ func getInstanceIP() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s:25565", ip), nil
+}
+
+// getProjectID returns the GCP project ID from instance metadata
+func getProjectID() (string, error) {
+	return metadata.ProjectID()
+}
+
+// getZone returns the GCP zone from instance metadata
+func getZone() (string, error) {
+	return metadata.Zone()
+}
+
+// getInstanceName returns the instance name from metadata
+func getInstanceName() (string, error) {
+	return metadata.InstanceName()
+}
+
+// stopInstance stops the current VM instance via GCP Compute API
+func stopInstance(ctx context.Context) error {
+	project, err := getProjectID()
+	if err != nil {
+		return fmt.Errorf("failed to get project ID: %w", err)
+	}
+
+	zone, err := getZone()
+	if err != nil {
+		return fmt.Errorf("failed to get zone: %w", err)
+	}
+
+	instance, err := getInstanceName()
+	if err != nil {
+		return fmt.Errorf("failed to get instance name: %w", err)
+	}
+
+	client, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create compute client: %w", err)
+	}
+	defer client.Close()
+
+	log.Printf("Stopping instance %s in project %s, zone %s", instance, project, zone)
+
+	req := &computepb.StopInstanceRequest{
+		Project:  project,
+		Zone:     zone,
+		Instance: instance,
+	}
+
+	op, err := client.Stop(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to stop instance: %w", err)
+	}
+
+	// Wait for operation to complete (will be interrupted when VM stops)
+	if err := op.Wait(ctx); err != nil {
+		// This error is expected as the VM will be stopped
+		log.Printf("Stop operation wait ended: %v", err)
+	}
+
+	return nil
 }
 
 func getMinecraftVersion() (version string, rawOutput string, err error) {
@@ -473,5 +562,123 @@ func setWhitelistEnabled(enabled bool) error {
 	if err != nil {
 		return fmt.Errorf("rcon whitelist on/off failed: %w, output: %s", err, string(output))
 	}
+	return nil
+}
+
+// checkScheduledShutdown checks if a shutdown is scheduled and handles warnings and execution
+func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName string) error {
+	// Get current status to check scheduled shutdown
+	currentStatus, err := dbConn.GetStatus(ctx, instanceName)
+	if err != nil {
+		return fmt.Errorf("failed to get status: %w", err)
+	}
+
+	// No shutdown scheduled
+	if currentStatus.ScheduledShutdown == nil {
+		// Reset warning state if shutdown was cancelled
+		if lastScheduledShutdownTime != nil {
+			log.Println("Scheduled shutdown was cancelled, resetting warning state")
+			shutdownWarningState = WarningStateNone
+			lastScheduledShutdownTime = nil
+		}
+		return nil
+	}
+
+	shutdownTime := *currentStatus.ScheduledShutdown
+
+	// Check if this is a new/different scheduled shutdown
+	if lastScheduledShutdownTime == nil || !lastScheduledShutdownTime.Equal(shutdownTime) {
+		log.Printf("New scheduled shutdown detected: %v", shutdownTime)
+		shutdownWarningState = WarningStateNone
+		lastScheduledShutdownTime = &shutdownTime
+	}
+
+	remaining := time.Until(shutdownTime)
+
+	// Time to shut down
+	if remaining <= 0 {
+		log.Println("Scheduled shutdown time reached, initiating shutdown...")
+		return initiateScheduledShutdown(ctx, dbConn, instanceName)
+	}
+
+	// Send warnings based on remaining time
+	if remaining <= 1*time.Minute && shutdownWarningState < WarningStateOneMin {
+		if err := sendMinecraftMessage("Server will shut down in 1 minute! Save your progress!"); err != nil {
+			log.Printf("Error sending 1-minute warning: %v", err)
+		} else {
+			log.Println("Sent 1-minute shutdown warning")
+		}
+		shutdownWarningState = WarningStateOneMin
+	} else if remaining <= 5*time.Minute && shutdownWarningState < WarningStateFiveMin {
+		if err := sendMinecraftMessage("Server will shut down in 5 minutes!"); err != nil {
+			log.Printf("Error sending 5-minute warning: %v", err)
+		} else {
+			log.Println("Sent 5-minute shutdown warning")
+		}
+		shutdownWarningState = WarningStateFiveMin
+	}
+
+	return nil
+}
+
+// sendMinecraftMessage sends a chat message to all players via RCON
+func sendMinecraftMessage(message string) error {
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "say", message)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("rcon say failed: %w, output: %s", err, string(output))
+	}
+	return nil
+}
+
+// saveMinecraftWorld saves the Minecraft world via RCON
+func saveMinecraftWorld() error {
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "save-all")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("rcon save-all failed: %w, output: %s", err, string(output))
+	}
+	log.Println("World saved successfully")
+	return nil
+}
+
+// initiateScheduledShutdown handles the shutdown process
+func initiateScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName string) error {
+	// Send final warning
+	if err := sendMinecraftMessage("Server is shutting down NOW!"); err != nil {
+		log.Printf("Error sending final shutdown message: %v", err)
+	}
+
+	// Save the world
+	if err := saveMinecraftWorld(); err != nil {
+		log.Printf("Error saving world before shutdown: %v", err)
+		// Continue with shutdown even if save fails
+	}
+
+	// Clear the scheduled shutdown from Firestore
+	currentStatus, err := dbConn.GetStatus(ctx, instanceName)
+	if err != nil {
+		log.Printf("Error getting status to clear scheduled shutdown: %v", err)
+	} else {
+		currentStatus.ScheduledShutdown = nil
+		currentStatus.Timestamp = time.Now()
+		if err := dbConn.UpdateStatus(ctx, instanceName, currentStatus); err != nil {
+			log.Printf("Error clearing scheduled shutdown: %v", err)
+		}
+	}
+
+	// Reset local state
+	shutdownWarningState = WarningStateNone
+	lastScheduledShutdownTime = nil
+
+	// Wait a moment for the save to complete
+	time.Sleep(5 * time.Second)
+
+	// Initiate VM shutdown via GCP Compute API
+	log.Println("Initiating VM shutdown via GCP Compute API...")
+	if err := stopInstance(ctx); err != nil {
+		return fmt.Errorf("failed to stop instance: %w", err)
+	}
+
 	return nil
 }

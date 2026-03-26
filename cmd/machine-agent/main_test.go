@@ -80,6 +80,9 @@ func TestRunStatusUpdate(t *testing.T) {
 		syncWhitelistFunc = oldSyncWhitelistFunc
 	}()
 
+	// Mock GetStatus for checkScheduledShutdown (called after UpdateStatus)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
+
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil).Run(func(args mock.Arguments) {
 		status := args.Get(2).(db.Status)
 		assert.Equal(t, 5, status.Players.Current)
@@ -118,6 +121,9 @@ func TestRunStatusUpdateError(t *testing.T) {
 		getMinecraftVersionFunc = oldVersionFunc
 		syncWhitelistFunc = oldSyncWhitelistFunc
 	}()
+
+	// Mock GetStatus for checkScheduledShutdown (called after UpdateStatus)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
 
