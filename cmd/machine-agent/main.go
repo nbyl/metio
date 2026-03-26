@@ -24,6 +24,7 @@ var Version = "dev" // default, overridden by ldflags
 var execCommand = exec.Command
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
+var getMinecraftVersionFunc = getMinecraftVersion
 var osReadFile = os.ReadFile
 
 func main() {
@@ -118,12 +119,24 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		log.Printf("Error getting instance IP: %v", err)
 		instanceIP = "unknown:25565"
 	}
+	version, rawOutput, err := getMinecraftVersionFunc()
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_version_failed"))
+		tracing.RecordError("get_version_failed")
+		log.Printf("Error getting Minecraft version: %v", err)
+		version = "Unknown"
+	}
+	if rawOutput != "" {
+		span.SetAttributes(attribute.String("version.raw_output", rawOutput))
+		log.Printf("Version parsing failed, raw RCON output: %s", rawOutput)
+	}
 
 	span.SetAttributes(
 		attribute.Int("players.current", current),
 		attribute.Int("players.max", max),
 		attribute.String("uptime", uptime),
 		attribute.String("instance.ip", instanceIP),
+		attribute.String("version", version),
 	)
 
 	err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
@@ -132,6 +145,7 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		Uptime:      uptime,
 		ServerState: db.ServerStateRunning,
 		InstanceIP:  instanceIP,
+		Version:     version,
 	})
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "update_status_failed"))
@@ -204,4 +218,38 @@ func getInstanceIP() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s:25565", ip), nil
+}
+
+func getMinecraftVersion() (version string, rawOutput string, err error) {
+	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "version")
+	output, err := cmd.Output()
+	if err != nil {
+		// Command failed - return "Unknown" with no raw output
+		return "Unknown", "", nil
+	}
+
+	outputStr := string(output)
+
+	// Try Paper/Spigot format: "(MC: 1.21.4)"
+	paperRe := regexp.MustCompile(`\(MC: ([0-9.]+)\)`)
+	if matches := paperRe.FindStringSubmatch(outputStr); len(matches) >= 2 {
+		return matches[1], "", nil
+	}
+
+	// Try Vanilla RCON format: "name = 1.21.10"
+	// Example: "Server version info:id = 1.21.10name = 1.21.10data = 4556..."
+	vanillaRconRe := regexp.MustCompile(`name\s*=\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
+	if matches := vanillaRconRe.FindStringSubmatch(outputStr); len(matches) >= 2 {
+		return matches[1], "", nil
+	}
+
+	// Fallback: Vanilla log format - look for version pattern like "1.21.4"
+	// Example: "Starting minecraft server version 1.21.4"
+	vanillaRe := regexp.MustCompile(`version ([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
+	if matches := vanillaRe.FindStringSubmatch(outputStr); len(matches) >= 2 {
+		return matches[1], "", nil
+	}
+
+	// Both regexes failed - return "Unknown" with raw output for debugging
+	return "Unknown", outputStr, nil
 }
