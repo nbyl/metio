@@ -38,4 +38,5 @@ type Status struct {
 	Uptime      string      `firestore:"uptime"`
 	ServerState ServerState `firestore:"server_state"`
 	InstanceIP  string      `firestore:"instance_ip"`
+	Version     string      `firestore:"version"`
 }

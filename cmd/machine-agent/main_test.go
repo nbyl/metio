@@ -29,15 +29,20 @@ func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
+	oldVersionFunc := getMinecraftVersionFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 5, 20, nil
 	}
 	getUptimeFunc = func() (string, error) {
 		return "2 days, 3:45", nil
 	}
+	getMinecraftVersionFunc = func() (string, string, error) {
+		return "1.21.4", "", nil
+	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
+		getMinecraftVersionFunc = oldVersionFunc
 	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil).Run(func(args mock.Arguments) {
@@ -45,6 +50,7 @@ func TestRunStatusUpdate(t *testing.T) {
 		assert.Equal(t, 5, status.Players.Current)
 		assert.Equal(t, 20, status.Players.Max)
 		assert.Equal(t, db.ServerStateRunning, status.ServerState)
+		assert.Equal(t, "1.21.4", status.Version)
 	})
 
 	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
@@ -56,15 +62,20 @@ func TestRunStatusUpdateError(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
+	oldVersionFunc := getMinecraftVersionFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 10, nil
 	}
 	getUptimeFunc = func() (string, error) {
 		return "2 days, 3:45", nil
 	}
+	getMinecraftVersionFunc = func() (string, string, error) {
+		return "1.21.4", "", nil
+	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
+		getMinecraftVersionFunc = oldVersionFunc
 	}()
 
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
@@ -130,4 +141,69 @@ func TestGetInstanceIP(t *testing.T) {
 	_ = func() (string, error) {
 		return getInstanceIP()
 	}
+}
+
+func TestGetMinecraftVersion_Paper(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "This server is running Paper version git-Paper-550 (MC: 1.21.4)")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	version, rawOutput, err := getMinecraftVersion()
+	assert.NoError(t, err)
+	assert.Equal(t, "1.21.4", version)
+	assert.Empty(t, rawOutput)
+}
+
+func TestGetMinecraftVersion_Vanilla(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "Starting minecraft server version 1.21.4")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	version, rawOutput, err := getMinecraftVersion()
+	assert.NoError(t, err)
+	assert.Equal(t, "1.21.4", version)
+	assert.Empty(t, rawOutput)
+}
+
+func TestGetMinecraftVersion_VanillaRcon(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "Server version info:id = 1.21.10name = 1.21.10data = 4556series = mainprotocol = 773 (0x305)build_time = Tue Oct 07 09:14:11 UTC 2025pack_resource = 69.0pack_data = 88.0stable = yes")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	version, rawOutput, err := getMinecraftVersion()
+	assert.NoError(t, err)
+	assert.Equal(t, "1.21.10", version)
+	assert.Empty(t, rawOutput)
+}
+
+func TestGetMinecraftVersion_CommandFails(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("false") // exits with error
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	version, rawOutput, err := getMinecraftVersion()
+	assert.NoError(t, err)
+	assert.Equal(t, "Unknown", version)
+	assert.Empty(t, rawOutput)
+}
+
+func TestGetMinecraftVersion_InvalidOutput(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "Some random text without version")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	version, rawOutput, err := getMinecraftVersion()
+	assert.NoError(t, err)
+	assert.Equal(t, "Unknown", version)
+	assert.Contains(t, rawOutput, "Some random text without version")
 }
