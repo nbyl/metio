@@ -33,7 +33,7 @@ write_files:
         for i in $(seq 1 $MAX_RETRIES); do \
           echo "[$(date)] Attempt $i/$MAX_RETRIES: Pulling $IMAGE..."; \
           docker pull "$IMAGE" && \
-          SIZE=$(docker run --rm "$IMAGE" stat -c%%s /opt/java/openjdk/bin/java 2>/dev/null || echo 0) && \
+          SIZE=$(docker run --rm --entrypoint stat "$IMAGE" -c%%s /opt/java/openjdk/bin/java 2>/dev/null || echo 0) && \
           if [ "$SIZE" -gt 1000 ]; then \
             echo "[$(date)] Java executable verified ($SIZE bytes)"; \
             exit 0; \
