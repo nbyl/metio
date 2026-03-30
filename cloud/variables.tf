@@ -56,3 +56,10 @@ variable "environment" {
   type        = string
   default     = "development"
 }
+
+variable "rcon_password" {
+  description = "RCON password for Minecraft server"
+  type        = string
+  sensitive   = true
+  default     = "minecraft2025"
+}
