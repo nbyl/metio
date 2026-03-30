@@ -56,23 +56,53 @@ type WhitelistConfig struct {
 	Enabled bool `firestore:"enabled"`
 }
 
-type OperationState string
+type OperationState int
 
 const (
-	OperationStatePending   OperationState = "PENDING"
-	OperationStateRunning   OperationState = "RUNNING"
-	OperationStateCompleted OperationState = "COMPLETED"
-	OperationStateFailed    OperationState = "FAILED"
-	OperationStateCancelled OperationState = "CANCELLED"
+	OperationStatePending OperationState = iota
+	OperationStateRunning
+	OperationStateCompleted
+	OperationStateFailed
+	OperationStateCancelled
 )
 
-type OperationType string
+func (s OperationState) String() string {
+	switch s {
+	case OperationStatePending:
+		return "PENDING"
+	case OperationStateRunning:
+		return "RUNNING"
+	case OperationStateCompleted:
+		return "COMPLETED"
+	case OperationStateFailed:
+		return "FAILED"
+	case OperationStateCancelled:
+		return "CANCELLED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+type OperationType int
 
 const (
-	OperationTypeCreate OperationType = "CREATE"
-	OperationTypeUpdate OperationType = "UPDATE"
-	OperationTypeDelete OperationType = "DELETE"
+	OperationTypeCreate OperationType = iota
+	OperationTypeUpdate
+	OperationTypeDelete
 )
+
+func (t OperationType) String() string {
+	switch t {
+	case OperationTypeCreate:
+		return "CREATE"
+	case OperationTypeUpdate:
+		return "UPDATE"
+	case OperationTypeDelete:
+		return "DELETE"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 type OperationStep struct {
 	Name        string `firestore:"name"`

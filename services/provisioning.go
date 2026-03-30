@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -13,6 +14,28 @@ import (
 	"gitlab.com/nbyl/metio/pulumi"
 	"gitlab.com/nbyl/metio/pulumi/programs"
 )
+
+const (
+	stepCreateServiceAccount = "create_service_account"
+	stepCreateBackupBucket   = "create_backup_bucket"
+	stepReserveStaticIP      = "reserve_static_ip"
+	stepCreateDisk           = "create_disk"
+	stepCreateFirewall       = "create_firewall"
+	stepCreateInstance       = "create_instance"
+	stepDeployInfrastructure = "deploy_infrastructure"
+	stepRefreshStack         = "refresh_stack"
+	stepUpdateInfrastructure = "update_infrastructure"
+	stepDestroyStack         = "destroy_stack"
+	stepCleanupResources     = "cleanup_resources"
+	stepUpsertStack          = "upsert_stack"
+)
+
+const errMsgOperationInProgress = "operation already in progress for server %s"
+const errMsgNoOperationInProgress = "no operation in progress for server %s"
+const errMsgRetryExhausted = "operation failed after %d attempts: %w"
+
+var errOperationInProgress = errors.New("operation already in progress")
+var errNoOperationInProgress = errors.New("no operation in progress")
 
 type ProvisioningService struct {
 	workspaceManager *pulumi.WorkspaceManager
@@ -38,13 +61,13 @@ func NewProvisioningService(workspaceManager *pulumi.WorkspaceManager, dbConn db
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
 	return s.queueOperation(ctx, serverID, db.OperationTypeCreate, func(opCtx context.Context, op *db.Operation) error {
 		op.Steps = []db.OperationStep{
-			{Name: "create_service_account", Description: "Creating service account...", Completed: false},
-			{Name: "create_backup_bucket", Description: "Creating backup bucket...", Completed: false},
-			{Name: "reserve_static_ip", Description: "Reserving static IP...", Completed: false},
-			{Name: "create_disk", Description: "Creating disk...", Completed: false},
-			{Name: "create_firewall", Description: "Creating firewall rules...", Completed: false},
-			{Name: "create_instance", Description: "Creating VM instance...", Completed: false},
-			{Name: "deploy_infrastructure", Description: "Deploying infrastructure with Pulumi...", Completed: false},
+			{Name: stepCreateServiceAccount, Description: "Creating service account...", Completed: false},
+			{Name: stepCreateBackupBucket, Description: "Creating backup bucket...", Completed: false},
+			{Name: stepReserveStaticIP, Description: "Reserving static IP...", Completed: false},
+			{Name: stepCreateDisk, Description: "Creating disk...", Completed: false},
+			{Name: stepCreateFirewall, Description: "Creating firewall rules...", Completed: false},
+			{Name: stepCreateInstance, Description: "Creating VM instance...", Completed: false},
+			{Name: stepDeployInfrastructure, Description: "Deploying infrastructure with Pulumi...", Completed: false},
 		}
 		s.updateOperation(opCtx, serverID, op)
 
@@ -52,20 +75,20 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, "upsert_stack", err)
+			return s.handleError(op, opCtx, serverID, stepUpsertStack, err)
 		}
 
-		s.completeStep(op, serverID, "create_service_account")
+		s.completeStep(op, serverID, stepCreateServiceAccount)
 
-		s.updateStep(opCtx, serverID, "deploy_infrastructure", "Deploying infrastructure with Pulumi...")
+		s.updateStep(opCtx, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
 		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
 			return s.workspaceManager.UpStack(opCtx, stack)
 		})
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, "deploy_infrastructure", err)
+			return s.handleError(op, opCtx, serverID, stepDeployInfrastructure, err)
 		}
 
-		s.completeStep(op, serverID, "deploy_infrastructure")
+		s.completeStep(op, serverID, stepDeployInfrastructure)
 
 		outputs := make(map[string]string)
 		for key, value := range result.Outputs {
@@ -85,8 +108,8 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
 	return s.queueOperation(ctx, serverID, db.OperationTypeUpdate, func(opCtx context.Context, op *db.Operation) error {
 		op.Steps = []db.OperationStep{
-			{Name: "refresh_stack", Description: "Refreshing Pulumi stack...", Completed: false},
-			{Name: "update_infrastructure", Description: "Updating infrastructure...", Completed: false},
+			{Name: stepRefreshStack, Description: "Refreshing Pulumi stack...", Completed: false},
+			{Name: stepUpdateInfrastructure, Description: "Updating infrastructure...", Completed: false},
 		}
 		s.updateOperation(opCtx, serverID, op)
 
@@ -94,20 +117,20 @@ func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string,
 
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, "upsert_stack", err)
+			return s.handleError(op, opCtx, serverID, stepUpsertStack, err)
 		}
 
-		s.completeStep(op, serverID, "refresh_stack")
+		s.completeStep(op, serverID, stepRefreshStack)
 
-		s.updateStep(opCtx, serverID, "update_infrastructure", "Updating infrastructure...")
+		s.updateStep(opCtx, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
 		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
 			return s.workspaceManager.UpStack(opCtx, stack)
 		})
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, "update_infrastructure", err)
+			return s.handleError(op, opCtx, serverID, stepUpdateInfrastructure, err)
 		}
 
-		s.completeStep(op, serverID, "update_infrastructure")
+		s.completeStep(op, serverID, stepUpdateInfrastructure)
 
 		outputs := make(map[string]string)
 		for key, value := range result.Outputs {
@@ -127,21 +150,21 @@ func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string,
 func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
 	return s.queueOperation(ctx, serverID, db.OperationTypeDelete, func(opCtx context.Context, op *db.Operation) error {
 		op.Steps = []db.OperationStep{
-			{Name: "destroy_stack", Description: "Destroying Pulumi stack...", Completed: false},
-			{Name: "cleanup_resources", Description: "Cleaning up resources...", Completed: false},
+			{Name: stepDestroyStack, Description: "Destroying Pulumi stack...", Completed: false},
+			{Name: stepCleanupResources, Description: "Cleaning up resources...", Completed: false},
 		}
 		s.updateOperation(opCtx, serverID, op)
 
-		s.updateStep(opCtx, serverID, "destroy_stack", "Destroying Pulumi stack...")
+		s.updateStep(opCtx, serverID, stepDestroyStack, "Destroying Pulumi stack...")
 		err := s.executeWithRetry(opCtx, func() error {
 			return s.workspaceManager.DestroyStack(opCtx, serverID)
 		})
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, "destroy_stack", err)
+			return s.handleError(op, opCtx, serverID, stepDestroyStack, err)
 		}
 
-		s.completeStep(op, serverID, "destroy_stack")
-		s.completeStep(op, serverID, "cleanup_resources")
+		s.completeStep(op, serverID, stepDestroyStack)
+		s.completeStep(op, serverID, stepCleanupResources)
 
 		op.State = db.OperationStateCompleted
 		s.updateOperation(opCtx, serverID, op)
@@ -162,7 +185,7 @@ func (s *ProvisioningService) queueOperation(ctx context.Context, serverID strin
 
 	if _, exists := s.operations[serverID]; exists {
 		s.mu.Unlock()
-		return fmt.Errorf("operation already in progress for server %s", serverID)
+		return fmt.Errorf(errMsgOperationInProgress, serverID)
 	}
 
 	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
@@ -207,7 +230,7 @@ func (s *ProvisioningService) CancelOperation(ctx context.Context, serverID stri
 
 	cancel, exists := s.operations[serverID]
 	if !exists {
-		return fmt.Errorf("no operation in progress for server %s", serverID)
+		return fmt.Errorf(errMsgNoOperationInProgress, serverID)
 	}
 
 	cancel()
@@ -248,7 +271,7 @@ func (s *ProvisioningService) executeWithRetry(ctx context.Context, fn func() er
 		}
 	}
 
-	return fmt.Errorf("operation failed after %d attempts: %w", s.retryAttempts, lastErr)
+	return fmt.Errorf(errMsgRetryExhausted, s.retryAttempts, lastErr)
 }
 
 func (s *ProvisioningService) executeUpWithRetry(ctx context.Context, fn func() (auto.UpResult, error)) (auto.UpResult, error) {
@@ -279,7 +302,7 @@ func (s *ProvisioningService) executeUpWithRetry(ctx context.Context, fn func() 
 		}
 	}
 
-	return auto.UpResult{}, fmt.Errorf("operation failed after %d attempts: %w", s.retryAttempts, lastErr)
+	return auto.UpResult{}, fmt.Errorf(errMsgRetryExhausted, s.retryAttempts, lastErr)
 }
 
 func (s *ProvisioningService) updateOperation(ctx context.Context, serverID string, op *db.Operation) {

@@ -232,8 +232,8 @@ func getOperationStatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(OperationStatusResponse{
 		ID:          operation.ID,
-		Type:        string(operation.Type),
-		State:       string(operation.State),
+		Type:        operation.Type.String(),
+		State:       operation.State.String(),
 		CurrentStep: operation.CurrentStep,
 		Steps:       steps,
 		Error:       operation.Error,
