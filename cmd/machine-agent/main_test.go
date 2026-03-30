@@ -55,6 +55,19 @@ func (m *MockDB) SetWhitelistEntries(ctx context.Context, instanceName string, e
 	return args.Error(0)
 }
 
+func (m *MockDB) GetOperation(ctx context.Context, instanceName string) (*db.Operation, error) {
+	args := m.Called(ctx, instanceName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Operation), args.Error(1)
+}
+
+func (m *MockDB) UpdateOperation(ctx context.Context, instanceName string, op *db.Operation) error {
+	args := m.Called(ctx, instanceName, op)
+	return args.Error(0)
+}
+
 func TestRunStatusUpdate(t *testing.T) {
 	mockDB := new(MockDB)
 	oldGetFunc := getMinecraftPlayerCountFunc
