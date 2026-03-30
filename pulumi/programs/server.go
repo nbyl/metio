@@ -19,6 +19,9 @@ type ServerConfig struct {
 	Environment       string
 	BackupBucket      string
 	MachineAgentImage string
+	GCPProject        string
+	InstanceName      string
+	RCONPassword      string
 }
 
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
@@ -41,8 +44,23 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		if config.Environment == "" {
 			config.Environment = "development"
 		}
+		if config.InstanceName == "" {
+			config.InstanceName = fmt.Sprintf("%s-minecraft-server", config.Environment)
+		}
+		if config.RCONPassword == "" {
+			config.RCONPassword = "minecraft2025"
+		}
 
-		userData, err := GenerateCloudConfig(config)
+		userData, err := RenderCloudConfig(&TemplateConfig{
+			Region:            config.Region,
+			GCPProject:        config.GCPProject,
+			Environment:       config.Environment,
+			InstanceName:      config.InstanceName,
+			BackupBucket:      config.BackupBucket,
+			MachineAgentImage: config.MachineAgentImage,
+			MinecraftVersion:  config.MinecraftVersion,
+			RCONPassword:      config.RCONPassword,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
 		}
@@ -175,40 +193,4 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 
 		return nil
 	}
-}
-
-func GenerateCloudConfig(config *ServerConfig) (string, error) {
-	return fmt.Sprintf(`#cloud-config
-write_files:
-  - path: /etc/systemd/system/minecraft.service
-    permissions: 0644
-    owner: root
-    content: |
-      [Unit]
-      Description=Minecraft Server
-      After=network-online.target
-      Wants=network-online.target
-      [Service]
-      Type=simple
-      User=metio
-      Group=metio
-      Restart=always
-      RestartSec=10
-      ExecStartPre=/bin/bash -c 'docker pull itzg/minecraft-server:stable-java21'
-      ExecStart=/bin/bash -c 'docker run --rm -v /data:/data -e EULA=TRUE -e VERSION=%s -p 25565:25565 itzg/minecraft-server:stable-java21'
-      ExecStop=/bin/bash -c 'docker stop $(docker ps -q --filter ancestor=itzg/minecraft-server:stable-java21)'
-      [Install]
-      WantedBy=multi-user.target
-  - path: /etc/systemd/system/minecraft-backup.service
-    permissions: 0644
-    owner: root
-    content: |
-      [Unit]
-      Description=Minecraft Backup Service
-      [Service]
-      Type=simple
-      User=metio
-      Group=metio
-      ExecStart=/bin/bash -c 'docker run --rm -v /data:/data -v %s:/backups alpine:latest tar -czf /backups/$(date +%%Y%%m%%d_%%H%%M%%S)_world.tar.gz -C /data world'
-`, config.MinecraftVersion, config.BackupBucket), nil
 }
