@@ -55,3 +55,40 @@ type WhitelistEntry struct {
 type WhitelistConfig struct {
 	Enabled bool `firestore:"enabled"`
 }
+
+type OperationState string
+
+const (
+	OperationStatePending   OperationState = "PENDING"
+	OperationStateRunning   OperationState = "RUNNING"
+	OperationStateCompleted OperationState = "COMPLETED"
+	OperationStateFailed    OperationState = "FAILED"
+	OperationStateCancelled OperationState = "CANCELLED"
+)
+
+type OperationType string
+
+const (
+	OperationTypeCreate OperationType = "CREATE"
+	OperationTypeUpdate OperationType = "UPDATE"
+	OperationTypeDelete OperationType = "DELETE"
+)
+
+type OperationStep struct {
+	Name        string `firestore:"name"`
+	Description string `firestore:"description"`
+	Completed   bool   `firestore:"completed"`
+	Error       string `firestore:"error,omitempty"`
+}
+
+type Operation struct {
+	ID          string            `firestore:"id"`
+	Type        OperationType     `firestore:"type"`
+	State       OperationState    `firestore:"state"`
+	CurrentStep string            `firestore:"current_step"`
+	Steps       []OperationStep   `firestore:"steps"`
+	Error       string            `firestore:"error,omitempty"`
+	CreatedAt   time.Time         `firestore:"created_at"`
+	UpdatedAt   time.Time         `firestore:"updated_at"`
+	Outputs     map[string]string `firestore:"outputs,omitempty"`
+}

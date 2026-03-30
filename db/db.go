@@ -17,6 +17,8 @@ type DB interface {
 	AddWhitelistEntry(ctx context.Context, instanceName string, entry WhitelistEntry) error
 	RemoveWhitelistEntry(ctx context.Context, instanceName string, uuid string) error
 	SetWhitelistEntries(ctx context.Context, instanceName string, entries []WhitelistEntry) error
+	GetOperation(ctx context.Context, instanceName string) (*Operation, error)
+	UpdateOperation(ctx context.Context, instanceName string, op *Operation) error
 }
 
 type FirestoreDB struct {
@@ -252,5 +254,32 @@ func (db *FirestoreDB) SetWhitelistEntries(ctx context.Context, instanceName str
 		}
 	}
 	log.Printf("Successfully set %d whitelist entries for instance %s", len(entries), instanceName)
+	return nil
+}
+
+func (db *FirestoreDB) GetOperation(ctx context.Context, instanceName string) (*Operation, error) {
+	if db.client == nil {
+		return nil, errors.New("client is nil")
+	}
+	doc, err := db.client.Collection("instances").Doc(instanceName).Collection("data").Doc("operation").Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var operation Operation
+	err = doc.DataTo(&operation)
+	if err != nil {
+		return nil, err
+	}
+	return &operation, nil
+}
+
+func (db *FirestoreDB) UpdateOperation(ctx context.Context, instanceName string, op *Operation) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	_, err := db.client.Collection("instances").Doc(instanceName).Collection("data").Doc("operation").Set(ctx, op)
+	if err != nil {
+		return err
+	}
 	return nil
 }
