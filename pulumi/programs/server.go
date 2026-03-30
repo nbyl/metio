@@ -2,8 +2,10 @@ package programs
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/compute"
+	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/serviceaccount"
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/storage"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -71,6 +73,30 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create service account: %w", err)
+		}
+
+		iamRoles := []string{
+			"roles/storage.objectUser",
+			"roles/storage.objectCreator",
+			"roles/logging.logWriter",
+			"roles/monitoring.metricWriter",
+			"roles/cloudtrace.agent",
+			"roles/artifactregistry.reader",
+			"roles/datastore.user",
+			"roles/serviceusage.serviceUsageConsumer",
+			"roles/compute.instanceAdmin.v1",
+		}
+
+		for _, role := range iamRoles {
+			roleName := strings.ReplaceAll(role, "roles/", "")
+			_, err = projects.NewIAMMember(ctx, fmt.Sprintf("%s-%s", config.Name, roleName), &projects.IAMMemberArgs{
+				Project: pulumi.String(config.GCPProject),
+				Role:    pulumi.String(role),
+				Member:  sa.Email,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create IAM binding for %s: %w", role, err)
+			}
 		}
 
 		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-reader", config.Name), &storage.BucketIAMMemberArgs{
@@ -174,6 +200,29 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			return fmt.Errorf("failed to create instance: %w", err)
 		}
 
+		shutdownPolicy, err := compute.NewResourcePolicy(ctx, fmt.Sprintf("%s-daily-shutdown", config.Name), &compute.ResourcePolicyArgs{
+			Name:   pulumi.String(fmt.Sprintf("%s-daily-shutdown", config.Environment)),
+			Region: pulumi.String(config.Region),
+			InstanceSchedulePolicy: &compute.ResourcePolicyInstanceSchedulePolicyArgs{
+				TimeZone: pulumi.String("Europe/Berlin"),
+				VmStopSchedule: &compute.ResourcePolicyInstanceSchedulePolicyVmStopScheduleArgs{
+					Schedule: pulumi.String("0 21 * * *"),
+				},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create shutdown policy: %w", err)
+		}
+
+		_, err = compute.NewResourcePolicyAttachment(ctx, fmt.Sprintf("%s-shutdown-attachment", config.Name), &compute.ResourcePolicyAttachmentArgs{
+			Name:     shutdownPolicy.Name,
+			Instance: instance.Name,
+			Zone:     pulumi.String(config.Zone),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to attach shutdown policy: %w", err)
+		}
+
 		ctx.Export("instanceName", instance.Name)
 		ctx.Export("instanceIP", instance.NetworkInterfaces.ApplyT(func(nics []compute.InstanceNetworkInterface) string {
 			if len(nics) == 0 {
@@ -188,8 +237,10 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			}
 			return *nic.AccessConfigs[0].NatIp
 		}))
+		ctx.Export("zone", pulumi.String(config.Zone))
 		ctx.Export("diskName", disk.Name)
 		ctx.Export("serviceAccount", sa.Email)
+		ctx.Export("backupBucket", pulumi.String(config.BackupBucket))
 
 		return nil
 	}
