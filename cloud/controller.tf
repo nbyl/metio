@@ -160,6 +160,10 @@ resource "google_cloud_run_v2_service" "controller" {
           }
         }
       }
+      env {
+        name  = "PULUMI_STATE_BUCKET"
+        value = google_storage_bucket.pulumi-state.name
+      }
 
     }
   }
@@ -216,4 +220,10 @@ resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_k
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.firebase_api_key]
+}
+
+resource "google_project_iam_member" "sa_storage_object_admin" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.controller_service_account.email}"
 }
