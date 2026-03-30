@@ -1,9 +1,9 @@
 #cloud-config
-device_aliases: {minecraftData: /dev/disk/by-id/google-minecraft-data}
+device_aliases: {minecraft_data: /dev/disk/by-id/google-minecraft-data}
 fs_setup:
-  - {device: minecraftData, filesystem: ext4, label: fs1}
+  - {device: minecraft_data, filesystem: ext4, label: fs1}
 mounts:
-  - [minecraftData, /mnt/disks/minecraft/data, ext4, "defaults", "0", "2"]
+  - [minecraft_data, /mnt/disks/minecraft/data, ext4, "defaults", "0", "2"]
 users:
   - name: metio
     gecos: Metio User
@@ -12,6 +12,39 @@ users:
     groups: docker
     system: false
 write_files:
+  - path: /usr/local/bin/verify-docker-image.sh
+    permissions: '0755'
+    owner: root
+    content: |
+      #!/bin/bash
+      set -e
+      IMAGE="${1}"
+      MAX_RETRIES=3
+      
+      for i in $(seq 1 $MAX_RETRIES); do
+        echo "[$(date)] Attempt $i/$MAX_RETRIES: Pulling $IMAGE..."
+        if docker pull "$IMAGE"; then
+          if echo "$IMAGE" | grep -q "minecraft-server"; then
+            SIZE=$(docker run --rm --entrypoint stat "$IMAGE" -c%s /opt/java/openjdk/bin/java 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000 ]; then
+              echo "[$(date)] Java executable verified ($SIZE bytes)"
+              exit 0
+            fi
+            echo "[$(date)] Verification failed (size: $SIZE bytes), removing corrupted image..."
+            docker rmi -f "$IMAGE" 2>/dev/null || true
+          else
+            echo "[$(date)] Image pulled successfully"
+            exit 0
+          fi
+        fi
+        if [ $i -lt $MAX_RETRIES ]; then
+          echo "[$(date)] Waiting 10 seconds before retry..."
+          sleep 10
+        fi
+      done
+      echo "[$(date)] CRITICAL: Failed to pull valid image after $MAX_RETRIES attempts"
+      exit 1
+
   - path: /etc/systemd/system/minecraft.service
     permissions: '0644'
     content: |
@@ -27,26 +60,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/bin/bash -c '\
-        IMAGE="itzg/minecraft-server:stable-java21"; \
-        MAX_RETRIES=3; \
-        for i in $(seq 1 $MAX_RETRIES); do \
-          echo "[$(date)] Attempt $i/$MAX_RETRIES: Pulling $IMAGE..."; \
-          docker pull "$IMAGE" && \
-          SIZE=$(docker run --rm --entrypoint stat "$IMAGE" -c%%s /opt/java/openjdk/bin/java 2>/dev/null || echo 0) && \
-          if [ "$SIZE" -gt 1000 ]; then \
-            echo "[$(date)] Java executable verified ($SIZE bytes)"; \
-            exit 0; \
-          fi; \
-          echo "[$(date)] Verification failed (size: $SIZE bytes), removing corrupted image..."; \
-          docker rmi -f "$IMAGE" 2>/dev/null || true; \
-          if [ $i -lt $MAX_RETRIES ]; then \
-            echo "[$(date)] Waiting 10 seconds before retry..."; \
-            sleep 10; \
-          fi; \
-        done; \
-        echo "[$(date)] CRITICAL: Failed to pull valid image after $MAX_RETRIES attempts"; \
-        exit 1'
+      ExecStartPre=/usr/local/bin/verify-docker-image.sh itzg/minecraft-server:stable-java21
       ExecStart=/usr/bin/docker run --rm --name %n \
         -p 25565:25565 \
         -p 127.0.0.1:25575:25575 \
@@ -77,24 +91,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/bin/bash -c '\
-        IMAGE="itzg/mc-backup"; \
-        MAX_RETRIES=3; \
-        for i in $(seq 1 $MAX_RETRIES); do \
-          echo "[$(date)] Attempt $i/$MAX_RETRIES: Pulling $IMAGE..."; \
-          if docker pull "$IMAGE"; then \
-            echo "[$(date)] Image pulled successfully"; \
-            exit 0; \
-          fi; \
-          echo "[$(date)] Pull failed, removing image..."; \
-          docker rmi -f "$IMAGE" 2>/dev/null || true; \
-          if [ $i -lt $MAX_RETRIES ]; then \
-            echo "[$(date)] Waiting 10 seconds before retry..."; \
-            sleep 10; \
-          fi; \
-        done; \
-        echo "[$(date)] CRITICAL: Failed to pull image after $MAX_RETRIES attempts"; \
-        exit 1'
+      ExecStartPre=/usr/local/bin/verify-docker-image.sh itzg/mc-backup
       ExecStart=/usr/bin/docker run --rm --name %n \
         --network host \
         -e BACKUP_METHOD=restic \
@@ -127,7 +124,7 @@ write_files:
       ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${region}-docker.pkg.dev
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/usr/bin/docker pull ${machineAgentImage}
+      ExecStartPre=/usr/local/bin/verify-docker-image.sh ${machineAgentImage}
       ExecStart=/usr/bin/docker run --rm --name %n \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -e ENVIRONMENT=${environment} \
