@@ -57,16 +57,31 @@ func (m *MockDB) SetWhitelistEntries(ctx context.Context, instanceName string, e
 	return args.Error(0)
 }
 
-func (m *MockDB) GetOperation(ctx context.Context, instanceName string) (*db.Operation, error) {
-	args := m.Called(ctx, instanceName)
+func (m *MockDB) GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error) {
+	args := m.Called(ctx, serverID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*db.Operation), args.Error(1)
+	return args.Get(0).(*db.ProvisioningStatus), args.Error(1)
 }
 
-func (m *MockDB) UpdateOperation(ctx context.Context, instanceName string, op *db.Operation) error {
-	args := m.Called(ctx, instanceName, op)
+func (m *MockDB) UpdateProvisioningStatus(ctx context.Context, serverID string, status *db.ProvisioningStatus) error {
+	args := m.Called(ctx, serverID, status)
+	return args.Error(0)
+}
+
+func (m *MockDB) AddProvisioningStep(ctx context.Context, serverID string, step db.ProvisioningStep) error {
+	args := m.Called(ctx, serverID, step)
+	return args.Error(0)
+}
+
+func (m *MockDB) CompleteProvisioning(ctx context.Context, serverID string, outputs map[string]string) error {
+	args := m.Called(ctx, serverID, outputs)
+	return args.Error(0)
+}
+
+func (m *MockDB) FailProvisioning(ctx context.Context, serverID string, errMsg string) error {
+	args := m.Called(ctx, serverID, errMsg)
 	return args.Error(0)
 }
 
@@ -136,34 +151,45 @@ func TestIsRetryableError(t *testing.T) {
 	}
 }
 
-func TestOperationState(t *testing.T) {
-	assert.Equal(t, 0, int(db.OperationStatePending))
-	assert.Equal(t, 1, int(db.OperationStateRunning))
-	assert.Equal(t, 2, int(db.OperationStateCompleted))
-	assert.Equal(t, 3, int(db.OperationStateFailed))
-	assert.Equal(t, 4, int(db.OperationStateCancelled))
+func TestProvisioningState(t *testing.T) {
+	assert.Equal(t, 0, int(db.ProvisioningStatePending))
+	assert.Equal(t, 1, int(db.ProvisioningStateInProgress))
+	assert.Equal(t, 2, int(db.ProvisioningStateCompleted))
+	assert.Equal(t, 3, int(db.ProvisioningStateFailed))
 }
 
-func TestOperationStateString(t *testing.T) {
-	assert.Equal(t, "PENDING", db.OperationStatePending.String())
-	assert.Equal(t, "RUNNING", db.OperationStateRunning.String())
-	assert.Equal(t, "COMPLETED", db.OperationStateCompleted.String())
-	assert.Equal(t, "FAILED", db.OperationStateFailed.String())
-	assert.Equal(t, "CANCELLED", db.OperationStateCancelled.String())
-	assert.Equal(t, "UNKNOWN", db.OperationState(99).String())
+func TestProvisioningStateString(t *testing.T) {
+	assert.Equal(t, "PENDING", db.ProvisioningStatePending.String())
+	assert.Equal(t, "IN_PROGRESS", db.ProvisioningStateInProgress.String())
+	assert.Equal(t, "COMPLETED", db.ProvisioningStateCompleted.String())
+	assert.Equal(t, "FAILED", db.ProvisioningStateFailed.String())
+	assert.Equal(t, "UNKNOWN", db.ProvisioningState(99).String())
 }
 
-func TestOperationType(t *testing.T) {
-	assert.Equal(t, 0, int(db.OperationTypeCreate))
-	assert.Equal(t, 1, int(db.OperationTypeUpdate))
-	assert.Equal(t, 2, int(db.OperationTypeDelete))
+func TestProvisioningStateFirestoreValue(t *testing.T) {
+	assert.Equal(t, "pending", db.ProvisioningStatePending.FirestoreValue())
+	assert.Equal(t, "in_progress", db.ProvisioningStateInProgress.FirestoreValue())
+	assert.Equal(t, "completed", db.ProvisioningStateCompleted.FirestoreValue())
+	assert.Equal(t, "failed", db.ProvisioningStateFailed.FirestoreValue())
 }
 
-func TestOperationTypeString(t *testing.T) {
-	assert.Equal(t, "CREATE", db.OperationTypeCreate.String())
-	assert.Equal(t, "UPDATE", db.OperationTypeUpdate.String())
-	assert.Equal(t, "DELETE", db.OperationTypeDelete.String())
-	assert.Equal(t, "UNKNOWN", db.OperationType(99).String())
+func TestProvisioningOperation(t *testing.T) {
+	assert.Equal(t, 0, int(db.ProvisioningOperationCreate))
+	assert.Equal(t, 1, int(db.ProvisioningOperationUpdate))
+	assert.Equal(t, 2, int(db.ProvisioningOperationDestroy))
+}
+
+func TestProvisioningOperationString(t *testing.T) {
+	assert.Equal(t, "CREATE", db.ProvisioningOperationCreate.String())
+	assert.Equal(t, "UPDATE", db.ProvisioningOperationUpdate.String())
+	assert.Equal(t, "DESTROY", db.ProvisioningOperationDestroy.String())
+	assert.Equal(t, "UNKNOWN", db.ProvisioningOperation(99).String())
+}
+
+func TestProvisioningOperationFirestoreValue(t *testing.T) {
+	assert.Equal(t, "create", db.ProvisioningOperationCreate.FirestoreValue())
+	assert.Equal(t, "update", db.ProvisioningOperationUpdate.FirestoreValue())
+	assert.Equal(t, "destroy", db.ProvisioningOperationDestroy.FirestoreValue())
 }
 
 func TestNewProvisioningService(t *testing.T) {
@@ -183,18 +209,19 @@ func TestCompleteStep(t *testing.T) {
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB)
 
-	op := &db.Operation{
-		Steps: []db.OperationStep{
-			{Name: stepCreateServiceAccount, Description: "Creating service account...", Completed: false},
-			{Name: stepDeployInfrastructure, Description: "Deploying infrastructure...", Completed: false},
+	status := &db.ProvisioningStatus{
+		Steps: []db.ProvisioningStep{
+			{Name: stepCreateServiceAccount, Status: db.ProvisioningStatePending, Message: "Creating service account...", Timestamp: time.Now()},
+			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure...", Timestamp: time.Now()},
 		},
 	}
 
-	service.completeStep(op, "test-server", stepCreateServiceAccount)
+	service.completeStep(status, "test-server", stepCreateServiceAccount)
 
-	assert.True(t, op.Steps[0].Completed)
-	assert.False(t, op.Steps[1].Completed)
-	assert.Equal(t, stepCreateServiceAccount, op.CurrentStep)
+	assert.Equal(t, db.ProvisioningStateCompleted, status.Steps[0].Status)
+	assert.Equal(t, "Completed", status.Steps[0].Message)
+	assert.Equal(t, db.ProvisioningStatePending, status.Steps[1].Status)
+	assert.Equal(t, stepCreateServiceAccount, status.CurrentStep)
 }
 
 func TestCompleteStepNotFound(t *testing.T) {
@@ -202,16 +229,16 @@ func TestCompleteStepNotFound(t *testing.T) {
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB)
 
-	op := &db.Operation{
-		Steps: []db.OperationStep{
-			{Name: stepCreateServiceAccount, Description: "Creating service account...", Completed: false},
+	status := &db.ProvisioningStatus{
+		Steps: []db.ProvisioningStep{
+			{Name: stepCreateServiceAccount, Status: db.ProvisioningStatePending, Message: "Creating service account...", Timestamp: time.Now()},
 		},
 	}
 
-	service.completeStep(op, "test-server", "non_existent_step")
+	service.completeStep(status, "test-server", "non_existent_step")
 
-	assert.False(t, op.Steps[0].Completed)
-	assert.Equal(t, "non_existent_step", op.CurrentStep)
+	assert.Equal(t, db.ProvisioningStatePending, status.Steps[0].Status)
+	assert.Equal(t, "non_existent_step", status.CurrentStep)
 }
 
 func TestUpdateStep(t *testing.T) {
@@ -219,7 +246,6 @@ func TestUpdateStep(t *testing.T) {
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB)
 
-	// Should not panic
 	service.updateStep(context.Background(), "test-server", stepDeployInfrastructure, "Deploying infrastructure...")
 }
 
@@ -228,22 +254,23 @@ func TestHandleError(t *testing.T) {
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB)
 
-	mockDB.On("UpdateOperation", mock.Anything, "test-server", mock.AnythingOfType("*db.Operation")).Return(nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
-	op := &db.Operation{
-		Steps: []db.OperationStep{
-			{Name: stepDeployInfrastructure, Description: "Deploying infrastructure...", Completed: false},
+	status := &db.ProvisioningStatus{
+		Steps: []db.ProvisioningStep{
+			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure...", Timestamp: time.Now()},
 		},
 	}
 
 	testErr := errors.New("deployment failed")
-	err := service.handleError(op, context.Background(), "test-server", stepDeployInfrastructure, testErr)
+	err := service.handleError(status, context.Background(), "test-server", stepDeployInfrastructure, testErr)
 
 	assert.Equal(t, testErr, err)
-	assert.Equal(t, db.OperationStateFailed, op.State)
-	assert.Equal(t, stepDeployInfrastructure, op.CurrentStep)
-	assert.Equal(t, "deployment failed", op.Error)
-	assert.Equal(t, "deployment failed", op.Steps[0].Error)
+	assert.Equal(t, db.ProvisioningStateFailed, status.State)
+	assert.Equal(t, stepDeployInfrastructure, status.CurrentStep)
+	assert.Equal(t, "deployment failed", status.Error)
+	assert.Equal(t, db.ProvisioningStateFailed, status.Steps[0].Status)
+	assert.Equal(t, "deployment failed", status.Steps[0].Message)
 }
 
 func TestExecuteUpWithRetry_Success(t *testing.T) {
@@ -292,21 +319,65 @@ func TestExecuteUpWithRetry_RetryableError(t *testing.T) {
 	assert.Contains(t, err.Error(), "operation failed after 3 attempts")
 }
 
-func TestUpdateOperation(t *testing.T) {
+func TestUpdateStatus(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB)
 
-	mockDB.On("UpdateOperation", mock.Anything, "test-server", mock.AnythingOfType("*db.Operation")).Return(nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
-	op := &db.Operation{
-		ID:    "test-server-123",
-		Type:  db.OperationTypeCreate,
-		State: db.OperationStateRunning,
+	status := &db.ProvisioningStatus{
+		ID:        "test-server-123",
+		Operation: db.ProvisioningOperationCreate,
+		State:     db.ProvisioningStateInProgress,
 	}
 
-	service.updateOperation(context.Background(), "test-server", op)
+	service.updateStatus(context.Background(), "test-server", status)
 
 	mockDB.AssertExpectations(t)
-	assert.NotZero(t, op.UpdatedAt)
+}
+
+func TestProvisioningStepStruct(t *testing.T) {
+	now := time.Now()
+	step := db.ProvisioningStep{
+		Name:      "test_step",
+		Status:    db.ProvisioningStateInProgress,
+		Message:   "Processing...",
+		Timestamp: now,
+	}
+
+	assert.Equal(t, "test_step", step.Name)
+	assert.Equal(t, db.ProvisioningStateInProgress, step.Status)
+	assert.Equal(t, "Processing...", step.Message)
+	assert.Equal(t, now, step.Timestamp)
+}
+
+func TestProvisioningStatusStruct(t *testing.T) {
+	now := time.Now()
+	completedAt := now.Add(5 * time.Minute)
+
+	status := db.ProvisioningStatus{
+		ID:          "server-123",
+		Operation:   db.ProvisioningOperationCreate,
+		State:       db.ProvisioningStateCompleted,
+		StartedAt:   now,
+		CompletedAt: &completedAt,
+		CurrentStep: "deploy_infrastructure",
+		Steps: []db.ProvisioningStep{
+			{Name: "deploy_infrastructure", Status: db.ProvisioningStateCompleted, Message: "Completed", Timestamp: now},
+		},
+		Error: "",
+		Outputs: map[string]string{
+			"instanceName": "test-instance",
+			"instanceIP":   "10.0.0.1",
+		},
+	}
+
+	assert.Equal(t, "server-123", status.ID)
+	assert.Equal(t, db.ProvisioningOperationCreate, status.Operation)
+	assert.Equal(t, db.ProvisioningStateCompleted, status.State)
+	assert.Equal(t, "deploy_infrastructure", status.CurrentStep)
+	assert.Len(t, status.Steps, 1)
+	assert.NotNil(t, status.Outputs)
+	assert.Equal(t, "test-instance", status.Outputs["instanceName"])
 }

@@ -31,23 +31,23 @@ type CreateServerResponse struct {
 	OperationID string `json:"operationId,omitempty"`
 }
 
-type OperationStatusResponse struct {
+type ProvisioningStatusResponse struct {
 	ID          string            `json:"id"`
-	Type        string            `json:"type"`
+	Operation   string            `json:"operation"`
 	State       string            `json:"state"`
 	CurrentStep string            `json:"currentStep"`
 	Steps       []StepResponse    `json:"steps"`
 	Error       string            `json:"error,omitempty"`
-	CreatedAt   string            `json:"createdAt"`
-	UpdatedAt   string            `json:"updatedAt"`
+	StartedAt   string            `json:"startedAt"`
+	CompletedAt *string           `json:"completedAt,omitempty"`
 	Outputs     map[string]string `json:"outputs,omitempty"`
 }
 
 type StepResponse struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Completed   bool   `json:"completed"`
-	Error       string `json:"error,omitempty"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp,omitempty"`
 }
 
 func createServerHandler(w http.ResponseWriter, r *http.Request) {
@@ -212,34 +212,40 @@ func getOperationStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	operation, err := provisioningService.GetOperationStatus(ctx, serverID)
+	status, err := provisioningService.GetProvisioningStatus(ctx, serverID)
 	if err != nil {
-		log.Printf("Error getting operation status: %v", err)
-		writeJSONError(w, "operation not found", http.StatusNotFound)
+		log.Printf("Error getting provisioning status: %v", err)
+		writeJSONError(w, "provisioning status not found", http.StatusNotFound)
 		return
 	}
 
-	steps := make([]StepResponse, len(operation.Steps))
-	for i, step := range operation.Steps {
+	steps := make([]StepResponse, len(status.Steps))
+	for i, step := range status.Steps {
 		steps[i] = StepResponse{
-			Name:        step.Name,
-			Description: step.Description,
-			Completed:   step.Completed,
-			Error:       step.Error,
+			Name:      step.Name,
+			Status:    step.Status.String(),
+			Message:   step.Message,
+			Timestamp: step.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
 
+	var completedAt *string
+	if status.CompletedAt != nil {
+		formatted := status.CompletedAt.Format("2006-01-02T15:04:05Z07:00")
+		completedAt = &formatted
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(OperationStatusResponse{
-		ID:          operation.ID,
-		Type:        operation.Type.String(),
-		State:       operation.State.String(),
-		CurrentStep: operation.CurrentStep,
+	json.NewEncoder(w).Encode(ProvisioningStatusResponse{
+		ID:          status.ID,
+		Operation:   status.Operation.String(),
+		State:       status.State.String(),
+		CurrentStep: status.CurrentStep,
 		Steps:       steps,
-		Error:       operation.Error,
-		CreatedAt:   operation.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   operation.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		Outputs:     operation.Outputs,
+		Error:       status.Error,
+		StartedAt:   status.StartedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CompletedAt: completedAt,
+		Outputs:     status.Outputs,
 	})
 }
 

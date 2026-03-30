@@ -55,16 +55,31 @@ func (m *MockDB) SetWhitelistEntries(ctx context.Context, instanceName string, e
 	return args.Error(0)
 }
 
-func (m *MockDB) GetOperation(ctx context.Context, instanceName string) (*db.Operation, error) {
-	args := m.Called(ctx, instanceName)
+func (m *MockDB) GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error) {
+	args := m.Called(ctx, serverID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*db.Operation), args.Error(1)
+	return args.Get(0).(*db.ProvisioningStatus), args.Error(1)
 }
 
-func (m *MockDB) UpdateOperation(ctx context.Context, instanceName string, op *db.Operation) error {
-	args := m.Called(ctx, instanceName, op)
+func (m *MockDB) UpdateProvisioningStatus(ctx context.Context, serverID string, status *db.ProvisioningStatus) error {
+	args := m.Called(ctx, serverID, status)
+	return args.Error(0)
+}
+
+func (m *MockDB) AddProvisioningStep(ctx context.Context, serverID string, step db.ProvisioningStep) error {
+	args := m.Called(ctx, serverID, step)
+	return args.Error(0)
+}
+
+func (m *MockDB) CompleteProvisioning(ctx context.Context, serverID string, outputs map[string]string) error {
+	args := m.Called(ctx, serverID, outputs)
+	return args.Error(0)
+}
+
+func (m *MockDB) FailProvisioning(ctx context.Context, serverID string, errMsg string) error {
+	args := m.Called(ctx, serverID, errMsg)
 	return args.Error(0)
 }
 
