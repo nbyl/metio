@@ -1,12 +1,13 @@
 locals {
-  user_data = templatefile("scripts/cloud-config.yaml.tftpl", {
-    backup_bucket       = google_storage_bucket.minecraft-backups.name
-    minecraft_version   = var.minecraft_version
-    machine_agent_image = var.machine_agent_image
-    region              = var.region
-    environment         = var.environment
-    instance_name       = "${var.environment}-minecraft-server"
-    project_id          = var.project_id
+  user_data = templatefile("${path.module}/../templates/server_cloud_config.tftpl", {
+    region            = var.region
+    gcpProject        = var.project_id
+    environment       = var.environment
+    instanceName      = "${var.environment}-minecraft-server"
+    backupBucket      = google_storage_bucket.minecraft-backups.name
+    machineAgentImage = var.machine_agent_image
+    minecraftVersion  = var.minecraft_version
+    rconPassword      = var.rcon_password
   })
 }
 
