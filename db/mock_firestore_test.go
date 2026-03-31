@@ -92,3 +92,13 @@ func (m *MockDocumentSnapshot) DataTo(dst interface{}) error {
 	args := m.Called(dst)
 	return args.Error(0)
 }
+
+func (m *MockDocumentSnapshot) GetDocumentRef() DocumentRef {
+	args := m.Called()
+	return args.Get(0).(DocumentRef)
+}
+
+func (m *MockDocumentSnapshot) GetID() string {
+	args := m.Called()
+	return args.String(0)
+}
