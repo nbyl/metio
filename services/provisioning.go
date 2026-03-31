@@ -59,36 +59,36 @@ func NewProvisioningService(workspaceManager *pulumi.WorkspaceManager, dbConn db
 }
 
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	return s.queueOperation(ctx, serverID, db.OperationTypeCreate, func(opCtx context.Context, op *db.Operation) error {
-		op.Steps = []db.OperationStep{
-			{Name: stepCreateServiceAccount, Description: "Creating service account...", Completed: false},
-			{Name: stepCreateBackupBucket, Description: "Creating backup bucket...", Completed: false},
-			{Name: stepReserveStaticIP, Description: "Reserving static IP...", Completed: false},
-			{Name: stepCreateDisk, Description: "Creating disk...", Completed: false},
-			{Name: stepCreateFirewall, Description: "Creating firewall rules...", Completed: false},
-			{Name: stepCreateInstance, Description: "Creating VM instance...", Completed: false},
-			{Name: stepDeployInfrastructure, Description: "Deploying infrastructure with Pulumi...", Completed: false},
+	return s.queueOperation(ctx, serverID, db.ProvisioningOperationCreate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		status.Steps = []db.ProvisioningStep{
+			{Name: stepCreateServiceAccount, Status: db.ProvisioningStatePending, Message: "Creating service account...", Timestamp: time.Now()},
+			{Name: stepCreateBackupBucket, Status: db.ProvisioningStatePending, Message: "Creating backup bucket...", Timestamp: time.Now()},
+			{Name: stepReserveStaticIP, Status: db.ProvisioningStatePending, Message: "Reserving static IP...", Timestamp: time.Now()},
+			{Name: stepCreateDisk, Status: db.ProvisioningStatePending, Message: "Creating disk...", Timestamp: time.Now()},
+			{Name: stepCreateFirewall, Status: db.ProvisioningStatePending, Message: "Creating firewall rules...", Timestamp: time.Now()},
+			{Name: stepCreateInstance, Status: db.ProvisioningStatePending, Message: "Creating VM instance...", Timestamp: time.Now()},
+			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure with Pulumi...", Timestamp: time.Now()},
 		}
-		s.updateOperation(opCtx, serverID, op)
+		s.updateStatus(opCtx, serverID, status)
 
 		config.Name = serverID
 
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, stepUpsertStack, err)
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
-		s.completeStep(op, serverID, stepCreateServiceAccount)
+		s.completeStep(status, serverID, stepCreateServiceAccount)
 
 		s.updateStep(opCtx, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
 		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
 			return s.workspaceManager.UpStack(opCtx, stack)
 		})
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, stepDeployInfrastructure, err)
+			return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
 		}
 
-		s.completeStep(op, serverID, stepDeployInfrastructure)
+		s.completeStep(status, serverID, stepDeployInfrastructure)
 
 		outputs := make(map[string]string)
 		for key, value := range result.Outputs {
@@ -97,40 +97,40 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 			}
 		}
 
-		op.Outputs = outputs
-		op.State = db.OperationStateCompleted
-		s.updateOperation(opCtx, serverID, op)
+		status.Outputs = outputs
+		status.State = db.ProvisioningStateCompleted
+		s.updateStatus(opCtx, serverID, status)
 
 		return nil
 	})
 }
 
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	return s.queueOperation(ctx, serverID, db.OperationTypeUpdate, func(opCtx context.Context, op *db.Operation) error {
-		op.Steps = []db.OperationStep{
-			{Name: stepRefreshStack, Description: "Refreshing Pulumi stack...", Completed: false},
-			{Name: stepUpdateInfrastructure, Description: "Updating infrastructure...", Completed: false},
+	return s.queueOperation(ctx, serverID, db.ProvisioningOperationUpdate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		status.Steps = []db.ProvisioningStep{
+			{Name: stepRefreshStack, Status: db.ProvisioningStatePending, Message: "Refreshing Pulumi stack...", Timestamp: time.Now()},
+			{Name: stepUpdateInfrastructure, Status: db.ProvisioningStatePending, Message: "Updating infrastructure...", Timestamp: time.Now()},
 		}
-		s.updateOperation(opCtx, serverID, op)
+		s.updateStatus(opCtx, serverID, status)
 
 		config.Name = serverID
 
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, stepUpsertStack, err)
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
-		s.completeStep(op, serverID, stepRefreshStack)
+		s.completeStep(status, serverID, stepRefreshStack)
 
 		s.updateStep(opCtx, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
 		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
 			return s.workspaceManager.UpStack(opCtx, stack)
 		})
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, stepUpdateInfrastructure, err)
+			return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
 		}
 
-		s.completeStep(op, serverID, stepUpdateInfrastructure)
+		s.completeStep(status, serverID, stepUpdateInfrastructure)
 
 		outputs := make(map[string]string)
 		for key, value := range result.Outputs {
@@ -139,41 +139,41 @@ func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string,
 			}
 		}
 
-		op.Outputs = outputs
-		op.State = db.OperationStateCompleted
-		s.updateOperation(opCtx, serverID, op)
+		status.Outputs = outputs
+		status.State = db.ProvisioningStateCompleted
+		s.updateStatus(opCtx, serverID, status)
 
 		return nil
 	})
 }
 
 func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
-	return s.queueOperation(ctx, serverID, db.OperationTypeDelete, func(opCtx context.Context, op *db.Operation) error {
-		op.Steps = []db.OperationStep{
-			{Name: stepDestroyStack, Description: "Destroying Pulumi stack...", Completed: false},
-			{Name: stepCleanupResources, Description: "Cleaning up resources...", Completed: false},
+	return s.queueOperation(ctx, serverID, db.ProvisioningOperationDestroy, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		status.Steps = []db.ProvisioningStep{
+			{Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now()},
+			{Name: stepCleanupResources, Status: db.ProvisioningStatePending, Message: "Cleaning up resources...", Timestamp: time.Now()},
 		}
-		s.updateOperation(opCtx, serverID, op)
+		s.updateStatus(opCtx, serverID, status)
 
 		s.updateStep(opCtx, serverID, stepDestroyStack, "Destroying Pulumi stack...")
 		err := s.executeWithRetry(opCtx, func() error {
 			return s.workspaceManager.DestroyStack(opCtx, serverID)
 		})
 		if err != nil {
-			return s.handleError(op, opCtx, serverID, stepDestroyStack, err)
+			return s.handleError(status, opCtx, serverID, stepDestroyStack, err)
 		}
 
-		s.completeStep(op, serverID, stepDestroyStack)
-		s.completeStep(op, serverID, stepCleanupResources)
+		s.completeStep(status, serverID, stepDestroyStack)
+		s.completeStep(status, serverID, stepCleanupResources)
 
-		op.State = db.OperationStateCompleted
-		s.updateOperation(opCtx, serverID, op)
+		status.State = db.ProvisioningStateCompleted
+		s.updateStatus(opCtx, serverID, status)
 
 		return nil
 	})
 }
 
-func (s *ProvisioningService) queueOperation(ctx context.Context, serverID string, opType db.OperationType, fn func(context.Context, *db.Operation) error) error {
+func (s *ProvisioningService) queueOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, fn func(context.Context, *db.ProvisioningStatus) error) error {
 	s.mu.Lock()
 
 	select {
@@ -200,24 +200,24 @@ func (s *ProvisioningService) queueOperation(ctx context.Context, serverID strin
 			s.mu.Unlock()
 		}()
 
-		op := &db.Operation{
-			ID:          fmt.Sprintf("%s-%d", serverID, time.Now().Unix()),
-			Type:        opType,
-			State:       db.OperationStateRunning,
+		now := time.Now()
+		status := &db.ProvisioningStatus{
+			ID:          fmt.Sprintf("%s-%d", serverID, now.Unix()),
+			Operation:   opType,
+			State:       db.ProvisioningStateInProgress,
+			StartedAt:   now,
 			CurrentStep: "initializing",
-			Steps:       []db.OperationStep{},
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+			Steps:       []db.ProvisioningStep{},
 		}
 
-		if err := fn(opCtx, op); err != nil {
+		if err := fn(opCtx, status); err != nil {
 			if opCtx.Err() == context.Canceled {
-				op.State = db.OperationStateCancelled
+				status.State = db.ProvisioningStateFailed
 			} else {
-				op.State = db.OperationStateFailed
-				op.Error = err.Error()
+				status.State = db.ProvisioningStateFailed
+				status.Error = err.Error()
 			}
-			s.updateOperation(opCtx, serverID, op)
+			s.updateStatus(opCtx, serverID, status)
 		}
 	}()
 
@@ -239,8 +239,8 @@ func (s *ProvisioningService) CancelOperation(ctx context.Context, serverID stri
 	return nil
 }
 
-func (s *ProvisioningService) GetOperationStatus(ctx context.Context, serverID string) (*db.Operation, error) {
-	return s.db.GetOperation(ctx, serverID)
+func (s *ProvisioningService) GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error) {
+	return s.db.GetProvisioningStatus(ctx, serverID)
 }
 
 func (s *ProvisioningService) executeWithRetry(ctx context.Context, fn func() error) error {
@@ -305,39 +305,44 @@ func (s *ProvisioningService) executeUpWithRetry(ctx context.Context, fn func() 
 	return auto.UpResult{}, fmt.Errorf(errMsgRetryExhausted, s.retryAttempts, lastErr)
 }
 
-func (s *ProvisioningService) updateOperation(ctx context.Context, serverID string, op *db.Operation) {
-	op.UpdatedAt = time.Now()
-	if err := s.db.UpdateOperation(ctx, serverID, op); err != nil {
-		log.Printf("Failed to update operation: %v", err)
+func (s *ProvisioningService) updateStatus(ctx context.Context, serverID string, status *db.ProvisioningStatus) {
+	if err := s.db.UpdateProvisioningStatus(ctx, serverID, status); err != nil {
+		log.Printf("Failed to update provisioning status: %v", err)
 	}
 }
 
-func (s *ProvisioningService) updateStep(ctx context.Context, serverID, stepName, description string) {
-	log.Printf("[%s] Step: %s - %s", serverID, stepName, description)
+func (s *ProvisioningService) updateStep(ctx context.Context, serverID, stepName, message string) {
+	log.Printf("[%s] Step: %s - %s", serverID, stepName, message)
 }
 
-func (s *ProvisioningService) completeStep(op *db.Operation, serverID, stepName string) {
-	for i, step := range op.Steps {
+func (s *ProvisioningService) completeStep(status *db.ProvisioningStatus, serverID, stepName string) {
+	now := time.Now()
+	for i, step := range status.Steps {
 		if step.Name == stepName {
-			op.Steps[i].Completed = true
+			status.Steps[i].Status = db.ProvisioningStateCompleted
+			status.Steps[i].Message = "Completed"
+			status.Steps[i].Timestamp = now
 			break
 		}
 	}
-	op.CurrentStep = stepName
+	status.CurrentStep = stepName
 	log.Printf("[%s] Completed step: %s", serverID, stepName)
 }
 
-func (s *ProvisioningService) handleError(op *db.Operation, ctx context.Context, serverID, stepName string, err error) error {
-	for i, step := range op.Steps {
+func (s *ProvisioningService) handleError(status *db.ProvisioningStatus, ctx context.Context, serverID, stepName string, err error) error {
+	now := time.Now()
+	for i, step := range status.Steps {
 		if step.Name == stepName {
-			op.Steps[i].Error = err.Error()
+			status.Steps[i].Status = db.ProvisioningStateFailed
+			status.Steps[i].Message = err.Error()
+			status.Steps[i].Timestamp = now
 			break
 		}
 	}
-	op.Error = err.Error()
-	op.State = db.OperationStateFailed
-	op.CurrentStep = stepName
-	s.updateOperation(ctx, serverID, op)
+	status.Error = err.Error()
+	status.State = db.ProvisioningStateFailed
+	status.CurrentStep = stepName
+	s.updateStatus(ctx, serverID, status)
 	return err
 }
 

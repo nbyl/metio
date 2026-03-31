@@ -102,30 +102,30 @@ func TestCreateServerResponseStruct(t *testing.T) {
 	}
 }
 
-func TestOperationStatusResponseStruct(t *testing.T) {
-	now := time.Now()
-	nowStr := now.Format("2006-01-02T15:04:05Z07:00")
+func TestProvisioningStatusResponseStruct(t *testing.T) {
+	nowStr := time.Now().Format("2006-01-02T15:04:05Z07:00")
 
-	response := OperationStatusResponse{
+	response := ProvisioningStatusResponse{
 		ID:          "server-123-1234567890",
-		Type:        "CREATE",
-		State:       "RUNNING",
+		Operation:   "CREATE",
+		State:       "IN_PROGRESS",
 		CurrentStep: "deploy_infrastructure",
 		Steps: []StepResponse{
 			{
-				Name:        "create_service_account",
-				Description: "Creating service account...",
-				Completed:   true,
+				Name:      "create_service_account",
+				Status:    "COMPLETED",
+				Message:   "Completed",
+				Timestamp: nowStr,
 			},
 			{
-				Name:        "deploy_infrastructure",
-				Description: "Deploying infrastructure...",
-				Completed:   false,
+				Name:      "deploy_infrastructure",
+				Status:    "IN_PROGRESS",
+				Message:   "Deploying infrastructure...",
+				Timestamp: nowStr,
 			},
 		},
 		Error:     "",
-		CreatedAt: nowStr,
-		UpdatedAt: nowStr,
+		StartedAt: nowStr,
 		Outputs: map[string]string{
 			"instanceName": "my-instance",
 			"instanceIP":   "34.1.2.3",
@@ -140,8 +140,8 @@ func TestOperationStatusResponseStruct(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "server-123-1234567890", parsed["id"])
-	assert.Equal(t, "CREATE", parsed["type"])
-	assert.Equal(t, "RUNNING", parsed["state"])
+	assert.Equal(t, "CREATE", parsed["operation"])
+	assert.Equal(t, "IN_PROGRESS", parsed["state"])
 	assert.Equal(t, "deploy_infrastructure", parsed["currentStep"])
 
 	steps := parsed["steps"].([]interface{})
@@ -149,13 +149,13 @@ func TestOperationStatusResponseStruct(t *testing.T) {
 
 	step1 := steps[0].(map[string]interface{})
 	assert.Equal(t, "create_service_account", step1["name"])
-	assert.Equal(t, "Creating service account...", step1["description"])
-	assert.Equal(t, true, step1["completed"])
+	assert.Equal(t, "COMPLETED", step1["status"])
+	assert.Equal(t, "Completed", step1["message"])
 
 	step2 := steps[1].(map[string]interface{})
 	assert.Equal(t, "deploy_infrastructure", step2["name"])
-	assert.Equal(t, "Deploying infrastructure...", step2["description"])
-	assert.Equal(t, false, step2["completed"])
+	assert.Equal(t, "IN_PROGRESS", step2["status"])
+	assert.Equal(t, "Deploying infrastructure...", step2["message"])
 
 	outputs := parsed["outputs"].(map[string]interface{})
 	assert.Equal(t, "my-instance", outputs["instanceName"])
@@ -171,31 +171,31 @@ func TestStepResponseStruct(t *testing.T) {
 		{
 			name: "Completed step",
 			step: StepResponse{
-				Name:        "create_disk",
-				Description: "Creating disk...",
-				Completed:   true,
-				Error:       "",
+				Name:      "create_disk",
+				Status:    "COMPLETED",
+				Message:   "Completed",
+				Timestamp: "2026-03-30T10:00:00Z",
 			},
 			expectedJSON: map[string]interface{}{
-				"name":        "create_disk",
-				"description": "Creating disk...",
-				"completed":   true,
-				"error":       nil,
+				"name":      "create_disk",
+				"status":    "COMPLETED",
+				"message":   "Completed",
+				"timestamp": "2026-03-30T10:00:00Z",
 			},
 		},
 		{
 			name: "Failed step",
 			step: StepResponse{
-				Name:        "deploy_infrastructure",
-				Description: "Deploying infrastructure...",
-				Completed:   false,
-				Error:       "insufficient permissions",
+				Name:      "deploy_infrastructure",
+				Status:    "FAILED",
+				Message:   "insufficient permissions",
+				Timestamp: "2026-03-30T10:00:00Z",
 			},
 			expectedJSON: map[string]interface{}{
-				"name":        "deploy_infrastructure",
-				"description": "Deploying infrastructure...",
-				"completed":   false,
-				"error":       "insufficient permissions",
+				"name":      "deploy_infrastructure",
+				"status":    "FAILED",
+				"message":   "insufficient permissions",
+				"timestamp": "2026-03-30T10:00:00Z",
 			},
 		},
 	}
@@ -210,27 +210,21 @@ func TestStepResponseStruct(t *testing.T) {
 			assert.NoError(t, err)
 
 			assert.Equal(t, tt.expectedJSON["name"], parsed["name"])
-			assert.Equal(t, tt.expectedJSON["description"], parsed["description"])
-			assert.Equal(t, tt.expectedJSON["completed"], parsed["completed"])
-			if errStr, ok := tt.expectedJSON["error"].(string); ok {
-				assert.Equal(t, errStr, parsed["error"])
-			} else {
-				assert.Nil(t, parsed["error"])
-			}
+			assert.Equal(t, tt.expectedJSON["status"], parsed["status"])
+			assert.Equal(t, tt.expectedJSON["message"], parsed["message"])
 		})
 	}
 }
 
-func TestOperationStateSerialization(t *testing.T) {
+func TestProvisioningStateSerialization(t *testing.T) {
 	states := []struct {
-		state    db.OperationState
+		state    db.ProvisioningState
 		expected string
 	}{
-		{db.OperationStatePending, "PENDING"},
-		{db.OperationStateRunning, "RUNNING"},
-		{db.OperationStateCompleted, "COMPLETED"},
-		{db.OperationStateFailed, "FAILED"},
-		{db.OperationStateCancelled, "CANCELLED"},
+		{db.ProvisioningStatePending, "PENDING"},
+		{db.ProvisioningStateInProgress, "IN_PROGRESS"},
+		{db.ProvisioningStateCompleted, "COMPLETED"},
+		{db.ProvisioningStateFailed, "FAILED"},
 	}
 
 	for _, tt := range states {
@@ -240,40 +234,42 @@ func TestOperationStateSerialization(t *testing.T) {
 	}
 }
 
-func TestOperationTypeSerialization(t *testing.T) {
-	types := []struct {
-		opType   db.OperationType
+func TestProvisioningOperationSerialization(t *testing.T) {
+	operations := []struct {
+		opType   db.ProvisioningOperation
 		expected string
 	}{
-		{db.OperationTypeCreate, "CREATE"},
-		{db.OperationTypeUpdate, "UPDATE"},
-		{db.OperationTypeDelete, "DELETE"},
+		{db.ProvisioningOperationCreate, "CREATE"},
+		{db.ProvisioningOperationUpdate, "UPDATE"},
+		{db.ProvisioningOperationDestroy, "DESTROY"},
 	}
 
-	for _, tt := range types {
+	for _, tt := range operations {
 		t.Run(tt.expected, func(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.opType.String())
 		})
 	}
 }
 
-func TestOperationStatusResponseWithError(t *testing.T) {
-	response := OperationStatusResponse{
+func TestProvisioningStatusResponseWithError(t *testing.T) {
+	completedAt := "2026-03-30T10:05:00Z"
+
+	response := ProvisioningStatusResponse{
 		ID:          "server-123-1234567890",
-		Type:        "CREATE",
+		Operation:   "CREATE",
 		State:       "FAILED",
 		CurrentStep: "deploy_infrastructure",
 		Steps: []StepResponse{
 			{
-				Name:        "deploy_infrastructure",
-				Description: "Deploying infrastructure...",
-				Completed:   false,
-				Error:       "deployment failed",
+				Name:      "deploy_infrastructure",
+				Status:    "FAILED",
+				Message:   "deployment failed",
+				Timestamp: "2026-03-30T10:00:00Z",
 			},
 		},
-		Error:     "deployment failed",
-		CreatedAt: "2026-03-30T10:00:00Z",
-		UpdatedAt: "2026-03-30T10:05:00Z",
+		Error:       "deployment failed",
+		StartedAt:   "2026-03-30T10:00:00Z",
+		CompletedAt: &completedAt,
 	}
 
 	data, err := json.Marshal(response)
@@ -285,10 +281,12 @@ func TestOperationStatusResponseWithError(t *testing.T) {
 
 	assert.Equal(t, "FAILED", parsed["state"])
 	assert.Equal(t, "deployment failed", parsed["error"])
+	assert.NotNil(t, parsed["completedAt"])
 
 	steps := parsed["steps"].([]interface{})
 	step := steps[0].(map[string]interface{})
-	assert.Equal(t, "deployment failed", step["error"])
+	assert.Equal(t, "FAILED", step["status"])
+	assert.Equal(t, "deployment failed", step["message"])
 }
 
 func TestCreateServerResponse_JSONOmitsEmptyFields(t *testing.T) {
@@ -305,15 +303,14 @@ func TestCreateServerResponse_JSONOmitsEmptyFields(t *testing.T) {
 	assert.NotContains(t, jsonStr, `"operationId":`)
 }
 
-func TestOperationStatusResponse_WithNilOutputs(t *testing.T) {
-	response := OperationStatusResponse{
+func TestProvisioningStatusResponse_WithNilOutputs(t *testing.T) {
+	response := ProvisioningStatusResponse{
 		ID:          "server-123",
-		Type:        "DELETE",
+		Operation:   "DELETE",
 		State:       "COMPLETED",
 		CurrentStep: "cleanup_resources",
 		Steps:       []StepResponse{},
-		CreatedAt:   "2026-03-30T10:00:00Z",
-		UpdatedAt:   "2026-03-30T10:05:00Z",
+		StartedAt:   "2026-03-30T10:00:00Z",
 		Outputs:     nil,
 	}
 
