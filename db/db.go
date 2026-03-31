@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"cloud.google.com/go/firestore"
 )
@@ -17,8 +18,11 @@ type DB interface {
 	AddWhitelistEntry(ctx context.Context, instanceName string, entry WhitelistEntry) error
 	RemoveWhitelistEntry(ctx context.Context, instanceName string, uuid string) error
 	SetWhitelistEntries(ctx context.Context, instanceName string, entries []WhitelistEntry) error
-	GetOperation(ctx context.Context, instanceName string) (*Operation, error)
-	UpdateOperation(ctx context.Context, instanceName string, op *Operation) error
+	GetProvisioningStatus(ctx context.Context, serverID string) (*ProvisioningStatus, error)
+	UpdateProvisioningStatus(ctx context.Context, serverID string, status *ProvisioningStatus) error
+	AddProvisioningStep(ctx context.Context, serverID string, step ProvisioningStep) error
+	CompleteProvisioning(ctx context.Context, serverID string, outputs map[string]string) error
+	FailProvisioning(ctx context.Context, serverID string, errMsg string) error
 }
 
 type FirestoreDB struct {
@@ -257,29 +261,72 @@ func (db *FirestoreDB) SetWhitelistEntries(ctx context.Context, instanceName str
 	return nil
 }
 
-func (db *FirestoreDB) GetOperation(ctx context.Context, instanceName string) (*Operation, error) {
+func (db *FirestoreDB) GetProvisioningStatus(ctx context.Context, serverID string) (*ProvisioningStatus, error) {
 	if db.client == nil {
 		return nil, errors.New("client is nil")
 	}
-	doc, err := db.client.Collection("instances").Doc(instanceName).Collection("data").Doc("operation").Get(ctx)
+	doc, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("provisioning").Get(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var operation Operation
-	err = doc.DataTo(&operation)
+	var status ProvisioningStatus
+	err = doc.DataTo(&status)
 	if err != nil {
 		return nil, err
 	}
-	return &operation, nil
+	return &status, nil
 }
 
-func (db *FirestoreDB) UpdateOperation(ctx context.Context, instanceName string, op *Operation) error {
+func (db *FirestoreDB) UpdateProvisioningStatus(ctx context.Context, serverID string, status *ProvisioningStatus) error {
 	if db.client == nil {
 		return errors.New("client is nil")
 	}
-	_, err := db.client.Collection("instances").Doc(instanceName).Collection("data").Doc("operation").Set(ctx, op)
+	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("provisioning").Set(ctx, status)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (db *FirestoreDB) AddProvisioningStep(ctx context.Context, serverID string, step ProvisioningStep) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	status, err := db.GetProvisioningStatus(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	status.Steps = append(status.Steps, step)
+	status.CurrentStep = step.Name
+	return db.UpdateProvisioningStatus(ctx, serverID, status)
+}
+
+func (db *FirestoreDB) CompleteProvisioning(ctx context.Context, serverID string, outputs map[string]string) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	status, err := db.GetProvisioningStatus(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	status.State = ProvisioningStateCompleted
+	status.CompletedAt = &now
+	status.Outputs = outputs
+	return db.UpdateProvisioningStatus(ctx, serverID, status)
+}
+
+func (db *FirestoreDB) FailProvisioning(ctx context.Context, serverID string, errMsg string) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	status, err := db.GetProvisioningStatus(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	status.State = ProvisioningStateFailed
+	status.CompletedAt = &now
+	status.Error = errMsg
+	return db.UpdateProvisioningStatus(ctx, serverID, status)
 }
