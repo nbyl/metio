@@ -20,6 +20,11 @@ service cloud.firestore {
       allow read: if request.auth != null;
     }
 
+    // Allow authenticated users to read and write server config
+    match /servers/{serverId}/data/config {
+      allow read, write: if request.auth != null;
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;
