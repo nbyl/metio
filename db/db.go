@@ -23,6 +23,11 @@ type DB interface {
 	AddProvisioningStep(ctx context.Context, serverID string, step ProvisioningStep) error
 	CompleteProvisioning(ctx context.Context, serverID string, outputs map[string]string) error
 	FailProvisioning(ctx context.Context, serverID string, errMsg string) error
+	CreateServerConfig(ctx context.Context, serverID string, config *ServerConfig) error
+	GetServerConfig(ctx context.Context, serverID string) (*ServerConfig, error)
+	UpdateServerConfig(ctx context.Context, serverID string, config *ServerConfig) error
+	DeleteServerConfig(ctx context.Context, serverID string) error
+	ListServerConfigs(ctx context.Context) ([]*ServerConfig, error)
 }
 
 type FirestoreDB struct {
@@ -48,6 +53,8 @@ type DocumentRef interface {
 
 type DocumentSnapshot interface {
 	DataTo(dst interface{}) error
+	GetDocumentRef() DocumentRef
+	GetID() string
 }
 
 type DocumentIterator interface {
@@ -106,6 +113,14 @@ type DocumentSnapshotAdapter struct {
 
 func (a *DocumentSnapshotAdapter) DataTo(dst interface{}) error {
 	return a.snap.DataTo(dst)
+}
+
+func (a *DocumentSnapshotAdapter) GetDocumentRef() DocumentRef {
+	return &DocumentRefAdapter{ref: a.snap.Ref}
+}
+
+func (a *DocumentSnapshotAdapter) GetID() string {
+	return a.snap.Ref.ID
 }
 
 type DocumentIteratorAdapter struct {
@@ -329,4 +344,81 @@ func (db *FirestoreDB) FailProvisioning(ctx context.Context, serverID string, er
 	status.CompletedAt = &now
 	status.Error = errMsg
 	return db.UpdateProvisioningStatus(ctx, serverID, status)
+}
+
+func (db *FirestoreDB) CreateServerConfig(ctx context.Context, serverID string, config *ServerConfig) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Set(ctx, config)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *FirestoreDB) GetServerConfig(ctx context.Context, serverID string) (*ServerConfig, error) {
+	if db.client == nil {
+		return nil, errors.New("client is nil")
+	}
+	doc, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var config ServerConfig
+	err = doc.DataTo(&config)
+	if err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
+
+func (db *FirestoreDB) UpdateServerConfig(ctx context.Context, serverID string, config *ServerConfig) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Set(ctx, config)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *FirestoreDB) DeleteServerConfig(ctx context.Context, serverID string) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Delete(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *FirestoreDB) ListServerConfigs(ctx context.Context) ([]*ServerConfig, error) {
+	if db.client == nil {
+		return nil, errors.New("client is nil")
+	}
+	iter := db.client.Collection("servers").Documents(ctx)
+	defer iter.Stop()
+
+	var configs []*ServerConfig
+	for {
+		doc, err := iter.Next()
+		if err != nil {
+			break
+		}
+		configDoc, err := doc.GetDocumentRef().Collection("data").Doc("config").Get(ctx)
+		if err != nil {
+			continue
+		}
+		var config ServerConfig
+		if err := configDoc.DataTo(&config); err != nil {
+			log.Printf("Error parsing server config: %v", err)
+			continue
+		}
+		config.ID = doc.GetID()
+		configs = append(configs, &config)
+	}
+	return configs, nil
 }
