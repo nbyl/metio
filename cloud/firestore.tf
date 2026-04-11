@@ -49,15 +49,15 @@ resource "google_firestore_index" "provisioning_state_started_at" {
   project = var.project_id
   collection = "servers"
   fields {
-    name = "data"
+    field_path = "data"
     order = "ASCENDING"
   }
   fields {
-    name = "provisioning.state"
+    field_path = "provisioning.state"
     order = "ASCENDING"
   }
   fields {
-    name = "provisioning.started_at"
+    field_path = "provisioning.started_at"
     order = "DESCENDING"
   }
 }
@@ -66,11 +66,11 @@ resource "google_firestore_index" "provisioning_state" {
   project = var.project_id
   collection = "servers"
   fields {
-    name = "data"
+    field_path = "data"
     order = "ASCENDING"
   }
   fields {
-    name = "provisioning.state"
+    field_path = "provisioning.state"
     order = "ASCENDING"
   }
 }
