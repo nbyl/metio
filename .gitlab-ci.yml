@@ -35,7 +35,7 @@ frontend-test:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
-go-test:
+backend-test:
   stage: validate
   image: golang:1.25-alpine
   cache:
@@ -46,6 +46,8 @@ go-test:
         - $GOPATH/pkg/mod
       policy: pull-push
   script:
+    - cd frontend && npm ci && npm run build
+    - cd ..
     - go mod tidy
     - go mod verify
     - go fmt ./...
