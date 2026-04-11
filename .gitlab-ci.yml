@@ -45,6 +45,8 @@ backend-test:
       paths:
         - $GOPATH/pkg/mod
       policy: pull-push
+  before_script:
+    - apk add --no-cache nodejs npm
   script:
     - cd frontend && npm ci && npm run build
     - cd ..
@@ -99,6 +101,7 @@ include:
       auto_define_backend: true
       state_name: $CI_COMMIT_REF_SLUG
       enable_id_tokens: true
+      stage_validate: tofu-validate
       stage_build: plan
       apply_rules:
          - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
