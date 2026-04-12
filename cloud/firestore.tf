@@ -47,7 +47,7 @@ resource "google_firebaserules_release" "firestore" {
 
 resource "google_firestore_index" "provisioning_state_started_at" {
   project    = var.project_id
-  database   = google_firestore_database.matio_firestore.name
+  database   = google_firestore_database.metio_firestore.name
   collection = "servers"
   fields {
     field_path = "data"
@@ -65,7 +65,7 @@ resource "google_firestore_index" "provisioning_state_started_at" {
 
 resource "google_firestore_index" "provisioning_state" {
   project    = var.project_id
-  database   = google_firestore_database.matio_firestore.name
+  database   = google_firestore_database.metio_firestore.name
   collection = "servers"
   fields {
     field_path = "data"
