@@ -100,7 +100,7 @@ include:
       root_dir: cloud/
       auto_define_backend: true
       state_name: $CI_COMMIT_REF_SLUG
-       enable_id_tokens: true
+      enable_id_tokens: true
       stage_build: plan
       apply_rules:
          - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -116,7 +116,7 @@ include:
           when: never
         - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
           when: manual
-".gitlab-tofu:id_tokens":
+.gitlab-tofu:id_tokens:
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
