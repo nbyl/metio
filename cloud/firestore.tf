@@ -46,31 +46,33 @@ resource "google_firebaserules_release" "firestore" {
 # Firestore Composite Indexes for Provisioning Operations
 
 resource "google_firestore_index" "provisioning_state_started_at" {
-  project = var.project_id
+  project    = var.project_id
+  database   = google_firestore_database.matio_firestore.name
   collection = "servers"
   fields {
     field_path = "data"
-    order = "ASCENDING"
+    order      = "ASCENDING"
   }
   fields {
     field_path = "provisioning.state"
-    order = "ASCENDING"
+    order      = "ASCENDING"
   }
   fields {
     field_path = "provisioning.started_at"
-    order = "DESCENDING"
+    order      = "DESCENDING"
   }
 }
 
 resource "google_firestore_index" "provisioning_state" {
-  project = var.project_id
+  project    = var.project_id
+  database   = google_firestore_database.matio_firestore.name
   collection = "servers"
   fields {
     field_path = "data"
-    order = "ASCENDING"
+    order      = "ASCENDING"
   }
   fields {
     field_path = "provisioning.state"
-    order = "ASCENDING"
+    order      = "ASCENDING"
   }
 }
