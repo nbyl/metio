@@ -205,6 +205,25 @@ make deploy-infrastructure
 
 Follow the [GitLab Google Cloud integration tutorial](https://docs.gitlab.com/tutorials/set_up_gitlab_google_integration/) to configure CI/CD with Workload Identity Federation.
 
+### Image Cleanup Policy
+
+GitLab automatically deletes non-main branch images older than 3 days to prevent registry bloat.
+
+**Configuration:**
+1. Go to **Settings → Repository → Registry** in GitLab
+2. Under **Cleanup policies**, click **Add cleanup policy**
+3. Configure:
+   - **Name:** `Delete old feature branch images`
+   - **Timeline:** `3 days`
+   - **Keep images from:** `main` branch
+   - **Regex pattern:** `.*` (match all)
+4. Click **Save changes**
+
+The policy runs daily and automatically removes images that:
+- Are older than 3 days
+- Are not from the `main` branch
+- Match the specified pattern
+
 ## Troubleshooting
 
 | Issue | Solution |
