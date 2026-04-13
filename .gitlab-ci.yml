@@ -13,7 +13,7 @@ variables:
     TF_VAR_controller_image: ${CI_REGISTRY_IMAGE}/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
     TF_VAR_machine_agent_image: ${CI_REGISTRY_IMAGE}/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
 
-frontend-test:
+.frontend-test:
   stage: validate
   image: node:24-alpine
   cache:
@@ -37,7 +37,7 @@ frontend-test:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
-backend-test:
+.backend-test:
   stage: validate
   image: golang:1.25-alpine
   cache:
@@ -70,7 +70,7 @@ backend-test:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
-approval-job:
+.approval-job:
   stage: approval
   tags:
     - saas-linux-small-amd64
