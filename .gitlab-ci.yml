@@ -118,7 +118,7 @@ promote-images:
   stage: promote
   tags:
     - saas-linux-small-amd64
-  image: docker:24-dind
+  image: google/cloud-sdk:alpine
   services:
     - docker:24-dind
   before_script:
