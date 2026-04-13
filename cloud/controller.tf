@@ -91,6 +91,11 @@ resource "google_cloud_run_v2_service" "controller" {
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
 
+  scaling {
+    manual_instance_count = 0
+    min_instance_count    = 0
+  }
+
   template {
     service_account = google_service_account.controller_service_account.email
 
