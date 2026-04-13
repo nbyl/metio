@@ -118,15 +118,18 @@ promote-images:
   stage: promote
   tags:
     - saas-linux-small-amd64
-  image: gcr.io/go-containerregistry/crane:latest
+  image: docker:24-dind
+  services:
+    - docker:24-dind
   before_script:
-    - echo $CI_REGISTRY_PASSWORD | crane auth login gitlab.com -u $CI_REGISTRY_USER --password-stdin
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
+    - gcloud auth configure-docker ${TF_VAR_region}-docker.pkg.dev
   script:
     - |
       for image in controller machine-agent; do
-        SOURCE_IMAGE="${CI_REGISTRY_IMAGE}/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
-        TARGET_IMAGE="${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
-        crane copy $SOURCE_IMAGE $TARGET_IMAGE
+        docker pull ${CI_REGISTRY_IMAGE}/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+        docker tag ${CI_REGISTRY_IMAGE}/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+        docker push ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
       done
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
