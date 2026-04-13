@@ -133,9 +133,10 @@ resource "google_compute_instance" "minecraft-server" {
   }
 
   scheduling {
-    preemptible        = true
-    automatic_restart  = false
-    provisioning_model = "SPOT"
+    preemptible                 = true
+    automatic_restart           = false
+    provisioning_model         = "SPOT"
+    instance_termination_action = "STOP"
   }
 
   tags = ["${var.environment}-minecraft-server", var.environment]
