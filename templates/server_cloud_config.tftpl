@@ -28,7 +28,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull itzg/minecraft-server:stable-java21 && docker run --rm --entrypoint stat itzg/minecraft-server:stable-java21 -c%s /opt/java/openjdk/bin/java 2>/dev/null | grep -qE "^[0-9]+$" && exit 0; sleep 10; done; exit 1'
+      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull itzg/minecraft-server:stable-java21 && docker run --rm --entrypoint stat itzg/minecraft-server:stable-java21 -c%%s /opt/java/openjdk/bin/java 2>/dev/null | grep -qE "^[0-9]+$" && exit 0; sleep 10; done; exit 1'
       ExecStart=/usr/bin/docker run --rm --name %n \
         -p 25565:25565 \
         -p 127.0.0.1:25575:25575 \
