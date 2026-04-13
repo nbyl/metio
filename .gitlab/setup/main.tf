@@ -56,6 +56,12 @@ resource "google_service_account_iam_binding" "gitlab-runner-oidc" {
 
 }
 
+resource "google_project_iam_member" "gitlab-runner-artifact-registry-writer" {
+  project = var.gcp_project_name
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.gitlab-runner.email}"
+}
+
 output "GCP_WORKLOAD_IDENTITY_PROVIDER" {
   value = google_iam_workload_identity_pool_provider.gitlab-provider-jwt.name
 }
