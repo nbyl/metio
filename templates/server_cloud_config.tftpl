@@ -13,39 +13,6 @@ users:
     groups: docker
     system: false
 write_files:
-  - path: /home/metio/verify-docker-image.sh
-    permissions: '0755'
-    owner: metio:metio
-    content: |
-      #!/bin/bash
-      set -e
-      IMAGE="${1}"
-      MAX_RETRIES=3
-      
-      for i in $(seq 1 $MAX_RETRIES); do
-        echo "[$(date)] Attempt $i/$MAX_RETRIES: Pulling $IMAGE..."
-        if docker pull "$IMAGE"; then
-          if echo "$IMAGE" | grep -q "minecraft-server"; then
-            SIZE=$(docker run --rm --entrypoint stat "$IMAGE" -c%s /opt/java/openjdk/bin/java 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000 ]; then
-              echo "[$(date)] Java executable verified ($SIZE bytes)"
-              exit 0
-            fi
-            echo "[$(date)] Verification failed (size: $SIZE bytes), removing corrupted image..."
-            docker rmi -f "$IMAGE" 2>/dev/null || true
-          else
-            echo "[$(date)] Image pulled successfully"
-            exit 0
-          fi
-        fi
-        if [ $i -lt $MAX_RETRIES ]; then
-          echo "[$(date)] Waiting 10 seconds before retry..."
-          sleep 10
-        fi
-      done
-      echo "[$(date)] CRITICAL: Failed to pull valid image after $MAX_RETRIES attempts"
-      exit 1
-
   - path: /etc/systemd/system/minecraft.service
     permissions: '0644'
     content: |
@@ -61,7 +28,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/home/metio/verify-docker-image.sh itzg/minecraft-server:stable-java21
+      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull itzg/minecraft-server:stable-java21 && docker run --rm --entrypoint stat itzg/minecraft-server:stable-java21 -c%s /opt/java/openjdk/bin/java 2>/dev/null | grep -qE "^[0-9]+$" && exit 0; sleep 10; done; exit 1'
       ExecStart=/usr/bin/docker run --rm --name %n \
         -p 25565:25565 \
         -p 127.0.0.1:25575:25575 \
@@ -92,7 +59,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/home/metio/verify-docker-image.sh itzg/mc-backup
+      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull itzg/mc-backup && exit 0; sleep 10; done; exit 1'
       ExecStart=/usr/bin/docker run --rm --name %n \
         --network host \
         -e BACKUP_METHOD=restic \
@@ -125,7 +92,7 @@ write_files:
       ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${region}-docker.pkg.dev
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/home/metio/verify-docker-image.sh ${machineAgentImage}
+      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull ${machineAgentImage} && exit 0; sleep 10; done; exit 1'
       ExecStart=/usr/bin/docker run --rm --name %n \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -e ENVIRONMENT=${environment} \
