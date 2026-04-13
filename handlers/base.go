@@ -47,6 +47,11 @@ func New() *mux.Router {
 	apiRouter.HandleFunc("/servers", deleteServerHandler).Methods("DELETE")
 	apiRouter.HandleFunc("/servers/operation", getOperationStatusHandler).Methods("GET")
 
+	apiRouter.HandleFunc("/servers", listServers).Methods("GET")
+	apiRouter.HandleFunc("/servers/{id}", getServer).Methods("GET")
+	apiRouter.HandleFunc("/servers/{id}", updateServer).Methods("PUT")
+	apiRouter.HandleFunc("/servers/{id}", deleteServer).Methods("DELETE")
+
 	// SPA fallback - serve React app for all other routes
 	r.PathPrefix("/").Handler(spaHandler())
 
