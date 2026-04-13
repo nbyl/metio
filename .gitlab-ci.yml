@@ -92,7 +92,7 @@ build-controller:
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - docker build -t $CI_REGISTRY_IMAGE/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} ./cmd/controller
+    - docker build -f cmd/controller/Dockerfile -t $CI_REGISTRY_IMAGE/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} .
     - docker push $CI_REGISTRY_IMAGE/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -108,7 +108,7 @@ build-machine-agent:
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - docker build -t $CI_REGISTRY_IMAGE/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} ./cmd/machine-agent
+    - docker build -f cmd/machine-agent/Dockerfile -t $CI_REGISTRY_IMAGE/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} .
     - docker push $CI_REGISTRY_IMAGE/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
