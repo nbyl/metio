@@ -2,14 +2,16 @@
 stages:
   - validate
   - test
+  - approval
   - build
+  - promote
   - plan
   - deploy
   - cleanup
 
 variables:
-    TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:$CI_COMMIT_SHORT_SHA
-    TF_VAR_machine_agent_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/machine-agent:$CI_COMMIT_SHORT_SHA
+    TF_VAR_controller_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+    TF_VAR_machine_agent_image: ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
 
 frontend-test:
   stage: validate
@@ -68,31 +70,81 @@ backend-test:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
+approval-job:
+  stage: approval
+  image: alpine:latest
+  tags:
+    - saas-linux-small-amd64
+  script:
+    - echo "Pipeline approved for deployment"
+  rules:
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: manual
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+
 build-controller:
-    image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
-    stage: build
-    identity: google_cloud
-    resource_group: cloudbuild
-    script:
-      - gcloud config set project "${TF_VAR_project_id}"
-      - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
-      - gcloud builds submit . --config cmd/controller/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
-    rules:
-      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+  stage: build
+  tags:
+    - saas-linux-small-amd64
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -f cmd/controller/Dockerfile -t $CI_REGISTRY_IMAGE/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} .
+    - docker push $CI_REGISTRY_IMAGE/controller:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
 build-machine-agent:
-    image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
-    stage: build
-    identity: google_cloud
-    resource_group: cloudbuild
-    script:
-      - gcloud config set project "${TF_VAR_project_id}"
-      - gcloud config set auth/impersonate_service_account $GCP_SERVICE_ACCOUNT
-      - gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --region europe-west3 --substitutions=COMMIT_SHA=$CI_COMMIT_SHORT_SHA
-    rules:
-      - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+  stage: build
+  tags:
+    - saas-linux-small-amd64
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -f cmd/machine-agent/Dockerfile -t $CI_REGISTRY_IMAGE/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} .
+    - docker push $CI_REGISTRY_IMAGE/machine-agent:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+
+promote-images:
+  stage: promote
+  tags:
+    - saas-linux-small-amd64
+  image: google/cloud-sdk:alpine
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  before_script:
+    - CRANE_VERSION=v0.21.5
+    - curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz"
+        | tar -zxf - -C /usr/local/bin/ crane
+    - echo ${GITLAB_OIDC_TOKEN} > .ci_job_jwt_file
+    - gcloud iam workload-identity-pools create-cred-config ${GCP_WORKLOAD_IDENTITY_PROVIDER}
+        --service-account="${GCP_SERVICE_ACCOUNT}"
+        --output-file=.gcp_temp_cred.json
+        --credential-source-file=.ci_job_jwt_file
+    - gcloud auth login --cred-file=$(pwd)/.gcp_temp_cred.json
+    - gcloud auth configure-docker ${TF_VAR_region}-docker.pkg.dev --quiet
+    - crane auth login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - |
+      for image in controller machine-agent; do
+        crane copy \
+          ${CI_REGISTRY_IMAGE}/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA} \
+          ${TF_VAR_region}-docker.pkg.dev/${TF_VAR_project_id}/metio/${image}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+      done
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 
 include:
    - component: $CI_SERVER_FQDN/components/opentofu/full-pipeline@3.0.1
@@ -116,6 +168,12 @@ include:
           when: never
         - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
           when: manual
+      fmt_rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+      validate_rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
 .gitlab-tofu:id_tokens:
   id_tokens:
     GITLAB_OIDC_TOKEN:
