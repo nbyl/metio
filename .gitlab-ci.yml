@@ -118,7 +118,7 @@ promote-images:
   stage: promote
   tags:
     - saas-linux-small-amd64
-  image: gcr.io/go-containerregistry/crane:v0.16.0
+  image: gcr.io/go-containerregistry/crane:latest
   before_script:
     - crane auth login gitlab.com -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
   script:
