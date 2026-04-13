@@ -122,7 +122,7 @@ promote-images:
   services:
     - docker:24-dind
   before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - gcloud auth configure-docker ${TF_VAR_region}-docker.pkg.dev
   script:
     - |
