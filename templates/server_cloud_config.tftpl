@@ -6,15 +6,16 @@ mounts:
   - [minecraft_data, /mnt/disks/minecraft/data, ext4, "defaults", "0", "2"]
 users:
   - name: metio
+    uid: 1000
     gecos: Metio User
     shell: /bin/bash
     primary_group: metio
     groups: docker
     system: false
 write_files:
-  - path: /usr/local/bin/verify-docker-image.sh
+  - path: /home/metio/verify-docker-image.sh
     permissions: '0755'
-    owner: root
+    owner: metio:metio
     content: |
       #!/bin/bash
       set -e
@@ -60,7 +61,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/usr/local/bin/verify-docker-image.sh itzg/minecraft-server:stable-java21
+      ExecStartPre=/home/metio/verify-docker-image.sh itzg/minecraft-server:stable-java21
       ExecStart=/usr/bin/docker run --rm --name %n \
         -p 25565:25565 \
         -p 127.0.0.1:25575:25575 \
@@ -91,7 +92,7 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/usr/local/bin/verify-docker-image.sh itzg/mc-backup
+      ExecStartPre=/home/metio/verify-docker-image.sh itzg/mc-backup
       ExecStart=/usr/bin/docker run --rm --name %n \
         --network host \
         -e BACKUP_METHOD=restic \
@@ -124,7 +125,7 @@ write_files:
       ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${region}-docker.pkg.dev
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/usr/local/bin/verify-docker-image.sh ${machineAgentImage}
+      ExecStartPre=/home/metio/verify-docker-image.sh ${machineAgentImage}
       ExecStart=/usr/bin/docker run --rm --name %n \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -e ENVIRONMENT=${environment} \
