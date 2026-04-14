@@ -14,11 +14,20 @@ import (
 func init() {
 	// Initialize viper with test values
 	viper.SetDefault("SESSION_KEY", "test-session-key-32-bytes-long!!")
+	viper.SetDefault("ENVIRONMENT", "development")
 }
 
-// setupTestSession creates a session store for testing
+// setupTestSession creates a session store for testing that mirrors
+// the production getSessionStore() cookie options.
 func setupTestSession() *sessions.CookieStore {
 	store = sessions.NewCookieStore([]byte("test-session-key-32-bytes-long!!"))
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7,
+		HttpOnly: true,
+		Secure:   false, // development mode for tests
+		SameSite: http.SameSiteLaxMode,
+	}
 	return store
 }
 
@@ -191,4 +200,83 @@ func TestMeHandler_Unauthenticated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, response.Authenticated)
 	assert.Empty(t, response.Email)
+}
+
+func TestGetSessionStore_CookieOptions_Development(t *testing.T) {
+	// Reset global store so getSessionStore() re-creates it
+	store = nil
+	viper.Set("ENVIRONMENT", "development")
+	defer viper.Set("ENVIRONMENT", "")
+
+	s := getSessionStore()
+	assert.Equal(t, "/", s.Options.Path)
+	assert.Equal(t, 86400*7, s.Options.MaxAge)
+	assert.True(t, s.Options.HttpOnly)
+	assert.False(t, s.Options.Secure, "Secure should be false in development")
+	assert.Equal(t, http.SameSiteLaxMode, s.Options.SameSite)
+
+	// Reset for other tests
+	store = nil
+}
+
+func TestGetSessionStore_CookieOptions_Production(t *testing.T) {
+	store = nil
+	viper.Set("ENVIRONMENT", "production")
+	defer viper.Set("ENVIRONMENT", "")
+
+	s := getSessionStore()
+	assert.True(t, s.Options.Secure, "Secure should be true in production")
+	assert.Equal(t, http.SameSiteLaxMode, s.Options.SameSite)
+
+	// Reset for other tests
+	store = nil
+}
+
+func TestGetUserEmail_WithSession(t *testing.T) {
+	testStore := setupTestSession()
+
+	// Create a session with email
+	setupReq := httptest.NewRequest("GET", "/setup", nil)
+	setupW := httptest.NewRecorder()
+	session, _ := testStore.Get(setupReq, sessionName)
+	session.Values[userKey] = "test-user-id"
+	session.Values[emailKey] = "user@example.com"
+	session.Save(setupReq, setupW)
+
+	// Create request with the session cookie
+	req := httptest.NewRequest("GET", "/api/server/whitelist", nil)
+	for _, cookie := range setupW.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+
+	email := getUserEmail(req)
+	assert.Equal(t, "user@example.com", email)
+}
+
+func TestGetUserEmail_WithoutSession(t *testing.T) {
+	setupTestSession()
+
+	req := httptest.NewRequest("GET", "/api/server/whitelist", nil)
+	email := getUserEmail(req)
+	assert.Empty(t, email)
+}
+
+func TestGetUserEmail_SessionWithoutEmail(t *testing.T) {
+	testStore := setupTestSession()
+
+	// Create a session with user but no email
+	setupReq := httptest.NewRequest("GET", "/setup", nil)
+	setupW := httptest.NewRecorder()
+	session, _ := testStore.Get(setupReq, sessionName)
+	session.Values[userKey] = "test-user-id"
+	// Intentionally not setting emailKey
+	session.Save(setupReq, setupW)
+
+	req := httptest.NewRequest("GET", "/api/server/whitelist", nil)
+	for _, cookie := range setupW.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+
+	email := getUserEmail(req)
+	assert.Empty(t, email)
 }

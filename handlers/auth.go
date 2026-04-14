@@ -36,6 +36,13 @@ var store *sessions.CookieStore
 func getSessionStore() *sessions.CookieStore {
 	if store == nil {
 		store = sessions.NewCookieStore([]byte(viper.GetString("SESSION_KEY")))
+		store.Options = &sessions.Options{
+			Path:     "/",
+			MaxAge:   86400 * 7, // 7 days
+			HttpOnly: true,
+			Secure:   viper.GetString("ENVIRONMENT") != "development",
+			SameSite: http.SameSiteLaxMode,
+		}
 	}
 	return store
 }
