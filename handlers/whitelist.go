@@ -280,10 +280,12 @@ func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
 func getUserEmail(r *http.Request) string {
 	session, err := getSessionStore().Get(r, sessionName)
 	if err != nil {
+		log.Printf("getUserEmail: error retrieving session: %v", err)
 		return ""
 	}
 	email, ok := session.Values["email"].(string)
 	if !ok {
+		log.Printf("getUserEmail: email not found in session (isNew=%v, keys=%v)", session.IsNew, len(session.Values))
 		return ""
 	}
 	return email
