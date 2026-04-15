@@ -11,7 +11,9 @@ import type { APIError } from '../types/server';
  * Fetches the whitelist from the API
  */
 async function fetchWhitelist(): Promise<WhitelistResponse> {
-  const response = await fetch('/api/server/whitelist');
+  const response = await fetch('/api/server/whitelist', {
+    credentials: 'include',
+  });
   if (!response.ok) {
     const error: APIError = await response.json();
     throw new Error(error.error || 'Failed to fetch whitelist');
@@ -27,6 +29,7 @@ async function addPlayer(username: string): Promise<WhitelistPlayer> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username } as AddPlayerRequest),
+    credentials: 'include',
   });
   if (!response.ok) {
     const error: APIError = await response.json();
@@ -41,6 +44,7 @@ async function addPlayer(username: string): Promise<WhitelistPlayer> {
 async function removePlayer(uuid: string): Promise<void> {
   const response = await fetch(`/api/server/whitelist/${uuid}`, {
     method: 'DELETE',
+    credentials: 'include',
   });
   if (!response.ok) {
     const error: APIError = await response.json();
@@ -56,6 +60,7 @@ async function setWhitelistEnabled(enabled: boolean): Promise<void> {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
+    credentials: 'include',
   });
   if (!response.ok) {
     const error: APIError = await response.json();
