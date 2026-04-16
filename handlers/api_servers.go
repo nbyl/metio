@@ -161,10 +161,8 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provisioningService, err := getProvisioningService(ctx, cfg)
-	if err != nil {
-		log.Printf("Error creating provisioning service: %v", err)
-		writeJSONError(w, "failed to create provisioning service", http.StatusInternalServerError)
+	if provisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -191,7 +189,8 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ServerResponse{
 		ID:     serverID,
 		Config: serverConfigToJSON(serverConfig),
@@ -330,10 +329,8 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provisioningService, err := getProvisioningService(ctx, cfg)
-	if err != nil {
-		log.Printf("Error creating provisioning service: %v", err)
-		writeJSONError(w, "failed to create provisioning service", http.StatusInternalServerError)
+	if provisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -360,6 +357,8 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ServerResponse{
 		ID:     serverID,
 		Config: serverConfigToJSON(existingConfig),
@@ -391,10 +390,8 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provisioningService, err := getProvisioningService(ctx, cfg)
-	if err != nil {
-		log.Printf("Error creating provisioning service: %v", err)
-		writeJSONError(w, "failed to create provisioning service", http.StatusInternalServerError)
+	if provisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -409,6 +406,7 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": fmt.Sprintf("server %s deletion started", serverID),
