@@ -9,97 +9,119 @@ import (
 	"gitlab.com/nbyl/metio/db"
 )
 
-func TestServerConfigRequestStruct(t *testing.T) {
-	req := ServerConfigRequest{
-		Region:           "europe-west3",
-		Zone:             "europe-west3-a",
-		MachineType:      "e2-micro",
-		MinecraftVersion: "1.21.4",
-		DiskSizeGB:       20,
-		BackupBucket:     "my-backup-bucket",
-		RCONPassword:     "secret123",
-	}
-
-	data, err := json.Marshal(req)
-	assert.NoError(t, err)
-
-	var parsed map[string]interface{}
-	err = json.Unmarshal(data, &parsed)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "europe-west3", parsed["region"])
-	assert.Equal(t, "europe-west3-a", parsed["zone"])
-	assert.Equal(t, "e2-micro", parsed["machineType"])
-	assert.Equal(t, "1.21.4", parsed["minecraftVersion"])
-	assert.Equal(t, float64(20), parsed["diskSizeGB"])
-	assert.Equal(t, "my-backup-bucket", parsed["backupBucket"])
-	assert.Equal(t, "secret123", parsed["rconPassword"])
-}
-
-func TestCreateServerResponseStruct(t *testing.T) {
+func TestCalculateProgress(t *testing.T) {
 	tests := []struct {
 		name     string
-		response CreateServerResponse
-		expected map[string]interface{}
+		status   *db.ProvisioningStatus
+		expected int
 	}{
 		{
-			name: "Success response",
-			response: CreateServerResponse{
-				Success:  true,
-				ServerID: "production-server",
-			},
-			expected: map[string]interface{}{
-				"success":  true,
-				"serverId": "production-server",
-			},
+			name:     "No steps",
+			status:   &db.ProvisioningStatus{Steps: []db.ProvisioningStep{}},
+			expected: 0,
 		},
 		{
-			name: "Error response",
-			response: CreateServerResponse{
-				Success:  false,
-				ServerID: "",
-				Error:    "operation already in progress",
+			name: "Completed status returns 100",
+			status: &db.ProvisioningStatus{
+				State: db.ProvisioningStateCompleted,
+				Steps: []db.ProvisioningStep{
+					{Name: "step1", Status: db.ProvisioningStateCompleted},
+				},
 			},
-			expected: map[string]interface{}{
-				"success":  false,
-				"serverId": nil,
-				"error":    "operation already in progress",
-			},
+			expected: 100,
 		},
 		{
-			name: "Response with operation ID",
-			response: CreateServerResponse{
-				Success:     true,
-				ServerID:    "test-server",
-				OperationID: "op-123",
+			name: "One of two steps completed",
+			status: &db.ProvisioningStatus{
+				State: db.ProvisioningStateInProgress,
+				Steps: []db.ProvisioningStep{
+					{Name: "step1", Status: db.ProvisioningStateCompleted},
+					{Name: "step2", Status: db.ProvisioningStateInProgress},
+				},
 			},
-			expected: map[string]interface{}{
-				"success":     true,
-				"serverId":    "test-server",
-				"operationId": "op-123",
+			expected: 50,
+		},
+		{
+			name: "Two of three steps completed",
+			status: &db.ProvisioningStatus{
+				State: db.ProvisioningStateInProgress,
+				Steps: []db.ProvisioningStep{
+					{Name: "step1", Status: db.ProvisioningStateCompleted},
+					{Name: "step2", Status: db.ProvisioningStateCompleted},
+					{Name: "step3", Status: db.ProvisioningStatePending},
+				},
 			},
+			expected: 66,
+		},
+		{
+			name: "No steps completed",
+			status: &db.ProvisioningStatus{
+				State: db.ProvisioningStateInProgress,
+				Steps: []db.ProvisioningStep{
+					{Name: "step1", Status: db.ProvisioningStatePending},
+					{Name: "step2", Status: db.ProvisioningStatePending},
+				},
+			},
+			expected: 0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := json.Marshal(tt.response)
-			assert.NoError(t, err)
-
-			var parsed map[string]interface{}
-			err = json.Unmarshal(data, &parsed)
-			assert.NoError(t, err)
-
-			assert.Equal(t, tt.expected["success"], parsed["success"])
-			assert.Equal(t, tt.expected["serverId"], parsed["serverId"])
-			if errStr, ok := tt.expected["error"].(string); ok {
-				assert.Equal(t, errStr, parsed["error"])
-			}
-			if opID, ok := tt.expected["operationId"].(string); ok {
-				assert.Equal(t, opID, parsed["operationId"])
-			}
+			result := calculateProgress(tt.status)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestToProvisioningStatusResponse(t *testing.T) {
+	now := time.Now()
+	completedAt := now.Add(5 * time.Minute)
+
+	status := &db.ProvisioningStatus{
+		ID:          "server-123-op",
+		Operation:   db.ProvisioningOperationCreate,
+		State:       db.ProvisioningStateCompleted,
+		CurrentStep: "deploy_infrastructure",
+		Steps: []db.ProvisioningStep{
+			{Name: "create_service_account", Status: db.ProvisioningStateCompleted, Message: "Completed", Timestamp: now},
+			{Name: "deploy_infrastructure", Status: db.ProvisioningStateCompleted, Message: "Completed", Timestamp: now},
+		},
+		StartedAt:   now,
+		CompletedAt: &completedAt,
+		Error:       "",
+		Outputs:     map[string]string{"instanceIP": "10.0.0.1"},
+	}
+
+	response := toProvisioningStatusResponse(status)
+
+	assert.Equal(t, "server-123-op", response.ID)
+	assert.Equal(t, "CREATE", response.Operation)
+	assert.Equal(t, "COMPLETED", response.State)
+	assert.Equal(t, "deploy_infrastructure", response.CurrentStep)
+	assert.Equal(t, 100, response.Progress)
+	assert.Len(t, response.Steps, 2)
+	assert.Equal(t, "create_service_account", response.Steps[0].Name)
+	assert.Equal(t, "COMPLETED", response.Steps[0].Status)
+	assert.NotNil(t, response.CompletedAt)
+	assert.Equal(t, "10.0.0.1", response.Outputs["instanceIP"])
+}
+
+func TestToProvisioningStatusResponse_NilCompletedAt(t *testing.T) {
+	now := time.Now()
+	status := &db.ProvisioningStatus{
+		ID:          "server-456",
+		Operation:   db.ProvisioningOperationUpdate,
+		State:       db.ProvisioningStateInProgress,
+		CurrentStep: "deploy_infrastructure",
+		Steps:       []db.ProvisioningStep{},
+		StartedAt:   now,
+		CompletedAt: nil,
+	}
+
+	response := toProvisioningStatusResponse(status)
+	assert.Nil(t, response.CompletedAt)
+	assert.Equal(t, "UPDATE", response.Operation)
 }
 
 func TestProvisioningStatusResponseStruct(t *testing.T) {
@@ -289,20 +311,6 @@ func TestProvisioningStatusResponseWithError(t *testing.T) {
 	assert.Equal(t, "deployment failed", step["message"])
 }
 
-func TestCreateServerResponse_JSONOmitsEmptyFields(t *testing.T) {
-	response := CreateServerResponse{
-		Success:  true,
-		ServerID: "test-server",
-	}
-
-	data, err := json.Marshal(response)
-	assert.NoError(t, err)
-
-	jsonStr := string(data)
-	assert.NotContains(t, jsonStr, `"error":`)
-	assert.NotContains(t, jsonStr, `"operationId":`)
-}
-
 func TestProvisioningStatusResponse_WithNilOutputs(t *testing.T) {
 	response := ProvisioningStatusResponse{
 		ID:          "server-123",
@@ -323,41 +331,4 @@ func TestProvisioningStatusResponse_WithNilOutputs(t *testing.T) {
 
 	_, hasOutputs := parsed["outputs"]
 	assert.False(t, hasOutputs, "omitempty should exclude nil outputs")
-}
-
-func TestServerConfigRequest_JSONDeserialization(t *testing.T) {
-	jsonStr := `{
-		"region": "us-central1",
-		"zone": "us-central1-a",
-		"machineType": "n2-standard-2",
-		"minecraftVersion": "1.20.4",
-		"diskSizeGB": 50,
-		"backupBucket": "backup-bucket",
-		"rconPassword": "mysecretpassword"
-	}`
-
-	var req ServerConfigRequest
-	err := json.Unmarshal([]byte(jsonStr), &req)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "us-central1", req.Region)
-	assert.Equal(t, "us-central1-a", req.Zone)
-	assert.Equal(t, "n2-standard-2", req.MachineType)
-	assert.Equal(t, "1.20.4", req.MinecraftVersion)
-	assert.Equal(t, 50, req.DiskSizeGB)
-	assert.Equal(t, "backup-bucket", req.BackupBucket)
-	assert.Equal(t, "mysecretpassword", req.RCONPassword)
-}
-
-func TestServerConfigRequest_WithMinimalFields(t *testing.T) {
-	jsonStr := `{"minecraftVersion": "1.21.4"}`
-
-	var req ServerConfigRequest
-	err := json.Unmarshal([]byte(jsonStr), &req)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "1.21.4", req.MinecraftVersion)
-	assert.Equal(t, "", req.Region)
-	assert.Equal(t, "", req.MachineType)
-	assert.Equal(t, 0, req.DiskSizeGB)
 }

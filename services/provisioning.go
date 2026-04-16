@@ -188,7 +188,9 @@ func (s *ProvisioningService) queueOperation(ctx context.Context, serverID strin
 		return fmt.Errorf(errMsgOperationInProgress, serverID)
 	}
 
-	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	// Use context.Background() so the operation survives HTTP request cancellation.
+	// The operation has its own timeout independent of the caller's context.
+	opCtx, cancel := context.WithTimeout(context.Background(), s.operationTimeout)
 	s.operations[serverID] = cancel
 	s.mu.Unlock()
 
