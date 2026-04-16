@@ -13,6 +13,12 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 RUN mkdir /app/build
 
+# Install Pulumi CLI
+ARG PULUMI_VERSION=3.231.0
+RUN apk add --no-cache curl && \
+    curl -fsSL "https://github.com/pulumi/pulumi/releases/download/v${PULUMI_VERSION}/pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz" | \
+    tar -xz -C /usr/local/bin --strip-components=1 pulumi/pulumi
+
 # Copy built frontend assets from frontend stage
 COPY --from=frontend-builder /app/static/dist ./static/dist
 COPY static/embed.go ./static/
@@ -25,9 +31,13 @@ ARG VERSION=local
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.Version=${VERSION}" -o build/controller ./cmd/controller
 
 # Stage 3: Runtime
-FROM gcr.io/distroless/static-debian11
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -u 65532 nonroot
 EXPOSE 8080
 WORKDIR /app
 COPY --from=builder /app/build/controller /app/controller
+COPY --from=builder /usr/local/bin/pulumi /usr/local/bin/pulumi
+ENV PULUMI_HOME=/tmp/.pulumi
 USER nonroot:nonroot
 ENTRYPOINT ["/app/controller"]
