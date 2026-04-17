@@ -232,6 +232,52 @@ func TestGetSessionStore_CookieOptions_Production(t *testing.T) {
 	store = nil
 }
 
+func TestApiAuthMiddleware_DevApiKey_ValidKey(t *testing.T) {
+	setupTestSession()
+	viper.Set("DEV_API_KEY", "test-dev-key")
+	defer viper.Set("DEV_API_KEY", "")
+
+	nextHandlerCalled := false
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextHandlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := apiAuthMiddleware(nextHandler)
+
+	req := httptest.NewRequest("GET", "/api/servers", nil)
+	req.Header.Set("Authorization", "Bearer test-dev-key")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, nextHandlerCalled)
+}
+
+func TestApiAuthMiddleware_DevApiKey_InvalidKey(t *testing.T) {
+	setupTestSession()
+	viper.Set("DEV_API_KEY", "test-dev-key")
+	defer viper.Set("DEV_API_KEY", "")
+
+	nextHandlerCalled := false
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextHandlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := apiAuthMiddleware(nextHandler)
+
+	req := httptest.NewRequest("GET", "/api/servers", nil)
+	req.Header.Set("Authorization", "Bearer wrong-key")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.False(t, nextHandlerCalled)
+}
+
 func TestGetUserEmail_WithSession(t *testing.T) {
 	testStore := setupTestSession()
 

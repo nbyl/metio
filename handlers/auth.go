@@ -146,6 +146,14 @@ func authMiddleware(next http.Handler) http.Handler {
 // instead of redirecting to login page (used for JSON API endpoints)
 func apiAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Dev API key bypass (only active when DEV_API_KEY is configured)
+		if devKey := viper.GetString("DEV_API_KEY"); devKey != "" {
+			if r.Header.Get("Authorization") == "Bearer "+devKey {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		if !isUserAuthenticated(r) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
