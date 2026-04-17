@@ -78,6 +78,10 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
+		if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+		}
+
 		s.completeStep(status, serverID, stepCreateServiceAccount)
 
 		s.updateStep(opCtx, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
@@ -117,6 +121,10 @@ func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string,
 
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+		}
+
+		if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
 			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
