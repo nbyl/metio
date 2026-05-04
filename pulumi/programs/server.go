@@ -13,16 +13,15 @@ import (
 
 type ServerConfig struct {
 	Name              string
+	ServerID          string
 	Region            string
 	Zone              string
 	MachineType       string
 	MinecraftVersion  string
 	DiskSizeGB        int
 	Environment       string
-	BackupBucket      string
 	MachineAgentImage string
 	GCPProject        string
-	InstanceName      string
 	RCONPassword      string
 }
 
@@ -46,19 +45,18 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		if config.Environment == "" {
 			config.Environment = "development"
 		}
-		if config.InstanceName == "" {
-			config.InstanceName = fmt.Sprintf("%s-minecraft-server", config.Environment)
-		}
 		if config.RCONPassword == "" {
 			config.RCONPassword = "minecraft2025"
 		}
+
+		backupBucketName := fmt.Sprintf("%s-%s-backups", config.GCPProject, config.Name)
 
 		userData, err := RenderCloudConfig(&TemplateConfig{
 			Region:            config.Region,
 			GCPProject:        config.GCPProject,
 			Environment:       config.Environment,
-			InstanceName:      config.InstanceName,
-			BackupBucket:      config.BackupBucket,
+			InstanceName:      config.Name,
+			BackupBucket:      backupBucketName,
 			MachineAgentImage: config.MachineAgentImage,
 			MinecraftVersion:  config.MinecraftVersion,
 			RCONPassword:      config.RCONPassword,
@@ -68,8 +66,8 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		sa, err := serviceaccount.NewAccount(ctx, fmt.Sprintf("%s-sa", config.Name), &serviceaccount.AccountArgs{
-			AccountId:   pulumi.String(fmt.Sprintf("%s-vm-sa", config.Environment)),
-			DisplayName: pulumi.String("Custom SA for VM Instance"),
+			AccountId:   pulumi.String(fmt.Sprintf("%s-sa", config.Name)),
+			DisplayName: pulumi.String(fmt.Sprintf("VM service account for %s", config.Name)),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create service account: %w", err)
@@ -92,24 +90,34 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			_, err = projects.NewIAMMember(ctx, fmt.Sprintf("%s-%s", config.Name, roleName), &projects.IAMMemberArgs{
 				Project: pulumi.String(config.GCPProject),
 				Role:    pulumi.String(role),
-				Member:  sa.Email,
+				Member:  pulumi.Sprintf("serviceAccount:%s", sa.Email),
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create IAM binding for %s: %w", role, err)
 			}
 		}
 
-		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-reader", config.Name), &storage.BucketIAMMemberArgs{
-			Bucket: pulumi.String(config.BackupBucket),
-			Role:   pulumi.String("roles/storage.objectViewer"),
-			Member: sa.Email,
+		backupBucket, err := storage.NewBucket(ctx, fmt.Sprintf("%s-backup-bucket", config.Name), &storage.BucketArgs{
+			Name:                     pulumi.String(backupBucketName),
+			Location:                 pulumi.String(config.Region),
+			UniformBucketLevelAccess: pulumi.Bool(true),
+			ForceDestroy:             pulumi.Bool(false),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create backup bucket: %w", err)
+		}
+
+		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-admin", config.Name), &storage.BucketIAMMemberArgs{
+			Bucket: backupBucket.Name,
+			Role:   pulumi.String("roles/storage.objectAdmin"),
+			Member: pulumi.Sprintf("serviceAccount:%s", sa.Email),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to grant backup bucket access: %w", err)
 		}
 
 		disk, err := compute.NewDisk(ctx, fmt.Sprintf("%s-disk", config.Name), &compute.DiskArgs{
-			Name: pulumi.String(fmt.Sprintf("%s-minecraft-data", config.Environment)),
+			Name: pulumi.String(fmt.Sprintf("%s-data", config.Name)),
 			Type: pulumi.String(fmt.Sprintf("zones/%s/diskTypes/pd-standard", config.Zone)),
 			Size: pulumi.Int(config.DiskSizeGB),
 			Zone: pulumi.String(config.Zone),
@@ -119,7 +127,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		address, err := compute.NewAddress(ctx, fmt.Sprintf("%s-address", config.Name), &compute.AddressArgs{
-			Name:   pulumi.String(fmt.Sprintf("%s-minecraft-server", config.Environment)),
+			Name:   pulumi.String(fmt.Sprintf("%s-addr", config.Name)),
 			Region: pulumi.String(config.Region),
 		})
 		if err != nil {
@@ -127,7 +135,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		firewall, err := compute.NewFirewall(ctx, fmt.Sprintf("%s-firewall", config.Name), &compute.FirewallArgs{
-			Name:    pulumi.String(fmt.Sprintf("%s-minecraft-server", config.Environment)),
+			Name:    pulumi.String(fmt.Sprintf("%s-fw", config.Name)),
 			Network: pulumi.String("default"),
 			Allows: compute.FirewallAllowArray{
 				&compute.FirewallAllowArgs{
@@ -144,7 +152,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 				pulumi.String("0.0.0.0/0"),
 			},
 			TargetTags: pulumi.StringArray{
-				pulumi.String(fmt.Sprintf("%s-minecraft-server", config.Environment)),
+				pulumi.String(config.Name),
 			},
 		})
 		if err != nil {
@@ -152,7 +160,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		instance, err := compute.NewInstance(ctx, config.Name, &compute.InstanceArgs{
-			Name:        pulumi.String(fmt.Sprintf("%s-minecraft-server", config.Environment)),
+			Name:        pulumi.String(config.Name),
 			MachineType: pulumi.String(config.MachineType),
 			Zone:        pulumi.String(config.Zone),
 			BootDisk: &compute.InstanceBootDiskArgs{
@@ -183,8 +191,9 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 				ProvisioningModel: pulumi.String("SPOT"),
 			},
 			Tags: pulumi.StringArray{
-				pulumi.String(fmt.Sprintf("%s-minecraft-server", config.Environment)),
+				pulumi.String(config.Name),
 				pulumi.String(config.Environment),
+				pulumi.String(config.ServerID),
 			},
 			ServiceAccount: &compute.InstanceServiceAccountArgs{
 				Email: sa.Email,
@@ -201,7 +210,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		shutdownPolicy, err := compute.NewResourcePolicy(ctx, fmt.Sprintf("%s-daily-shutdown", config.Name), &compute.ResourcePolicyArgs{
-			Name:   pulumi.String(fmt.Sprintf("%s-daily-shutdown", config.Environment)),
+			Name:   pulumi.String(fmt.Sprintf("%s-shutdown", config.Name)),
 			Region: pulumi.String(config.Region),
 			InstanceSchedulePolicy: &compute.ResourcePolicyInstanceSchedulePolicyArgs{
 				TimeZone: pulumi.String("Europe/Berlin"),
@@ -240,7 +249,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		ctx.Export("zone", pulumi.String(config.Zone))
 		ctx.Export("diskName", disk.Name)
 		ctx.Export("serviceAccount", sa.Email)
-		ctx.Export("backupBucket", pulumi.String(config.BackupBucket))
+		ctx.Export("backupBucket", pulumi.String(backupBucketName))
 
 		return nil
 	}

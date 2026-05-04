@@ -242,17 +242,17 @@ func TestCompleteStep(t *testing.T) {
 
 	status := &db.ProvisioningStatus{
 		Steps: []db.ProvisioningStep{
-			{Name: stepCreateServiceAccount, Status: db.ProvisioningStatePending, Message: "Creating service account...", Timestamp: time.Now()},
+			{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
 			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure...", Timestamp: time.Now()},
 		},
 	}
 
-	service.completeStep(status, "test-server", stepCreateServiceAccount)
+	service.completeStep(status, "test-server", stepUpsertStack)
 
 	assert.Equal(t, db.ProvisioningStateCompleted, status.Steps[0].Status)
 	assert.Equal(t, "Completed", status.Steps[0].Message)
 	assert.Equal(t, db.ProvisioningStatePending, status.Steps[1].Status)
-	assert.Equal(t, stepCreateServiceAccount, status.CurrentStep)
+	assert.Equal(t, stepUpsertStack, status.CurrentStep)
 }
 
 func TestCompleteStepNotFound(t *testing.T) {
@@ -262,7 +262,7 @@ func TestCompleteStepNotFound(t *testing.T) {
 
 	status := &db.ProvisioningStatus{
 		Steps: []db.ProvisioningStep{
-			{Name: stepCreateServiceAccount, Status: db.ProvisioningStatePending, Message: "Creating service account...", Timestamp: time.Now()},
+			{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
 		},
 	}
 

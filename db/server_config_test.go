@@ -17,12 +17,14 @@ func TestValidateServerName(t *testing.T) {
 		{"valid single char", "a", true},
 		{"valid two chars", "ab", true},
 		{"valid three chars", "abc", false},
-		{"too long 64 chars", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", true},
-		{"valid max length 63 chars", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaAAAAAAAAAAA", false},
+		{"too long 25 chars", "abcdefghijklmnopqrstuvwxy", true},
+		{"valid max length 24 chars", "abcdefghijklmnopqrstuvwx", false},
 		{"starts with hyphen", "-server", true},
 		{"ends with hyphen", "server-", true},
 		{"contains underscore", "my_server", true},
 		{"contains space", "my server", true},
+		{"contains uppercase", "MyServer", true},
+		{"starts with digit", "1server", true},
 	}
 
 	for _, tt := range tests {
