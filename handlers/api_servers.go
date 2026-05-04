@@ -167,6 +167,8 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	programConfig := &programs.ServerConfig{
+		Name:              req.Name,
+		ServerID:          serverID,
 		Region:            req.Region,
 		Zone:              req.Zone,
 		MachineType:       req.MachineType,
@@ -175,7 +177,6 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
 		GCPProject:        cfg.ProjectID,
-		InstanceName:      serverID,
 	}
 
 	if err := provisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
@@ -335,6 +336,8 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	programConfig := &programs.ServerConfig{
+		Name:              existingConfig.Name,
+		ServerID:          serverID,
 		Region:            existingConfig.Region,
 		Zone:              existingConfig.Zone,
 		MachineType:       existingConfig.MachineType,
@@ -343,7 +346,6 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
 		GCPProject:        cfg.ProjectID,
-		InstanceName:      serverID,
 	}
 
 	if err := provisioningService.UpdateServer(ctx, serverID, programConfig); err != nil {

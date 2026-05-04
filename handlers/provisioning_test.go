@@ -84,7 +84,7 @@ func TestToProvisioningStatusResponse(t *testing.T) {
 		State:       db.ProvisioningStateCompleted,
 		CurrentStep: "deploy_infrastructure",
 		Steps: []db.ProvisioningStep{
-			{Name: "create_service_account", Status: db.ProvisioningStateCompleted, Message: "Completed", Timestamp: now},
+			{Name: "upsert_stack", Status: db.ProvisioningStateCompleted, Message: "Completed", Timestamp: now},
 			{Name: "deploy_infrastructure", Status: db.ProvisioningStateCompleted, Message: "Completed", Timestamp: now},
 		},
 		StartedAt:   now,
@@ -101,7 +101,7 @@ func TestToProvisioningStatusResponse(t *testing.T) {
 	assert.Equal(t, "deploy_infrastructure", response.CurrentStep)
 	assert.Equal(t, 100, response.Progress)
 	assert.Len(t, response.Steps, 2)
-	assert.Equal(t, "create_service_account", response.Steps[0].Name)
+	assert.Equal(t, "upsert_stack", response.Steps[0].Name)
 	assert.Equal(t, "COMPLETED", response.Steps[0].Status)
 	assert.NotNil(t, response.CompletedAt)
 	assert.Equal(t, "10.0.0.1", response.Outputs["instanceIP"])
@@ -134,7 +134,7 @@ func TestProvisioningStatusResponseStruct(t *testing.T) {
 		CurrentStep: "deploy_infrastructure",
 		Steps: []StepResponse{
 			{
-				Name:      "create_service_account",
+				Name:      "upsert_stack",
 				Status:    "COMPLETED",
 				Message:   "Completed",
 				Timestamp: nowStr,
@@ -170,7 +170,7 @@ func TestProvisioningStatusResponseStruct(t *testing.T) {
 	assert.Len(t, steps, 2)
 
 	step1 := steps[0].(map[string]interface{})
-	assert.Equal(t, "create_service_account", step1["name"])
+	assert.Equal(t, "upsert_stack", step1["name"])
 	assert.Equal(t, "COMPLETED", step1["status"])
 	assert.Equal(t, "Completed", step1["message"])
 
@@ -193,13 +193,13 @@ func TestStepResponseStruct(t *testing.T) {
 		{
 			name: "Completed step",
 			step: StepResponse{
-				Name:      "create_disk",
+				Name:      "deploy_infrastructure",
 				Status:    "COMPLETED",
 				Message:   "Completed",
 				Timestamp: "2026-03-30T10:00:00Z",
 			},
 			expectedJSON: map[string]interface{}{
-				"name":      "create_disk",
+				"name":      "deploy_infrastructure",
 				"status":    "COMPLETED",
 				"message":   "Completed",
 				"timestamp": "2026-03-30T10:00:00Z",
@@ -316,7 +316,7 @@ func TestProvisioningStatusResponse_WithNilOutputs(t *testing.T) {
 		ID:          "server-123",
 		Operation:   "DELETE",
 		State:       "COMPLETED",
-		CurrentStep: "cleanup_resources",
+		CurrentStep: "destroy_stack",
 		Steps:       []StepResponse{},
 		StartedAt:   "2026-03-30T10:00:00Z",
 		Outputs:     nil,
