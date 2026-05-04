@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,7 +9,10 @@ import (
 
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/spf13/viper"
+	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/handlers"
+	"gitlab.com/nbyl/metio/pulumi"
+	"gitlab.com/nbyl/metio/services"
 	"gitlab.com/nbyl/metio/tracing"
 )
 
@@ -28,7 +32,13 @@ func main() {
 	}
 	defer tracing.ShutdownTracer()
 
-	r := handlers.New()
+	// Initialize provisioning service as a singleton
+	provisioningService, err := initProvisioningService()
+	if err != nil {
+		log.Printf("Warning: provisioning service not available: %v", err)
+	}
+
+	r := handlers.New(provisioningService)
 
 	// Wrap router with CORS middleware (only enabled in dev mode)
 	handler := handlers.CORSMiddleware(r)
@@ -36,4 +46,26 @@ func main() {
 	port := viper.GetString("PORT")
 	log.Printf("Server starting on :%s", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), gorillahandlers.LoggingHandler(os.Stdout, handler)))
+}
+
+func initProvisioningService() (*services.ProvisioningService, error) {
+	ctx := context.Background()
+	cfg := config.Load()
+
+	stateBucket := viper.GetString("PULUMI_STATE_BUCKET")
+	if stateBucket == "" {
+		return nil, fmt.Errorf("PULUMI_STATE_BUCKET not configured")
+	}
+
+	workspaceManager, err := pulumi.NewWorkspaceManager(ctx, cfg.ProjectID, stateBucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create workspace manager: %w", err)
+	}
+
+	dbConn, err := cfg.NewDBConnection(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create db connection: %w", err)
+	}
+
+	return services.NewProvisioningService(workspaceManager, dbConn), nil
 }

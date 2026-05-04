@@ -7,10 +7,14 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"gitlab.com/nbyl/metio/services"
 	"gitlab.com/nbyl/metio/static"
 )
 
-func New() *mux.Router {
+var provisioningService *services.ProvisioningService
+
+func New(ps *services.ProvisioningService) *mux.Router {
+	provisioningService = ps
 	r := mux.NewRouter()
 
 	// Add tracing middleware to all routes
@@ -42,15 +46,12 @@ func New() *mux.Router {
 	apiRouter.HandleFunc("/server/shutdown/schedule", scheduleShutdownHandler).Methods("POST")
 	apiRouter.HandleFunc("/server/shutdown/schedule", cancelScheduledShutdownHandler).Methods("DELETE")
 
-	apiRouter.HandleFunc("/servers", createServerHandler).Methods("POST")
-	apiRouter.HandleFunc("/servers", updateServerHandler).Methods("PUT")
-	apiRouter.HandleFunc("/servers", deleteServerHandler).Methods("DELETE")
-	apiRouter.HandleFunc("/servers/operation", getOperationStatusHandler).Methods("GET")
-
 	apiRouter.HandleFunc("/servers", listServers).Methods("GET")
+	apiRouter.HandleFunc("/servers", createServer).Methods("POST")
 	apiRouter.HandleFunc("/servers/{id}", getServer).Methods("GET")
 	apiRouter.HandleFunc("/servers/{id}", updateServer).Methods("PUT")
 	apiRouter.HandleFunc("/servers/{id}", deleteServer).Methods("DELETE")
+	apiRouter.HandleFunc("/servers/{id}/provisioning", getServerProvisioningStatus).Methods("GET")
 
 	// SPA fallback - serve React app for all other routes
 	r.PathPrefix("/").Handler(spaHandler())

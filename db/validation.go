@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	nameRegex       = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$`)
+	nameRegex       = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$`)
 	timeRegex       = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):[0-5][0-9]$`)
 	validGCPRegions = map[string]bool{
 		"us-central1":             true,
@@ -181,11 +181,11 @@ func ValidateServerConfig(config *ServerConfig) error {
 }
 
 func ValidateServerName(name string) error {
-	if len(name) < 3 || len(name) > 63 {
-		return fmt.Errorf("name must be between 3 and 63 characters, got %d", len(name))
+	if len(name) < 3 || len(name) > 24 {
+		return fmt.Errorf("name must be between 3 and 24 characters, got %d", len(name))
 	}
 	if !nameRegex.MatchString(name) {
-		return fmt.Errorf("name must start and end with alphanumeric character, and contain only alphanumeric characters and hyphens")
+		return fmt.Errorf("name must start with a lowercase letter, end with a lowercase letter or digit, and contain only lowercase letters, digits, and hyphens")
 	}
 	return nil
 }

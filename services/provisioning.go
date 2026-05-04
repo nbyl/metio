@@ -16,18 +16,11 @@ import (
 )
 
 const (
-	stepCreateServiceAccount = "create_service_account"
-	stepCreateBackupBucket   = "create_backup_bucket"
-	stepReserveStaticIP      = "reserve_static_ip"
-	stepCreateDisk           = "create_disk"
-	stepCreateFirewall       = "create_firewall"
-	stepCreateInstance       = "create_instance"
+	stepUpsertStack          = "upsert_stack"
 	stepDeployInfrastructure = "deploy_infrastructure"
 	stepRefreshStack         = "refresh_stack"
 	stepUpdateInfrastructure = "update_infrastructure"
 	stepDestroyStack         = "destroy_stack"
-	stepCleanupResources     = "cleanup_resources"
-	stepUpsertStack          = "upsert_stack"
 )
 
 const errMsgOperationInProgress = "operation already in progress for server %s"
@@ -61,24 +54,21 @@ func NewProvisioningService(workspaceManager *pulumi.WorkspaceManager, dbConn db
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
 	return s.queueOperation(ctx, serverID, db.ProvisioningOperationCreate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		status.Steps = []db.ProvisioningStep{
-			{Name: stepCreateServiceAccount, Status: db.ProvisioningStatePending, Message: "Creating service account...", Timestamp: time.Now()},
-			{Name: stepCreateBackupBucket, Status: db.ProvisioningStatePending, Message: "Creating backup bucket...", Timestamp: time.Now()},
-			{Name: stepReserveStaticIP, Status: db.ProvisioningStatePending, Message: "Reserving static IP...", Timestamp: time.Now()},
-			{Name: stepCreateDisk, Status: db.ProvisioningStatePending, Message: "Creating disk...", Timestamp: time.Now()},
-			{Name: stepCreateFirewall, Status: db.ProvisioningStatePending, Message: "Creating firewall rules...", Timestamp: time.Now()},
-			{Name: stepCreateInstance, Status: db.ProvisioningStatePending, Message: "Creating VM instance...", Timestamp: time.Now()},
+			{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
 			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure with Pulumi...", Timestamp: time.Now()},
 		}
 		s.updateStatus(opCtx, serverID, status)
-
-		config.Name = serverID
 
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
 			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
-		s.completeStep(status, serverID, stepCreateServiceAccount)
+		if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+		}
+
+		s.completeStep(status, serverID, stepUpsertStack)
 
 		s.updateStep(opCtx, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
 		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
@@ -113,10 +103,12 @@ func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string,
 		}
 		s.updateStatus(opCtx, serverID, status)
 
-		config.Name = serverID
-
 		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 		if err != nil {
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+		}
+
+		if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
 			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
@@ -151,7 +143,6 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 	return s.queueOperation(ctx, serverID, db.ProvisioningOperationDestroy, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		status.Steps = []db.ProvisioningStep{
 			{Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now()},
-			{Name: stepCleanupResources, Status: db.ProvisioningStatePending, Message: "Cleaning up resources...", Timestamp: time.Now()},
 		}
 		s.updateStatus(opCtx, serverID, status)
 
@@ -164,7 +155,6 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 		}
 
 		s.completeStep(status, serverID, stepDestroyStack)
-		s.completeStep(status, serverID, stepCleanupResources)
 
 		status.State = db.ProvisioningStateCompleted
 		s.updateStatus(opCtx, serverID, status)
@@ -188,7 +178,9 @@ func (s *ProvisioningService) queueOperation(ctx context.Context, serverID strin
 		return fmt.Errorf(errMsgOperationInProgress, serverID)
 	}
 
-	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
+	// Use context.Background() so the operation survives HTTP request cancellation.
+	// The operation has its own timeout independent of the caller's context.
+	opCtx, cancel := context.WithTimeout(context.Background(), s.operationTimeout)
 	s.operations[serverID] = cancel
 	s.mu.Unlock()
 
