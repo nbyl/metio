@@ -161,14 +161,14 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provisioningService, err := getProvisioningService(ctx, cfg)
-	if err != nil {
-		log.Printf("Error creating provisioning service: %v", err)
-		writeJSONError(w, "failed to create provisioning service", http.StatusInternalServerError)
+	if provisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
 	programConfig := &programs.ServerConfig{
+		Name:              req.Name,
+		ServerID:          serverID,
 		Region:            req.Region,
 		Zone:              req.Zone,
 		MachineType:       req.MachineType,
@@ -177,7 +177,6 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
 		GCPProject:        cfg.ProjectID,
-		InstanceName:      serverID,
 	}
 
 	if err := provisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
@@ -191,7 +190,8 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ServerResponse{
 		ID:     serverID,
 		Config: serverConfigToJSON(serverConfig),
@@ -330,14 +330,14 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provisioningService, err := getProvisioningService(ctx, cfg)
-	if err != nil {
-		log.Printf("Error creating provisioning service: %v", err)
-		writeJSONError(w, "failed to create provisioning service", http.StatusInternalServerError)
+	if provisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
 	programConfig := &programs.ServerConfig{
+		Name:              existingConfig.Name,
+		ServerID:          serverID,
 		Region:            existingConfig.Region,
 		Zone:              existingConfig.Zone,
 		MachineType:       existingConfig.MachineType,
@@ -346,7 +346,6 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
 		GCPProject:        cfg.ProjectID,
-		InstanceName:      serverID,
 	}
 
 	if err := provisioningService.UpdateServer(ctx, serverID, programConfig); err != nil {
@@ -360,6 +359,8 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ServerResponse{
 		ID:     serverID,
 		Config: serverConfigToJSON(existingConfig),
@@ -391,10 +392,8 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provisioningService, err := getProvisioningService(ctx, cfg)
-	if err != nil {
-		log.Printf("Error creating provisioning service: %v", err)
-		writeJSONError(w, "failed to create provisioning service", http.StatusInternalServerError)
+	if provisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -409,6 +408,7 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": fmt.Sprintf("server %s deletion started", serverID),

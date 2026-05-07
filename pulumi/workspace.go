@@ -23,7 +23,8 @@ func NewWorkspaceManager(ctx context.Context, projectID, stateBucket string) (*W
 		return nil, fmt.Errorf("stateBucket is required")
 	}
 
-	os.Setenv("PULUMI_STATE_BUCKET", stateBucket)
+	os.Setenv("PULUMI_BACKEND_URL", fmt.Sprintf("gs://%s", stateBucket))
+	os.Setenv("PULUMI_CONFIG_PASSPHRASE", "")
 	os.Setenv("PULUMI_HOME", "/tmp/.pulumi")
 
 	return &WorkspaceManager{

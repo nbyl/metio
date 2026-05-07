@@ -350,7 +350,14 @@ func (db *FirestoreDB) CreateServerConfig(ctx context.Context, serverID string, 
 	if db.client == nil {
 		return errors.New("client is nil")
 	}
-	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Set(ctx, config)
+	// Write a marker document at servers/{id} so ListServerConfigs can discover it
+	_, err := db.client.Collection("servers").Doc(serverID).Set(ctx, map[string]interface{}{
+		"createdAt": time.Now(),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Set(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -389,6 +396,11 @@ func (db *FirestoreDB) DeleteServerConfig(ctx context.Context, serverID string) 
 		return errors.New("client is nil")
 	}
 	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config").Delete(ctx)
+	if err != nil {
+		return err
+	}
+	// Delete the marker document at servers/{id}
+	_, err = db.client.Collection("servers").Doc(serverID).Delete(ctx)
 	if err != nil {
 		return err
 	}
