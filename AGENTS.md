@@ -62,6 +62,9 @@
 - **Go linting**: Not configured - consider adding `golangci-lint`
 - **Frontend linting**: ESLint + Prettier configured
 
+## API Documentation
+- **Insomnia collection**: `docs/insomnia/metio-api.json` — importable into Insomnia for testing all API endpoints
+
 ## Development Workflow & Infrastructure
 
 - **Issues and Ticket system:** Issues and features are stored in Linear, to retrieve them use the linear tool.
