@@ -111,3 +111,16 @@ func (m *MockDB) ListServerConfigs(ctx context.Context) ([]*db.ServerConfig, err
 	}
 	return args.Get(0).([]*db.ServerConfig), args.Error(1)
 }
+
+func (m *MockDB) GetPulumiSettings(ctx context.Context) (*db.PulumiSettings, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.PulumiSettings), args.Error(1)
+}
+
+func (m *MockDB) SetPulumiSettings(ctx context.Context, settings *db.PulumiSettings) error {
+	args := m.Called(ctx, settings)
+	return args.Error(0)
+}
