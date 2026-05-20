@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/storage"
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/config"
@@ -52,19 +53,25 @@ func initProvisioningService() (*services.ProvisioningService, error) {
 	ctx := context.Background()
 	cfg := config.Load()
 
-	stateBucket := viper.GetString("PULUMI_STATE_BUCKET")
-	if stateBucket == "" {
-		return nil, fmt.Errorf("PULUMI_STATE_BUCKET not configured")
+	dbConn, err := cfg.NewDBConnection(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create db connection: %w", err)
+	}
+
+	storageClient, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage client: %w", err)
+	}
+
+	setupSvc := services.NewSetupService(cfg, dbConn, services.NewStorageAdapter(storageClient))
+	stateBucket, err := setupSvc.EnsureStateBucket(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure Pulumi state bucket: %w", err)
 	}
 
 	workspaceManager, err := pulumi.NewWorkspaceManager(ctx, cfg.ProjectID, stateBucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create workspace manager: %w", err)
-	}
-
-	dbConn, err := cfg.NewDBConnection(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create db connection: %w", err)
 	}
 
 	return services.NewProvisioningService(workspaceManager, dbConn), nil

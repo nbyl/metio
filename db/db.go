@@ -28,6 +28,8 @@ type DB interface {
 	UpdateServerConfig(ctx context.Context, serverID string, config *ServerConfig) error
 	DeleteServerConfig(ctx context.Context, serverID string) error
 	ListServerConfigs(ctx context.Context) ([]*ServerConfig, error)
+	GetPulumiSettings(ctx context.Context) (*PulumiSettings, error)
+	SetPulumiSettings(ctx context.Context, settings *PulumiSettings) error
 }
 
 type FirestoreDB struct {
