@@ -11,13 +11,47 @@ import (
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/spf13/viper"
-	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// ComputeClient abstracts GCP Compute Instance operations for testability.
+type ComputeClient interface {
+	Start(ctx context.Context, req *computepb.StartInstanceRequest) error
+	Stop(ctx context.Context, req *computepb.StopInstanceRequest) error
+	Close() error
+}
+
+// gcpComputeClient wraps the real GCP compute client.
+type gcpComputeClient struct {
+	client *compute.InstancesClient
+}
+
+func (g *gcpComputeClient) Start(ctx context.Context, req *computepb.StartInstanceRequest) error {
+	_, err := g.client.Start(ctx, req)
+	return err
+}
+
+func (g *gcpComputeClient) Stop(ctx context.Context, req *computepb.StopInstanceRequest) error {
+	_, err := g.client.Stop(ctx, req)
+	return err
+}
+
+func (g *gcpComputeClient) Close() error {
+	return g.client.Close()
+}
+
+// newComputeClient is a function variable for creating compute clients. Override in tests.
+var newComputeClient = func(ctx context.Context) (ComputeClient, error) {
+	c, err := compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &gcpComputeClient{client: c}, nil
+}
 
 // ServerStatus represents the server status for JSON API responses
 type ServerStatus struct {
@@ -61,7 +95,7 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "startServerHandler")
 	defer span.End()
 
-	cfg := config.Load()
+	dbConn, cfg, dbErr := getDBConnection(ctx)
 	zone := viper.GetString("GCP_ZONE")
 
 	span.SetAttributes(
@@ -70,7 +104,7 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 		attribute.String("instance.zone", zone),
 	)
 
-	c, err := compute.NewInstancesRESTClient(ctx)
+	c, err := newComputeClient(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "compute_client_failed"))
 		log.Print(err)
@@ -79,13 +113,13 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.Close()
 
-	req := &computepb.StartInstanceRequest{
+	startReq := &computepb.StartInstanceRequest{
 		Instance: cfg.InstanceName,
 		Project:  cfg.ProjectID,
 		Zone:     zone,
 	}
 
-	_, err = c.Start(ctx, req)
+	err = c.Start(ctx, startReq)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "start_instance_failed"))
 		log.Print(err)
@@ -94,7 +128,6 @@ func startServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update DB with starting status
-	dbConn, dbErr := cfg.NewDBConnection(ctx)
 	if dbErr != nil {
 		span.SetAttributes(attribute.String("error", "db_connection_failed"))
 		log.Printf("Error connecting to db for status update: %v", dbErr)
@@ -134,7 +167,7 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "stopServerHandler")
 	defer span.End()
 
-	cfg := config.Load()
+	dbConn, cfg, dbErr := getDBConnection(ctx)
 	zone := viper.GetString("GCP_ZONE")
 
 	span.SetAttributes(
@@ -143,7 +176,7 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 		attribute.String("instance.zone", zone),
 	)
 
-	c, err := compute.NewInstancesRESTClient(ctx)
+	c, err := newComputeClient(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "compute_client_failed"))
 		log.Print(err)
@@ -152,13 +185,13 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.Close()
 
-	req := &computepb.StopInstanceRequest{
+	stopReq := &computepb.StopInstanceRequest{
 		Instance: cfg.InstanceName,
 		Project:  cfg.ProjectID,
 		Zone:     zone,
 	}
 
-	_, err = c.Stop(ctx, req)
+	err = c.Stop(ctx, stopReq)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "stop_instance_failed"))
 		log.Print(err)
@@ -167,7 +200,6 @@ func stopServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update DB with stopping status
-	dbConn, dbErr := cfg.NewDBConnection(ctx)
 	if dbErr != nil {
 		span.SetAttributes(attribute.String("error", "db_connection_failed"))
 		log.Printf("Error connecting to db for status update: %v", dbErr)
@@ -226,18 +258,16 @@ func getServerStatus(ctx context.Context) (*ServerStatus, error) {
 	ctx, span := tracer.Start(ctx, "getServerStatus")
 	defer span.End()
 
-	cfg := config.Load()
+	dbConn, cfg, err := getDBConnection(ctx)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "database_connection_failed"))
+		return nil, fmt.Errorf("error connecting to database: %w", err)
+	}
 
 	span.SetAttributes(
 		attribute.String("instance.name", cfg.InstanceName),
 		attribute.String("database.id", cfg.DatabaseID()),
 	)
-
-	dbConn, err := cfg.NewDBConnection(ctx)
-	if err != nil {
-		span.SetAttributes(attribute.String("error", "database_connection_failed"))
-		return nil, fmt.Errorf("error connecting to database: %w", err)
-	}
 
 	playerStatus, err := dbConn.GetStatus(ctx, cfg.InstanceName)
 	if err != nil {
@@ -327,20 +357,19 @@ func scheduleShutdownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := config.Load()
-	span.SetAttributes(
-		attribute.String("instance.name", cfg.InstanceName),
-		attribute.String("shutdown.time", shutdownTime.Format(time.RFC3339)),
-	)
-
 	// Get database connection
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
 		return
 	}
+
+	span.SetAttributes(
+		attribute.String("instance.name", cfg.InstanceName),
+		attribute.String("shutdown.time", shutdownTime.Format(time.RFC3339)),
+	)
 
 	// Get current status to preserve other fields
 	currentStatus, err := dbConn.GetStatus(ctx, cfg.InstanceName)
@@ -378,17 +407,16 @@ func cancelScheduledShutdownHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "cancelScheduledShutdownHandler")
 	defer span.End()
 
-	cfg := config.Load()
-	span.SetAttributes(attribute.String("instance.name", cfg.InstanceName))
-
 	// Get database connection
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
 		return
 	}
+
+	span.SetAttributes(attribute.String("instance.name", cfg.InstanceName))
 
 	// Get current status to preserve other fields
 	currentStatus, err := dbConn.GetStatus(ctx, cfg.InstanceName)

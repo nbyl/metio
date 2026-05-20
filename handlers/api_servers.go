@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
-	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/pulumi/programs"
 )
@@ -125,8 +124,6 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := config.Load()
-
 	shutdownSchedule := shutdownScheduleFromInput(req.ShutdownSchedule)
 	serverConfig := &db.ServerConfig{
 		Name:             req.Name,
@@ -145,7 +142,7 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -201,9 +198,7 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 func listServers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, _, err := getDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -239,9 +234,7 @@ func getServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, _, err := getDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -280,9 +273,7 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -377,9 +368,7 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, _, err := getDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
