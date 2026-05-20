@@ -232,3 +232,9 @@ resource "google_project_iam_member" "sa_storage_object_admin" {
   role    = "roles/storage.objectAdmin"
   member  = "serviceAccount:${google_service_account.controller_service_account.email}"
 }
+
+resource "google_project_iam_member" "sa_storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.admin"
+  member  = "serviceAccount:${google_service_account.controller_service_account.email}"
+}
