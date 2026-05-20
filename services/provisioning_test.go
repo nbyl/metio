@@ -11,110 +11,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/pulumi"
+	"gitlab.com/nbyl/metio/pulumi/programs"
+	"gitlab.com/nbyl/metio/testutil"
 )
 
-type MockDB struct {
-	mock.Mock
-}
-
-func (m *MockDB) UpdateStatus(ctx context.Context, instanceName string, status db.Status) error {
-	args := m.Called(ctx, instanceName, status)
-	return args.Error(0)
-}
-
-func (m *MockDB) GetStatus(ctx context.Context, instanceName string) (db.Status, error) {
-	args := m.Called(ctx, instanceName)
-	return args.Get(0).(db.Status), args.Error(1)
-}
-
-func (m *MockDB) GetWhitelistConfig(ctx context.Context, instanceName string) (db.WhitelistConfig, error) {
-	args := m.Called(ctx, instanceName)
-	return args.Get(0).(db.WhitelistConfig), args.Error(1)
-}
-
-func (m *MockDB) SetWhitelistConfig(ctx context.Context, instanceName string, config db.WhitelistConfig) error {
-	args := m.Called(ctx, instanceName, config)
-	return args.Error(0)
-}
-
-func (m *MockDB) GetWhitelistEntries(ctx context.Context, instanceName string) ([]db.WhitelistEntry, error) {
-	args := m.Called(ctx, instanceName)
-	return args.Get(0).([]db.WhitelistEntry), args.Error(1)
-}
-
-func (m *MockDB) AddWhitelistEntry(ctx context.Context, instanceName string, entry db.WhitelistEntry) error {
-	args := m.Called(ctx, instanceName, entry)
-	return args.Error(0)
-}
-
-func (m *MockDB) RemoveWhitelistEntry(ctx context.Context, instanceName string, uuid string) error {
-	args := m.Called(ctx, instanceName, uuid)
-	return args.Error(0)
-}
-
-func (m *MockDB) SetWhitelistEntries(ctx context.Context, instanceName string, entries []db.WhitelistEntry) error {
-	args := m.Called(ctx, instanceName, entries)
-	return args.Error(0)
-}
-
-func (m *MockDB) GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error) {
-	args := m.Called(ctx, serverID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*db.ProvisioningStatus), args.Error(1)
-}
-
-func (m *MockDB) UpdateProvisioningStatus(ctx context.Context, serverID string, status *db.ProvisioningStatus) error {
-	args := m.Called(ctx, serverID, status)
-	return args.Error(0)
-}
-
-func (m *MockDB) AddProvisioningStep(ctx context.Context, serverID string, step db.ProvisioningStep) error {
-	args := m.Called(ctx, serverID, step)
-	return args.Error(0)
-}
-
-func (m *MockDB) CompleteProvisioning(ctx context.Context, serverID string, outputs map[string]string) error {
-	args := m.Called(ctx, serverID, outputs)
-	return args.Error(0)
-}
-
-func (m *MockDB) FailProvisioning(ctx context.Context, serverID string, errMsg string) error {
-	args := m.Called(ctx, serverID, errMsg)
-	return args.Error(0)
-}
-
-func (m *MockDB) CreateServerConfig(ctx context.Context, serverID string, config *db.ServerConfig) error {
-	args := m.Called(ctx, serverID, config)
-	return args.Error(0)
-}
-
-func (m *MockDB) GetServerConfig(ctx context.Context, serverID string) (*db.ServerConfig, error) {
-	args := m.Called(ctx, serverID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*db.ServerConfig), args.Error(1)
-}
-
-func (m *MockDB) UpdateServerConfig(ctx context.Context, serverID string, config *db.ServerConfig) error {
-	args := m.Called(ctx, serverID, config)
-	return args.Error(0)
-}
-
-func (m *MockDB) DeleteServerConfig(ctx context.Context, serverID string) error {
-	args := m.Called(ctx, serverID)
-	return args.Error(0)
-}
-
-func (m *MockDB) ListServerConfigs(ctx context.Context) ([]*db.ServerConfig, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*db.ServerConfig), args.Error(1)
-}
+// Re-export for backward compatibility within this test file
+type MockDB = testutil.MockDB
 
 func TestIsRetryableError(t *testing.T) {
 	tests := []struct {
@@ -411,4 +313,264 @@ func TestProvisioningStatusStruct(t *testing.T) {
 	assert.Len(t, status.Steps, 1)
 	assert.NotNil(t, status.Outputs)
 	assert.Equal(t, "test-instance", status.Outputs["instanceName"])
+}
+
+func newTestService() (*ProvisioningService, *testutil.MockWorkspaceManager, *MockDB) {
+	mockWM := new(testutil.MockWorkspaceManager)
+	mockDB := new(MockDB)
+	svc := &ProvisioningService{
+		workspaceManager: mockWM,
+		db:               mockDB,
+		operations:       make(map[string]context.CancelFunc),
+		operationTimeout: 5 * time.Second,
+		retryAttempts:    1,
+		retryDelay:       1 * time.Millisecond,
+	}
+	return svc, mockWM, mockDB
+}
+
+func TestCreateServer_Success(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
+		Outputs: auto.OutputMap{},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.NoError(t, err)
+
+	// Wait for goroutine to complete
+	time.Sleep(100 * time.Millisecond)
+	mockDB.AssertCalled(t, "UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus"))
+}
+
+func TestCreateServer_UpsertError(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(nil, errors.New("upsert failed"))
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.NoError(t, err) // queueOperation returns nil immediately
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestCreateServer_SetConfigError(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(errors.New("config error"))
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestCreateServer_UpError(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{}, errors.New("deploy failed"))
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestUpdateServer_Success(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
+		Outputs: auto.OutputMap{},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestDestroyServer_Success(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.DestroyServer(context.Background(), "srv1")
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestDestroyServer_Error(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(errors.New("destroy failed"))
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.DestroyServer(context.Background(), "srv1")
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestQueueOperation_AlreadyInProgress(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	// Manually add an operation
+	svc.mu.Lock()
+	svc.operations["srv1"] = func() {}
+	svc.mu.Unlock()
+
+	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "operation already in progress")
+}
+
+func TestQueueOperation_CancelledContext(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := svc.CreateServer(ctx, "srv1", &programs.ServerConfig{Name: "test"})
+	assert.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+}
+
+func TestCancelOperation_Success(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	called := false
+	svc.mu.Lock()
+	svc.operations["srv1"] = func() { called = true }
+	svc.mu.Unlock()
+
+	err := svc.CancelOperation(context.Background(), "srv1")
+	assert.NoError(t, err)
+	assert.True(t, called)
+}
+
+func TestCancelOperation_NotFound(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	err := svc.CancelOperation(context.Background(), "nonexistent")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no operation in progress")
+}
+
+func TestGetProvisioningStatus(t *testing.T) {
+	svc, _, mockDB := newTestService()
+
+	expected := &db.ProvisioningStatus{ID: "status-1", State: db.ProvisioningStateCompleted}
+	mockDB.On("GetProvisioningStatus", mock.Anything, "srv1").Return(expected, nil)
+
+	result, err := svc.GetProvisioningStatus(context.Background(), "srv1")
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+}
+
+func TestGetProvisioningStatus_Error(t *testing.T) {
+	svc, _, mockDB := newTestService()
+
+	mockDB.On("GetProvisioningStatus", mock.Anything, "srv1").Return((*db.ProvisioningStatus)(nil), errors.New("not found"))
+
+	result, err := svc.GetProvisioningStatus(context.Background(), "srv1")
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestExecuteWithRetry_Success(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	err := svc.executeWithRetry(context.Background(), func() error {
+		return nil
+	})
+	assert.NoError(t, err)
+}
+
+func TestExecuteWithRetry_NonRetryableError(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	err := svc.executeWithRetry(context.Background(), func() error {
+		return errors.New("permission denied")
+	})
+	assert.Error(t, err)
+	assert.Equal(t, "permission denied", err.Error())
+}
+
+func TestExecuteWithRetry_RetryableExhausted(t *testing.T) {
+	svc, _, _ := newTestService()
+	svc.retryAttempts = 2
+
+	err := svc.executeWithRetry(context.Background(), func() error {
+		return errors.New("connection refused")
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "operation failed after 2 attempts")
+}
+
+func TestExecuteWithRetry_ContextCancelled(t *testing.T) {
+	svc, _, _ := newTestService()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := svc.executeWithRetry(ctx, func() error {
+		return errors.New("connection refused")
+	})
+	assert.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+}
+
+func TestUpdateStatus_DBError(t *testing.T) {
+	svc, _, mockDB := newTestService()
+
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(errors.New("db error"))
+
+	status := &db.ProvisioningStatus{ID: "test"}
+	// Should not panic, just log
+	assert.NotPanics(t, func() {
+		svc.updateStatus(context.Background(), "srv1", status)
+	})
+}
+
+func TestCreateServer_WithOutputs(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
+		Outputs: auto.OutputMap{
+			"instanceIP": auto.OutputValue{Value: "10.0.0.1"},
+		},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
 }

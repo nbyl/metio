@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -47,20 +46,18 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "getWhitelistHandler")
 	defer span.End()
 
-	cfg := config.Load()
-
-	span.SetAttributes(
-		attribute.String("instance.name", cfg.InstanceName),
-		attribute.String("database.id", cfg.DatabaseID()),
-	)
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
 		return
 	}
+
+	span.SetAttributes(
+		attribute.String("instance.name", cfg.InstanceName),
+		attribute.String("database.id", cfg.DatabaseID()),
+	)
 
 	// Get whitelist config
 	whitelistConfig, err := dbConn.GetWhitelistConfig(ctx, cfg.InstanceName)
@@ -157,9 +154,7 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		userEmail = "unknown"
 	}
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -212,9 +207,7 @@ func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.String("uuid", uuid))
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -252,15 +245,14 @@ func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.Bool("enabled", req.Enabled))
 
-	cfg := config.Load()
-
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, cfg, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
 		return
 	}
+	_ = cfg
 
 	whitelistConfig := db.WhitelistConfig{Enabled: req.Enabled}
 	if err := dbConn.SetWhitelistConfig(ctx, cfg.InstanceName, whitelistConfig); err != nil {

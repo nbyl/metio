@@ -179,6 +179,6 @@ func FormatUUID(uuid string) string {
 var defaultMojangClient = NewMojangClient()
 
 // LookupMinecraftUser looks up a Minecraft user using the default client
-func LookupMinecraftUser(ctx context.Context, username string) (*MojangProfile, error) {
+var LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
 	return defaultMojangClient.LookupUser(ctx, username)
 }
