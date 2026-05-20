@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/tracing"
 	"go.opentelemetry.io/otel"
@@ -232,8 +231,7 @@ func updateInstanceState(ctx context.Context, instanceName string, state db.Serv
 	tracing.RecordDBOperation("update_instance_state")
 
 	// Get database connection
-	cfg := config.Load()
-	dbConn, err := cfg.NewDBConnection(ctx)
+	dbConn, _, err := getDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		tracing.RecordError("database_connection_failed")
