@@ -35,6 +35,10 @@ var osReadFile = os.ReadFile
 var syncWhitelistFunc = syncWhitelist
 var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
 var checkScheduledShutdownFunc = checkScheduledShutdown
+var getInstanceIPFunc = getInstanceIP
+var stopInstanceFunc = stopInstance
+var sendMinecraftMessageFunc = sendMinecraftMessage
+var saveMinecraftWorldFunc = saveMinecraftWorld
 
 // WarningState represents the state of shutdown warnings sent
 type WarningState int
@@ -135,7 +139,7 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		tracing.RecordError("get_uptime_failed")
 		return err
 	}
-	instanceIP, err := getInstanceIP()
+	instanceIP, err := getInstanceIPFunc()
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_instance_ip_failed"))
 		tracing.RecordError("get_instance_ip_failed")
@@ -603,14 +607,14 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 
 	// Send warnings based on remaining time
 	if remaining <= 1*time.Minute && shutdownWarningState < WarningStateOneMin {
-		if err := sendMinecraftMessage("Server will shut down in 1 minute! Save your progress!"); err != nil {
+		if err := sendMinecraftMessageFunc("Server will shut down in 1 minute! Save your progress!"); err != nil {
 			log.Printf("Error sending 1-minute warning: %v", err)
 		} else {
 			log.Println("Sent 1-minute shutdown warning")
 		}
 		shutdownWarningState = WarningStateOneMin
 	} else if remaining <= 5*time.Minute && shutdownWarningState < WarningStateFiveMin {
-		if err := sendMinecraftMessage("Server will shut down in 5 minutes!"); err != nil {
+		if err := sendMinecraftMessageFunc("Server will shut down in 5 minutes!"); err != nil {
 			log.Printf("Error sending 5-minute warning: %v", err)
 		} else {
 			log.Println("Sent 5-minute shutdown warning")
@@ -645,12 +649,12 @@ func saveMinecraftWorld() error {
 // initiateScheduledShutdown handles the shutdown process
 func initiateScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName string) error {
 	// Send final warning
-	if err := sendMinecraftMessage("Server is shutting down NOW!"); err != nil {
+	if err := sendMinecraftMessageFunc("Server is shutting down NOW!"); err != nil {
 		log.Printf("Error sending final shutdown message: %v", err)
 	}
 
 	// Save the world
-	if err := saveMinecraftWorld(); err != nil {
+	if err := saveMinecraftWorldFunc(); err != nil {
 		log.Printf("Error saving world before shutdown: %v", err)
 		// Continue with shutdown even if save fails
 	}
@@ -676,7 +680,7 @@ func initiateScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName s
 
 	// Initiate VM shutdown via GCP Compute API
 	log.Println("Initiating VM shutdown via GCP Compute API...")
-	if err := stopInstance(ctx); err != nil {
+	if err := stopInstanceFunc(ctx); err != nil {
 		return fmt.Errorf("failed to stop instance: %w", err)
 	}
 

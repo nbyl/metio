@@ -31,7 +31,7 @@ var errOperationInProgress = errors.New("operation already in progress")
 var errNoOperationInProgress = errors.New("no operation in progress")
 
 type ProvisioningService struct {
-	workspaceManager *pulumi.WorkspaceManager
+	workspaceManager pulumi.WorkspaceManagerInterface
 	db               db.DB
 	operations       map[string]context.CancelFunc
 	mu               sync.RWMutex
@@ -40,7 +40,7 @@ type ProvisioningService struct {
 	retryDelay       time.Duration
 }
 
-func NewProvisioningService(workspaceManager *pulumi.WorkspaceManager, dbConn db.DB) *ProvisioningService {
+func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB) *ProvisioningService {
 	return &ProvisioningService{
 		workspaceManager: workspaceManager,
 		db:               dbConn,

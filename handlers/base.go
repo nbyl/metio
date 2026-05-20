@@ -1,19 +1,38 @@
 package handlers
 
 import (
+	"context"
 	"io/fs"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/services"
+	"gitlab.com/nbyl/metio/config"
+	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/pulumi/programs"
 	"gitlab.com/nbyl/metio/static"
 )
 
-var provisioningService *services.ProvisioningService
+// ProvisioningServiceInterface defines the methods used by handlers from the provisioning service.
+type ProvisioningServiceInterface interface {
+	CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
+	UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
+	DestroyServer(ctx context.Context, serverID string) error
+	GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error)
+}
 
-func New(ps *services.ProvisioningService) *mux.Router {
+var provisioningService ProvisioningServiceInterface
+
+// getDBConnection is a function variable that returns a DB connection.
+// Override in tests to inject a mock DB.
+var getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
+	cfg := config.Load()
+	dbConn, err := cfg.NewDBConnection(ctx)
+	return dbConn, cfg, err
+}
+
+func New(ps ProvisioningServiceInterface) *mux.Router {
 	provisioningService = ps
 	r := mux.NewRouter()
 
