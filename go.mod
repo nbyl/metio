@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/compute v1.44.0
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/firestore v1.18.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/sessions v1.4.0
@@ -20,6 +21,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.41.0
 	go.opentelemetry.io/otel/trace v1.41.0
 	golang.org/x/oauth2 v0.35.0
+	google.golang.org/api v0.248.0
 	google.golang.org/grpc v1.79.3
 )
 
@@ -69,7 +71,6 @@ require (
 	github.com/golang/glog v1.2.5 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
@@ -146,7 +147,6 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
-	google.golang.org/api v0.248.0 // indirect
 	google.golang.org/genproto v0.0.0-20250715232539-7130f93afb79 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260226221140-a57be14db171 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect

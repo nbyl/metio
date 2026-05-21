@@ -14,9 +14,16 @@ import (
 	"gitlab.com/nbyl/metio/pulumi"
 	"gitlab.com/nbyl/metio/services"
 	"gitlab.com/nbyl/metio/tracing"
+	"google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/serviceusage/v1"
 )
 
 var Version = "dev" // default, overridden by ldflags
+
+type servicesBundle struct {
+	provisioning *services.ProvisioningService
+	validation   *services.ValidationService
+}
 
 func main() {
 	// Initialize viper first so config is available for tracing
@@ -32,13 +39,13 @@ func main() {
 	}
 	defer tracing.ShutdownTracer()
 
-	// Initialize provisioning service as a singleton
-	provisioningService, err := initProvisioningService()
+	// Initialize services
+	svcs, err := initServices()
 	if err != nil {
-		log.Printf("Warning: provisioning service not available: %v", err)
+		log.Printf("Warning: services not fully available: %v", err)
 	}
 
-	r := handlers.New(provisioningService)
+	r := handlers.New(svcs.provisioning, svcs.validation)
 
 	// Wrap router with CORS middleware (only enabled in dev mode)
 	handler := handlers.CORSMiddleware(r)
@@ -48,7 +55,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), gorillahandlers.LoggingHandler(os.Stdout, handler)))
 }
 
-func initProvisioningService() (*services.ProvisioningService, error) {
+func initServices() (*servicesBundle, error) {
 	ctx := context.Background()
 	cfg := config.Load()
 
@@ -67,5 +74,24 @@ func initProvisioningService() (*services.ProvisioningService, error) {
 		return nil, fmt.Errorf("failed to create db connection: %w", err)
 	}
 
-	return services.NewProvisioningService(workspaceManager, dbConn), nil
+	provisioningService := services.NewProvisioningService(workspaceManager, dbConn)
+
+	suSvc, err := serviceusage.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create serviceusage client: %w", err)
+	}
+
+	rmSvc, err := cloudresourcemanager.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+
+	validationService := services.NewValidationService(cfg,
+		services.NewServiceUsageAdapter(suSvc),
+		services.NewResourceManagerAdapter(rmSvc))
+
+	return &servicesBundle{
+		provisioning: provisioningService,
+		validation:   validationService,
+	}, nil
 }

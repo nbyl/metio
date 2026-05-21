@@ -24,6 +24,8 @@ type ProvisioningServiceInterface interface {
 
 var provisioningService ProvisioningServiceInterface
 
+var validationService ValidationServiceInterface
+
 // getDBConnection is a function variable that returns a DB connection.
 // Override in tests to inject a mock DB.
 var getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
@@ -32,8 +34,9 @@ var getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
 	return dbConn, cfg, err
 }
 
-func New(ps ProvisioningServiceInterface) *mux.Router {
+func New(ps ProvisioningServiceInterface, vs ValidationServiceInterface) *mux.Router {
 	provisioningService = ps
+	validationService = vs
 	r := mux.NewRouter()
 
 	// Add tracing middleware to all routes
@@ -71,6 +74,8 @@ func New(ps ProvisioningServiceInterface) *mux.Router {
 	apiRouter.HandleFunc("/servers/{id}", updateServer).Methods("PUT")
 	apiRouter.HandleFunc("/servers/{id}", deleteServer).Methods("DELETE")
 	apiRouter.HandleFunc("/servers/{id}/provisioning", getServerProvisioningStatus).Methods("GET")
+
+	apiRouter.HandleFunc("/setup/validate", validateSetupHandler).Methods("GET")
 
 	// SPA fallback - serve React app for all other routes
 	r.PathPrefix("/").Handler(spaHandler())
