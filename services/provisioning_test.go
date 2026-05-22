@@ -129,7 +129,7 @@ func TestNewProvisioningService(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 
 	assert.NotNil(t, service)
 	assert.Equal(t, 30*time.Minute, service.operationTimeout)
@@ -140,7 +140,7 @@ func TestNewProvisioningService(t *testing.T) {
 func TestCompleteStep(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 
 	status := &db.ProvisioningStatus{
 		Steps: []db.ProvisioningStep{
@@ -160,7 +160,7 @@ func TestCompleteStep(t *testing.T) {
 func TestCompleteStepNotFound(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 
 	status := &db.ProvisioningStatus{
 		Steps: []db.ProvisioningStep{
@@ -177,7 +177,7 @@ func TestCompleteStepNotFound(t *testing.T) {
 func TestUpdateStep(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 
 	service.updateStep(context.Background(), "test-server", stepDeployInfrastructure, "Deploying infrastructure...")
 }
@@ -185,7 +185,7 @@ func TestUpdateStep(t *testing.T) {
 func TestHandleError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -209,7 +209,7 @@ func TestHandleError(t *testing.T) {
 func TestExecuteUpWithRetry_Success(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 	service.retryAttempts = 3
 	service.retryDelay = 1 * time.Millisecond
 
@@ -224,7 +224,7 @@ func TestExecuteUpWithRetry_Success(t *testing.T) {
 func TestExecuteUpWithRetry_NonRetryableError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 	service.retryAttempts = 3
 	service.retryDelay = 1 * time.Millisecond
 
@@ -239,7 +239,7 @@ func TestExecuteUpWithRetry_NonRetryableError(t *testing.T) {
 func TestExecuteUpWithRetry_RetryableError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 	service.retryAttempts = 3
 	service.retryDelay = 1 * time.Millisecond
 
@@ -255,7 +255,7 @@ func TestExecuteUpWithRetry_RetryableError(t *testing.T) {
 func TestUpdateStatus(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB)
+	service := NewProvisioningService(wm, mockDB, "test-version")
 
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -340,6 +340,8 @@ func TestCreateServer_Success(t *testing.T) {
 		Outputs: auto.OutputMap{},
 	}, nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
 	assert.NoError(t, err)
@@ -356,9 +358,51 @@ func TestCreateServer_UpsertError(t *testing.T) {
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
 	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
-	assert.NoError(t, err) // queueOperation returns nil immediately
+	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestStampServerConfig_SetsVersionFields(t *testing.T) {
+	mockDB := new(MockDB)
+	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
+	svc := NewProvisioningService(wm, mockDB, "abc1234")
+
+	existingConfig := &db.ServerConfig{Name: "test-server", InfraVersion: 0}
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existingConfig, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.MatchedBy(func(cfg *db.ServerConfig) bool {
+		return cfg.InfraVersion == programs.CurrentInfraVersion && cfg.DeployedByControllerVersion == "abc1234"
+	})).Return(nil)
+
+	err := svc.stampServerConfig(context.Background(), "srv1")
+	assert.NoError(t, err)
+	mockDB.AssertExpectations(t)
+}
+
+func TestStampServerConfig_GetError(t *testing.T) {
+	mockDB := new(MockDB)
+	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
+	svc := NewProvisioningService(wm, mockDB, "abc1234")
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(nil, errors.New("not found"))
+
+	err := svc.stampServerConfig(context.Background(), "srv1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get server config")
+}
+
+func TestStampServerConfig_UpdateError(t *testing.T) {
+	mockDB := new(MockDB)
+	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
+	svc := NewProvisioningService(wm, mockDB, "abc1234")
+
+	existingConfig := &db.ServerConfig{Name: "test-server"}
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existingConfig, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(errors.New("write failed"))
+
+	err := svc.stampServerConfig(context.Background(), "srv1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to update server config")
 }
 
 func TestCreateServer_SetConfigError(t *testing.T) {
@@ -403,6 +447,8 @@ func TestUpdateServer_Success(t *testing.T) {
 		Outputs: auto.OutputMap{},
 	}, nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
 	assert.NoError(t, err)
@@ -568,6 +614,8 @@ func TestCreateServer_WithOutputs(t *testing.T) {
 		},
 	}, nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	err := svc.CreateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
 	assert.NoError(t, err)

@@ -74,5 +74,5 @@ func initProvisioningService() (*services.ProvisioningService, error) {
 		return nil, fmt.Errorf("failed to create workspace manager: %w", err)
 	}
 
-	return services.NewProvisioningService(workspaceManager, dbConn), nil
+	return services.NewProvisioningService(workspaceManager, dbConn, Version), nil
 }
