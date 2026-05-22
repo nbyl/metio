@@ -1412,7 +1412,7 @@ func TestStopServerHandler_DBUpdateError(t *testing.T) {
 // --- New and spaHandler tests ---
 
 func TestNew_ReturnsRouter(t *testing.T) {
-	r := New(nil)
+	r := New(nil, nil)
 	assert.NotNil(t, r)
 }
 

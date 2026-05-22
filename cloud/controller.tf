@@ -18,6 +18,7 @@ resource "google_project_iam_custom_role" "controller-role" {
     "iam.serviceAccounts.signBlob",
     "logging.logEntries.create",
     "monitoring.timeSeries.create",
+    "serviceusage.services.get",
     "serviceusage.services.use",
     "telemetry.traces.write",
   ]
