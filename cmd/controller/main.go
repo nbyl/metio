@@ -81,7 +81,7 @@ func initServices() (*servicesBundle, error) {
 		return nil, fmt.Errorf("failed to create workspace manager: %w", err)
 	}
 
-	provisioningService := services.NewProvisioningService(workspaceManager, dbConn)
+	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version)
 
 	suSvc, err := serviceusage.NewService(ctx)
 	if err != nil {
