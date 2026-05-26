@@ -18,8 +18,8 @@ func (m *MockProvisioningService) CreateServer(ctx context.Context, serverID str
 	return args.Error(0)
 }
 
-func (m *MockProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	args := m.Called(ctx, serverID, config)
+func (m *MockProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
+	args := m.Called(ctx, serverID, config, updateType)
 	return args.Error(0)
 }
 
@@ -34,4 +34,9 @@ func (m *MockProvisioningService) GetProvisioningStatus(ctx context.Context, ser
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*db.ProvisioningStatus), args.Error(1)
+}
+
+func (m *MockProvisioningService) RevertServerConfig(ctx context.Context, serverID string) error {
+	args := m.Called(ctx, serverID)
+	return args.Error(0)
 }

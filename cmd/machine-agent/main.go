@@ -39,6 +39,9 @@ var getInstanceIPFunc = getInstanceIP
 var stopInstanceFunc = stopInstance
 var sendMinecraftMessageFunc = sendMinecraftMessage
 var saveMinecraftWorldFunc = saveMinecraftWorld
+var handlePendingCommandFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error {
+	return nil // default no-op; production main() replaces with handlePendingCommand
+}
 
 // WarningState represents the state of shutdown warnings sent
 type WarningState int
@@ -88,6 +91,8 @@ func main() {
 
 	fmt.Printf("Machine agent started with check interval: %v\n", interval)
 
+	handlePendingCommandFunc = handlePendingCommand
+
 	// Import whitelist on startup if Firestore is empty
 	if err := importWhitelistIfEmptyFunc(ctx, dbConn, cfg.InstanceName); err != nil {
 		log.Printf("Error during initial whitelist import: %v", err)
@@ -122,6 +127,12 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		span.SetAttributes(attribute.String("error", "check_scheduled_shutdown_failed"))
 		log.Printf("Error checking scheduled shutdown: %v", err)
 		// Don't fail the entire update, just log the error
+	}
+
+	// Handle any pending commands from the controller (e.g., world save).
+	if err := handlePendingCommandFunc(ctx, dbConn, instanceName); err != nil {
+		span.SetAttributes(attribute.String("error", "handle_pending_command_failed"))
+		log.Printf("Error handling pending command: %v", err)
 	}
 
 	// Record database operation
@@ -644,6 +655,33 @@ func saveMinecraftWorld() error {
 	}
 	log.Println("World saved successfully")
 	return nil
+}
+
+// handlePendingCommand checks for and executes pending commands from the controller.
+// Currently supports: "save" - triggers a world save via RCON.
+func handlePendingCommand(ctx context.Context, dbConn db.DB, instanceName string) error {
+	status, err := dbConn.GetStatus(ctx, instanceName)
+	if err != nil {
+		return fmt.Errorf("failed to get status: %w", err)
+	}
+	if status.PendingCommand == "" {
+		return nil
+	}
+
+	command := status.PendingCommand
+	switch command {
+	case "save":
+		if err := saveMinecraftWorldFunc(); err != nil {
+			status.PendingCommandResult = "failed: " + err.Error()
+		} else {
+			status.PendingCommandResult = "completed"
+		}
+	default:
+		status.PendingCommandResult = "failed: unknown command: " + command
+	}
+	status.PendingCommand = ""
+
+	return dbConn.UpdateStatus(ctx, instanceName, status)
 }
 
 // initiateScheduledShutdown handles the shutdown process

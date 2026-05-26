@@ -305,14 +305,24 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name != nil {
-		existingConfig.Name = *req.Name
-	}
+	// Reject immutable field changes: region and zone.
 	if req.Region != nil {
-		existingConfig.Region = *req.Region
+		writeJSONError(w, "region is immutable; create a new server to change location", http.StatusBadRequest)
+		return
 	}
 	if req.Zone != nil {
-		existingConfig.Zone = *req.Zone
+		writeJSONError(w, "zone is immutable; create a new server to change location", http.StatusBadRequest)
+		return
+	}
+
+	// Reject disk size decreases.
+	if req.DiskSizeGB != nil && *req.DiskSizeGB < existingConfig.DiskSizeGB {
+		writeJSONError(w, "disk size can only be increased", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name != nil {
+		existingConfig.Name = *req.Name
 	}
 	if req.MachineType != nil {
 		existingConfig.MachineType = *req.MachineType
@@ -330,6 +340,16 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 
 	if err := db.ValidateServerConfig(existingConfig); err != nil {
 		writeJSONError(w, fmt.Sprintf("validation error: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Classify the update type based on which fields changed.
+	updateType := classifyUpdate(req, existingConfig)
+
+	// Save a snapshot of the current config before updating, for rollback.
+	if err := dbConn.SaveConfigSnapshot(ctx, serverID, existingConfig); err != nil {
+		log.Printf("Error saving config snapshot: %v", err)
+		writeJSONError(w, "failed to save config snapshot", http.StatusInternalServerError)
 		return
 	}
 
@@ -357,11 +377,15 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		GCPProject:        cfg.ProjectID,
 	}
 
-	if err := provisioningService.UpdateServer(ctx, serverID, programConfig); err != nil {
+	if err := provisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {
 		log.Printf("Error starting server update: %v", err)
 		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
 			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)
 			return
+		}
+		// Revert config snapshot on provisioning failure.
+		if revertErr := provisioningService.RevertServerConfig(ctx, serverID); revertErr != nil {
+			log.Printf("Error reverting config after failed update: %v", revertErr)
 		}
 		writeJSONError(w, fmt.Sprintf("failed to start update: %s", err.Error()), http.StatusInternalServerError)
 		return
@@ -376,6 +400,17 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		CurrentInfraVersion: programs.CurrentInfraVersion,
 		Outdated:            true, // outdated until provisioning completes
 	})
+}
+
+// classifyUpdate determines the UpdateType based on which fields were changed in the request.
+func classifyUpdate(req UpdateServerRequest, config *db.ServerConfig) int {
+	if req.MinecraftVersion != nil {
+		return int(UpdateTypeRecreate)
+	}
+	if req.MachineType != nil {
+		return int(UpdateTypeResize)
+	}
+	return int(UpdateTypeInPlace)
 }
 
 func deleteServer(w http.ResponseWriter, r *http.Request) {

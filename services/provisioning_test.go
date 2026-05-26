@@ -9,6 +9,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/pulumi"
 	"gitlab.com/nbyl/metio/pulumi/programs"
@@ -321,6 +322,7 @@ func newTestService() (*ProvisioningService, *testutil.MockWorkspaceManager, *Mo
 	svc := &ProvisioningService{
 		workspaceManager: mockWM,
 		db:               mockDB,
+		backupCoord:      NewBackupCoordinator(mockDB),
 		operations:       make(map[string]context.CancelFunc),
 		operationTimeout: 5 * time.Second,
 		retryAttempts:    1,
@@ -361,6 +363,105 @@ func TestCreateServer_UpsertError(t *testing.T) {
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestUpdateServer_Resize(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	oldStop := stopInstanceFn
+	oldStart := startInstanceFn
+	stopInstanceFn = func(ctx context.Context, req *computepb.StopInstanceRequest) error {
+		return nil
+	}
+	startInstanceFn = func(ctx context.Context, req *computepb.StartInstanceRequest) error {
+		return nil
+	}
+	defer func() {
+		stopInstanceFn = oldStop
+		startInstanceFn = oldStart
+	}()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
+		Outputs: auto.OutputMap{},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"}, updateTypeResize)
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestUpdateServer_Recreate(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
+		Outputs: auto.OutputMap{},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	// Backup coordinator mocks
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{}, nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test", mock.AnythingOfType("db.Status")).Return(nil)
+
+	// stampServerConfig mocks
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"}, updateTypeRecreate)
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestRevertServerConfig_Success(t *testing.T) {
+	mockWM := new(testutil.MockWorkspaceManager)
+	mockDB := new(MockDB)
+
+	svc := &ProvisioningService{
+		workspaceManager: mockWM,
+		db:               mockDB,
+		operations:       make(map[string]context.CancelFunc),
+		operationTimeout: 5 * time.Second,
+		retryAttempts:    1,
+		retryDelay:       1 * time.Millisecond,
+	}
+
+	original := &db.ServerConfig{Name: "original-name"}
+	mockDB.On("GetConfigSnapshot", mock.Anything, "srv1").Return(original, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", original).Return(nil)
+	mockDB.On("DeleteConfigSnapshot", mock.Anything, "srv1").Return(nil)
+
+	err := svc.RevertServerConfig(context.Background(), "srv1")
+	assert.NoError(t, err)
+}
+
+func TestRevertServerConfig_SnapshotNotFound(t *testing.T) {
+	mockWM := new(testutil.MockWorkspaceManager)
+	mockDB := new(MockDB)
+	svc := &ProvisioningService{
+		workspaceManager: mockWM,
+		db:               mockDB,
+		operations:       make(map[string]context.CancelFunc),
+		operationTimeout: 5 * time.Second,
+		retryAttempts:    1,
+		retryDelay:       1 * time.Millisecond,
+	}
+
+	mockDB.On("GetConfigSnapshot", mock.Anything, "srv1").Return(nil, errors.New("not found"))
+
+	err := svc.RevertServerConfig(context.Background(), "srv1")
+	assert.Error(t, err)
 }
 
 func TestStampServerConfig_SetsVersionFields(t *testing.T) {
@@ -450,7 +551,7 @@ func TestUpdateServer_Success(t *testing.T) {
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
-	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"})
+	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"}, updateTypeInPlace)
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
