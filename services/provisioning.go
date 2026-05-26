@@ -21,6 +21,15 @@ const (
 	stepRefreshStack         = "refresh_stack"
 	stepUpdateInfrastructure = "update_infrastructure"
 	stepDestroyStack         = "destroy_stack"
+	stepStopInstance         = "stop_instance"
+	stepStartInstance        = "start_instance"
+	stepSaveWorld            = "save_world"
+)
+
+const (
+	updateTypeInPlace   = 0
+	updateTypeResize    = 1
+	updateTypeRecreate  = 2
 )
 
 const errMsgOperationInProgress = "operation already in progress for server %s"
@@ -33,6 +42,7 @@ var errNoOperationInProgress = errors.New("no operation in progress")
 type ProvisioningService struct {
 	workspaceManager pulumi.WorkspaceManagerInterface
 	db               db.DB
+	backupCoord      *BackupCoordinator
 	controllerVersion string
 	operations       map[string]context.CancelFunc
 	mu               sync.RWMutex
@@ -45,6 +55,7 @@ func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, d
 	return &ProvisioningService{
 		workspaceManager: workspaceManager,
 		db:               dbConn,
+		backupCoord:      NewBackupCoordinator(dbConn),
 		controllerVersion: controllerVersion,
 		operations:       make(map[string]context.CancelFunc),
 		operationTimeout: 30 * time.Minute,
@@ -102,53 +113,138 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 	})
 }
 
-func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
+func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
 	return s.queueOperation(ctx, serverID, db.ProvisioningOperationUpdate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
-		status.Steps = []db.ProvisioningStep{
-			{Name: stepRefreshStack, Status: db.ProvisioningStatePending, Message: "Refreshing Pulumi stack...", Timestamp: time.Now()},
-			{Name: stepUpdateInfrastructure, Status: db.ProvisioningStatePending, Message: "Updating infrastructure...", Timestamp: time.Now()},
-		}
-		s.updateStatus(opCtx, serverID, status)
-
-		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
-		if err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
-		}
-
-		if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
-		}
-
-		s.completeStep(status, serverID, stepRefreshStack)
-
-		s.updateStep(opCtx, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
-		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
-			return s.workspaceManager.UpStack(opCtx, stack)
-		})
-		if err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
-		}
-
-		s.completeStep(status, serverID, stepUpdateInfrastructure)
-
-		// Stamp the server config with the current infrastructure and controller versions.
-		if err := s.stampServerConfig(opCtx, serverID); err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
-		}
-
-		outputs := make(map[string]string)
-		for key, value := range result.Outputs {
-			if str, ok := value.Value.(string); ok {
-				outputs[key] = str
-			}
-		}
-
-		status.Outputs = outputs
-		status.State = db.ProvisioningStateCompleted
-		s.updateStatus(opCtx, serverID, status)
-
-		return nil
+		return s.runUpdate(opCtx, status, serverID, config, updateType)
 	})
+}
+
+func (s *ProvisioningService) runUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig, updateType int) error {
+	switch updateType {
+	case updateTypeResize:
+		return s.runResizeUpdate(opCtx, status, serverID, config)
+	case updateTypeRecreate:
+		return s.runRecreateUpdate(opCtx, status, serverID, config)
+	default:
+		return s.runInPlaceUpdate(opCtx, status, serverID, config)
+	}
+}
+
+func (s *ProvisioningService) runInPlaceUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	return s.runPulumiUpdate(opCtx, status, serverID, config)
+}
+
+func (s *ProvisioningService) runResizeUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	status.Steps = []db.ProvisioningStep{
+		{Name: stepStopInstance, Status: db.ProvisioningStatePending, Message: "Stopping VM instance...", Timestamp: time.Now()},
+		{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Updating infrastructure...", Timestamp: time.Now()},
+		{Name: stepStartInstance, Status: db.ProvisioningStatePending, Message: "Starting VM instance...", Timestamp: time.Now()},
+	}
+	s.updateStatus(opCtx, serverID, status)
+
+	s.updateStep(opCtx, serverID, stepStopInstance, "Stopping VM instance...")
+	if err := StopInstance(opCtx, config.GCPProject, config.Zone, config.Name); err != nil {
+		return s.handleError(status, opCtx, serverID, stepStopInstance, err)
+	}
+	s.completeStep(status, serverID, stepStopInstance)
+
+	if err := s.runPulumiUpdate(opCtx, status, serverID, config); err != nil {
+		// If pulumi fails after stopping, attempt to start the VM back.
+		if startErr := StartInstance(opCtx, config.GCPProject, config.Zone, config.Name); startErr != nil {
+			log.Printf("Failed to restart instance %s after update failure: %v", serverID, startErr)
+		}
+		return err
+	}
+
+	s.updateStep(opCtx, serverID, stepStartInstance, "Starting VM instance...")
+	if err := StartInstance(opCtx, config.GCPProject, config.Zone, config.Name); err != nil {
+		return s.handleError(status, opCtx, serverID, stepStartInstance, err)
+	}
+	s.completeStep(status, serverID, stepStartInstance)
+
+	return nil
+}
+
+func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	status.Steps = []db.ProvisioningStep{
+		{Name: stepSaveWorld, Status: db.ProvisioningStatePending, Message: "Saving world data...", Timestamp: time.Now()},
+		{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Updating infrastructure...", Timestamp: time.Now()},
+	}
+	s.updateStatus(opCtx, serverID, status)
+
+	s.updateStep(opCtx, serverID, stepSaveWorld, "Saving world data...")
+	if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
+		log.Printf("Warning: failed to trigger world save for server %s: %v", serverID, err)
+	} else {
+		result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+		if err != nil {
+			log.Printf("Warning: world save ack failed for server %s: %v (result: %s)", serverID, result, err)
+		}
+	}
+	s.completeStep(status, serverID, stepSaveWorld)
+
+	if err := s.runPulumiUpdate(opCtx, status, serverID, config); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+	}
+
+	if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+	}
+
+	s.completeStep(status, serverID, stepUpsertStack)
+
+	s.updateStep(opCtx, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
+	result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
+		return s.workspaceManager.UpStack(opCtx, stack)
+	})
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
+	}
+
+	s.completeStep(status, serverID, stepUpdateInfrastructure)
+
+	// Stamp the server config with the current infrastructure and controller versions.
+	if err := s.stampServerConfig(opCtx, serverID); err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
+	}
+
+	outputs := make(map[string]string)
+	for key, value := range result.Outputs {
+		if str, ok := value.Value.(string); ok {
+			outputs[key] = str
+		}
+	}
+
+	status.Outputs = outputs
+	status.State = db.ProvisioningStateCompleted
+	s.updateStatus(opCtx, serverID, status)
+
+	return nil
+}
+
+// RevertServerConfig replaces the server config with a previously saved snapshot.
+// This is called by handlers when an update operation fails.
+func (s *ProvisioningService) RevertServerConfig(ctx context.Context, serverID string) error {
+	snapshot, err := s.db.GetConfigSnapshot(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get config snapshot: %w", err)
+	}
+	if err := s.db.UpdateServerConfig(ctx, serverID, snapshot); err != nil {
+		return fmt.Errorf("failed to revert server config: %w", err)
+	}
+	if err := s.db.DeleteConfigSnapshot(ctx, serverID); err != nil {
+		log.Printf("Warning: failed to delete config snapshot for %s: %v", serverID, err)
+	}
+	return nil
 }
 
 func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {

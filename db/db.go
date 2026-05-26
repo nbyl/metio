@@ -28,6 +28,9 @@ type DB interface {
 	UpdateServerConfig(ctx context.Context, serverID string, config *ServerConfig) error
 	DeleteServerConfig(ctx context.Context, serverID string) error
 	ListServerConfigs(ctx context.Context) ([]*ServerConfig, error)
+	SaveConfigSnapshot(ctx context.Context, serverID string, config *ServerConfig) error
+	GetConfigSnapshot(ctx context.Context, serverID string) (*ServerConfig, error)
+	DeleteConfigSnapshot(ctx context.Context, serverID string) error
 	GetPulumiSettings(ctx context.Context) (*PulumiSettings, error)
 	SetPulumiSettings(ctx context.Context, settings *PulumiSettings) error
 }
@@ -435,4 +438,33 @@ func (db *FirestoreDB) ListServerConfigs(ctx context.Context) ([]*ServerConfig, 
 		configs = append(configs, &config)
 	}
 	return configs, nil
+}
+
+func (db *FirestoreDB) SaveConfigSnapshot(ctx context.Context, serverID string, config *ServerConfig) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config_previous").Set(ctx, config)
+	return err
+}
+
+func (db *FirestoreDB) GetConfigSnapshot(ctx context.Context, serverID string) (*ServerConfig, error) {
+	if db.client == nil {
+		return nil, errors.New("client is nil")
+	}
+	doc, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config_previous").Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var config ServerConfig
+	err = doc.DataTo(&config)
+	return &config, err
+}
+
+func (db *FirestoreDB) DeleteConfigSnapshot(ctx context.Context, serverID string) error {
+	if db.client == nil {
+		return errors.New("client is nil")
+	}
+	_, err := db.client.Collection("servers").Doc(serverID).Collection("data").Doc("config_previous").Delete(ctx)
+	return err
 }
