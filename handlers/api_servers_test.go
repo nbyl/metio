@@ -359,3 +359,65 @@ func TestStatusResponseStruct(t *testing.T) {
 	assert.Equal(t, float64(10), players["current"])
 	assert.Equal(t, float64(20), players["max"])
 }
+
+func TestClassifyUpdate_InPlace(t *testing.T) {
+	cfg := &db.ServerConfig{
+		Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1",
+	}
+
+	req := UpdateServerRequest{Name: strPtr("new-name")}
+	assert.Equal(t, 0, classifyUpdate(req, cfg))
+
+	req = UpdateServerRequest{DiskSizeGB: intPtr(100)}
+	assert.Equal(t, 0, classifyUpdate(req, cfg))
+
+	req = UpdateServerRequest{Name: strPtr("n"), DiskSizeGB: intPtr(200)}
+	assert.Equal(t, 0, classifyUpdate(req, cfg))
+}
+
+func TestClassifyUpdate_Resize(t *testing.T) {
+	cfg := &db.ServerConfig{
+		Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1",
+	}
+
+	req := UpdateServerRequest{MachineType: strPtr("e2-medium")}
+	assert.Equal(t, 1, classifyUpdate(req, cfg))
+}
+
+func TestClassifyUpdate_Recreate(t *testing.T) {
+	cfg := &db.ServerConfig{
+		Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1",
+	}
+
+	req := UpdateServerRequest{MinecraftVersion: strPtr("1.21.4")}
+	assert.Equal(t, 2, classifyUpdate(req, cfg))
+}
+
+func TestClassifyUpdate_ResizeOverridesInPlace(t *testing.T) {
+	cfg := &db.ServerConfig{
+		Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1",
+	}
+
+	req := UpdateServerRequest{Name: strPtr("n"), MachineType: strPtr("e2-standard-2")}
+	assert.Equal(t, 1, classifyUpdate(req, cfg))
+}
+
+func TestClassifyUpdate_RecreateOverridesOthers(t *testing.T) {
+	cfg := &db.ServerConfig{
+		Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1",
+	}
+
+	req := UpdateServerRequest{
+		Name: strPtr("n"), MachineType: strPtr("e2-standard-2"),
+		MinecraftVersion: strPtr("1.21.4"),
+	}
+	assert.Equal(t, 2, classifyUpdate(req, cfg))
+}
+
+func strPtr(s string) *string { return &s }
+func intPtr(i int) *int       { return &i }
