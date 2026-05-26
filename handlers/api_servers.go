@@ -41,15 +41,17 @@ type UpdateServerRequest struct {
 }
 
 type ServerConfigJSON struct {
-	Name             string                 `json:"name"`
-	Region           string                 `json:"region"`
-	Zone             string                 `json:"zone"`
-	MachineType      string                 `json:"machineType"`
-	MinecraftVersion string                 `json:"minecraftVersion"`
-	DiskSizeGB       int                    `json:"diskSizeGB"`
-	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
-	CreatedAt        string                 `json:"createdAt"`
-	UpdatedAt        string                 `json:"updatedAt"`
+	Name                     string                 `json:"name"`
+	Region                   string                 `json:"region"`
+	Zone                     string                 `json:"zone"`
+	MachineType              string                 `json:"machineType"`
+	MinecraftVersion         string                 `json:"minecraftVersion"`
+	DiskSizeGB               int                    `json:"diskSizeGB"`
+	InfraVersion             int                    `json:"infraVersion,omitempty"`
+	DeployedByControllerVersion string               `json:"deployedByControllerVersion,omitempty"`
+	ShutdownSchedule         *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
+	CreatedAt                string                 `json:"createdAt"`
+	UpdatedAt                string                 `json:"updatedAt"`
 }
 
 type StatusResponse struct {
@@ -69,9 +71,11 @@ type PlayersJSON struct {
 }
 
 type ServerResponse struct {
-	ID     string           `json:"id"`
-	Config ServerConfigJSON `json:"config"`
-	Status *StatusResponse  `json:"status,omitempty"`
+	ID                     string           `json:"id"`
+	Config                 ServerConfigJSON `json:"config"`
+	Status                 *StatusResponse  `json:"status,omitempty"`
+	CurrentInfraVersion    int              `json:"currentInfraVersion"`
+	Outdated               bool             `json:"outdated"`
 }
 
 type ErrorResponse struct {
@@ -103,15 +107,17 @@ func shutdownScheduleFromInput(s *ShutdownScheduleInput) *db.ShutdownSchedule {
 
 func serverConfigToJSON(cfg *db.ServerConfig) ServerConfigJSON {
 	return ServerConfigJSON{
-		Name:             cfg.Name,
-		Region:           cfg.Region,
-		Zone:             cfg.Zone,
-		MachineType:      cfg.MachineType,
-		MinecraftVersion: cfg.MinecraftVersion,
-		DiskSizeGB:       cfg.DiskSizeGB,
-		ShutdownSchedule: shutdownScheduleToInput(cfg.ShutdownSchedule),
-		CreatedAt:        cfg.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:        cfg.UpdatedAt.Format(time.RFC3339),
+		Name:                     cfg.Name,
+		Region:                   cfg.Region,
+		Zone:                     cfg.Zone,
+		MachineType:              cfg.MachineType,
+		MinecraftVersion:         cfg.MinecraftVersion,
+		DiskSizeGB:               cfg.DiskSizeGB,
+		InfraVersion:             cfg.InfraVersion,
+		DeployedByControllerVersion: cfg.DeployedByControllerVersion,
+		ShutdownSchedule:         shutdownScheduleToInput(cfg.ShutdownSchedule),
+		CreatedAt:                cfg.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:                cfg.UpdatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -190,8 +196,10 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ServerResponse{
-		ID:     serverID,
-		Config: serverConfigToJSON(serverConfig),
+		ID:                  serverID,
+		Config:              serverConfigToJSON(serverConfig),
+		CurrentInfraVersion: programs.CurrentInfraVersion,
+		Outdated:            true, // newly created server is outdated until provisioning completes
 	})
 }
 
@@ -214,9 +222,12 @@ func listServers(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]ServerResponse, 0, len(configs))
 	for _, cfg := range configs {
+		outdated := cfg.InfraVersion < programs.CurrentInfraVersion
 		responses = append(responses, ServerResponse{
-			ID:     cfg.ID,
-			Config: serverConfigToJSON(cfg),
+			ID:                  cfg.ID,
+			Config:              serverConfigToJSON(cfg),
+			CurrentInfraVersion: programs.CurrentInfraVersion,
+			Outdated:            outdated,
 		})
 	}
 
@@ -248,9 +259,16 @@ func getServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	outdated := false
+	if serverConfig.InfraVersion < programs.CurrentInfraVersion {
+		outdated = true
+	}
+
 	response := ServerResponse{
-		ID:     serverID,
-		Config: serverConfigToJSON(serverConfig),
+		ID:                 serverID,
+		Config:             serverConfigToJSON(serverConfig),
+		CurrentInfraVersion: programs.CurrentInfraVersion,
+		Outdated:           outdated,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -377,8 +395,10 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(ServerResponse{
-		ID:     serverID,
-		Config: serverConfigToJSON(existingConfig),
+		ID:                  serverID,
+		Config:              serverConfigToJSON(existingConfig),
+		CurrentInfraVersion: programs.CurrentInfraVersion,
+		Outdated:            true, // outdated until provisioning completes
 	})
 }
 

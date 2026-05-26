@@ -1,6 +1,8 @@
 package programs
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -64,6 +66,11 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
 		}
+
+		// Compute a hash of the cloud-config to detect changes that require VM recreation.
+		h := sha256.New()
+		h.Write([]byte(userData))
+		cloudConfigHash := hex.EncodeToString(h.Sum(nil))[:16] // first 16 hex chars
 
 		sa, err := serviceaccount.NewAccount(ctx, fmt.Sprintf("%s-sa", config.Name), &serviceaccount.AccountArgs{
 			AccountId:   pulumi.String(fmt.Sprintf("%s-sa", config.Name)),
@@ -201,10 +208,14 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 					pulumi.String("cloud-platform"),
 				},
 			},
+			Labels: pulumi.StringMap{
+				"cloud_config_hash": pulumi.String(cloudConfigHash),
+				"infra_version":     pulumi.String(fmt.Sprintf("%d", CurrentInfraVersion)),
+			},
 			Metadata: pulumi.StringMap{
 				"user-data": pulumi.String(userData),
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{firewall}))
+		}, pulumi.ReplaceOnChanges([]string{"labels.cloud_config_hash"}), pulumi.DependsOn([]pulumi.Resource{firewall}))
 		if err != nil {
 			return fmt.Errorf("failed to create instance: %w", err)
 		}
