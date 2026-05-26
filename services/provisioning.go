@@ -43,6 +43,7 @@ type ProvisioningService struct {
 	workspaceManager pulumi.WorkspaceManagerInterface
 	db               db.DB
 	backupCoord      *BackupCoordinator
+	controllerVersion string
 	operations       map[string]context.CancelFunc
 	mu               sync.RWMutex
 	operationTimeout time.Duration
@@ -50,11 +51,12 @@ type ProvisioningService struct {
 	retryDelay       time.Duration
 }
 
-func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB) *ProvisioningService {
+func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB, controllerVersion string) *ProvisioningService {
 	return &ProvisioningService{
 		workspaceManager: workspaceManager,
 		db:               dbConn,
 		backupCoord:      NewBackupCoordinator(dbConn),
+		controllerVersion: controllerVersion,
 		operations:       make(map[string]context.CancelFunc),
 		operationTimeout: 30 * time.Minute,
 		retryAttempts:    3,
@@ -90,6 +92,11 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 		}
 
 		s.completeStep(status, serverID, stepDeployInfrastructure)
+
+		// Stamp the server config with the current infrastructure and controller versions.
+		if err := s.stampServerConfig(opCtx, serverID); err != nil {
+			return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
+		}
 
 		outputs := make(map[string]string)
 		for key, value := range result.Outputs {
@@ -204,6 +211,11 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 	}
 
 	s.completeStep(status, serverID, stepUpdateInfrastructure)
+
+	// Stamp the server config with the current infrastructure and controller versions.
+	if err := s.stampServerConfig(opCtx, serverID); err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
+	}
 
 	outputs := make(map[string]string)
 	for key, value := range result.Outputs {
@@ -391,6 +403,21 @@ func (s *ProvisioningService) executeUpWithRetry(ctx context.Context, fn func() 
 	}
 
 	return auto.UpResult{}, fmt.Errorf(errMsgRetryExhausted, s.retryAttempts, lastErr)
+}
+
+// stampServerConfig updates the given server's config with the current infrastructure version
+// and the controller version that deployed it.
+func (s *ProvisioningService) stampServerConfig(ctx context.Context, serverID string) error {
+	config, err := s.db.GetServerConfig(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get server config: %w", err)
+	}
+	config.InfraVersion = programs.CurrentInfraVersion
+	config.DeployedByControllerVersion = s.controllerVersion
+	if err := s.db.UpdateServerConfig(ctx, serverID, config); err != nil {
+		return fmt.Errorf("failed to update server config: %w", err)
+	}
+	return nil
 }
 
 func (s *ProvisioningService) updateStatus(ctx context.Context, serverID string, status *db.ProvisioningStatus) {

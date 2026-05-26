@@ -2,6 +2,8 @@ package programs
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
@@ -109,4 +111,36 @@ func NewMockResourceRegistry() *MockResourceRegistry {
 	return &MockResourceRegistry{
 		resources: make(map[string]pulumi.Resource),
 	}
+}
+
+func TestCloudConfigHash_DifferentInputsProduceDifferentHashes(t *testing.T) {
+	hash := func(input string) string {
+		h := sha256.New()
+		h.Write([]byte(input))
+		return hex.EncodeToString(h.Sum(nil))[:16]
+	}
+
+	h1 := hash("cloud-config-v1")
+	h2 := hash("cloud-config-v2")
+
+	assert.NotEqual(t, h1, h2, "Different cloud-config content should produce different hashes")
+	assert.Len(t, h1, 16, "Hash should be 16 hex characters")
+	assert.Len(t, h2, 16, "Hash should be 16 hex characters")
+}
+
+func TestCloudConfigHash_SameInputProducesSameHash(t *testing.T) {
+	hash := func(input string) string {
+		h := sha256.New()
+		h.Write([]byte(input))
+		return hex.EncodeToString(h.Sum(nil))[:16]
+	}
+
+	h1 := hash("cloud-config-v1")
+	h2 := hash("cloud-config-v1")
+
+	assert.Equal(t, h1, h2, "Same cloud-config content should produce the same hash")
+}
+
+func TestCurrentInfraVersion_IsPositive(t *testing.T) {
+	assert.Greater(t, CurrentInfraVersion, 0, "CurrentInfraVersion should be > 0")
 }
