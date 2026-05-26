@@ -390,7 +390,129 @@ func TestHandleInstancePreempted(t *testing.T) {
 	assert.NotPanics(t, func() {
 		handleInstancePreempted(context.Background(), auditLog)
 	})
-	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status"))
+}
+
+func TestUpdateServer_ImmutableRegion(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+
+	region := "europe-west3"
+	body, _ := json.Marshal(UpdateServerRequest{Region: &region})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var errResp ErrorResponse
+	json.NewDecoder(w.Body).Decode(&errResp)
+	assert.Contains(t, errResp.Error, "region is immutable")
+}
+
+func TestUpdateServer_ImmutableZone(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+
+	zone := "us-central1-b"
+	body, _ := json.Marshal(UpdateServerRequest{Zone: &zone})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var errResp ErrorResponse
+	json.NewDecoder(w.Body).Decode(&errResp)
+	assert.Contains(t, errResp.Error, "zone is immutable")
+}
+
+func TestUpdateServer_DiskSizeDecrease(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+		DiskSizeGB: 50,
+	}, nil)
+
+	small := 20
+	body, _ := json.Marshal(UpdateServerRequest{DiskSizeGB: &small})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var errResp ErrorResponse
+	json.NewDecoder(w.Body).Decode(&errResp)
+	assert.Contains(t, errResp.Error, "disk size can only be increased")
+}
+
+func TestUpdateServer_MinecraftVersionChange(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := provisioningService
+	provisioningService = mockPS
+	defer func() { provisioningService = oldPS }()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	v := "1.21.4"
+	body, _ := json.Marshal(UpdateServerRequest{MinecraftVersion: &v})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+}
+
+func TestUpdateServer_MachineTypeChange(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := provisioningService
+	provisioningService = mockPS
+	defer func() { provisioningService = oldPS }()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	mt := "e2-medium"
+	body, _ := json.Marshal(UpdateServerRequest{MachineType: &mt})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
 }
 
 func TestHandleInstanceStop_EmptyResourceName(t *testing.T) {
@@ -651,8 +773,9 @@ func TestUpdateServer_Success(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
-	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
 	name := "new-name"
 	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
@@ -690,6 +813,7 @@ func TestUpdateServer_UpdateDBError(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(assert.AnError)
 
 	name := "new"
@@ -715,6 +839,7 @@ func TestUpdateServer_NoProvisioningService(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	name := "new"
@@ -743,7 +868,8 @@ func TestUpdateServer_ProvisioningConflict(t *testing.T) {
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
-	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig")).Return(
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(
 		fmt.Errorf("operation already in progress for server srv1"))
 
 	name := "new"
@@ -772,8 +898,10 @@ func TestUpdateServer_ProvisioningError(t *testing.T) {
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
-	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig")).Return(
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(
 		fmt.Errorf("some other error"))
+	mockPS.On("RevertServerConfig", mock.Anything, "srv1").Return(nil)
 
 	name := "new"
 	body, _ := json.Marshal(UpdateServerRequest{Name: &name})

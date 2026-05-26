@@ -14,12 +14,23 @@ import (
 	"gitlab.com/nbyl/metio/static"
 )
 
+// UpdateType classifies what kind of update is being performed, which determines
+// the provisioning workflow steps (e.g., stop VM, save world, etc.).
+type UpdateType int
+
+const (
+	UpdateTypeInPlace   UpdateType = iota // Fields that can be updated without VM disruption
+	UpdateTypeResize                      // Machine type change (stop -> up -> start)
+	UpdateTypeRecreate                    // Minecraft version change (backup -> up -> start)
+)
+
 // ProvisioningServiceInterface defines the methods used by handlers from the provisioning service.
 type ProvisioningServiceInterface interface {
 	CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
-	UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
+	UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error
 	DestroyServer(ctx context.Context, serverID string) error
 	GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error)
+	RevertServerConfig(ctx context.Context, serverID string) error
 }
 
 var provisioningService ProvisioningServiceInterface
