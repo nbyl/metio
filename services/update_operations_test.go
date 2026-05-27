@@ -88,3 +88,32 @@ func TestBackupCoordinator_WaitForCommandAck_Timeout(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "timeout")
 }
+
+func TestWaitForServerHealthy_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{ServerState: "RUNNING"}, nil).Once()
+
+	err := WaitForServerHealthy(context.Background(), mockDB, "test", 5*time.Second)
+	assert.NoError(t, err)
+}
+
+func TestWaitForServerHealthy_GetStatusError(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{}, assert.AnError).Once()
+
+	err := WaitForServerHealthy(context.Background(), mockDB, "test", 1*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout")
+}
+
+func TestWaitForServerHealthy_Timeout(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{ServerState: "STARTING"}, nil)
+
+	err := WaitForServerHealthy(context.Background(), mockDB, "test", 1*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout")
+}

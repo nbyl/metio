@@ -24,6 +24,7 @@ const (
 	stepStopInstance         = "stop_instance"
 	stepStartInstance        = "start_instance"
 	stepSaveWorld            = "save_world"
+	stepHealthCheck          = "health_check"
 )
 
 const (
@@ -162,6 +163,12 @@ func (s *ProvisioningService) runResizeUpdate(opCtx context.Context, status *db.
 	}
 	s.completeStep(status, serverID, stepStartInstance)
 
+	s.updateStep(opCtx, serverID, stepHealthCheck, "Waiting for server to become healthy...")
+	if err := WaitForServerHealthy(opCtx, s.db, config.Name, 120*time.Second); err != nil {
+		log.Printf("Warning: server %s did not become healthy after resize: %v", serverID, err)
+	}
+	s.completeStep(status, serverID, stepHealthCheck)
+
 	return nil
 }
 
@@ -174,18 +181,25 @@ func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *d
 
 	s.updateStep(opCtx, serverID, stepSaveWorld, "Saving world data...")
 	if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
-		log.Printf("Warning: failed to trigger world save for server %s: %v", serverID, err)
-	} else {
-		result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
-		if err != nil {
-			log.Printf("Warning: world save ack failed for server %s: %v (result: %s)", serverID, result, err)
-		}
+		return s.handleError(status, opCtx, serverID, stepSaveWorld,
+			fmt.Errorf("failed to trigger world save: %w", err))
+	}
+	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld,
+			fmt.Errorf("world save failed: result=%s, %w", result, err))
 	}
 	s.completeStep(status, serverID, stepSaveWorld)
 
 	if err := s.runPulumiUpdate(opCtx, status, serverID, config); err != nil {
 		return err
 	}
+
+	s.updateStep(opCtx, serverID, stepHealthCheck, "Waiting for server to become healthy...")
+	if err := WaitForServerHealthy(opCtx, s.db, config.Name, 180*time.Second); err != nil {
+		log.Printf("Warning: server %s did not become healthy after recreate: %v", serverID, err)
+	}
+	s.completeStep(status, serverID, stepHealthCheck)
 
 	return nil
 }
