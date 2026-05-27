@@ -111,3 +111,33 @@ func (b *BackupCoordinator) WaitForCommandAck(ctx context.Context, instanceName 
 
 	return "", fmt.Errorf("timeout waiting for command ack after %v", timeout)
 }
+
+// WaitForServerHealthy polls the server status until the machine-agent reports RUNNING or the timeout elapses.
+func WaitForServerHealthy(ctx context.Context, dbConn db.DB, instanceName string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	pollInterval := 5 * time.Second
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		status, err := dbConn.GetStatus(ctx, instanceName)
+		if err != nil {
+			log.Printf("Error polling server status for %s: %v", instanceName, err)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		if status.ServerState.IsRunning() {
+			log.Printf("Server %s is healthy (state: RUNNING)", instanceName)
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for server %s to become healthy after %v", instanceName, timeout)
+}

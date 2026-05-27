@@ -392,6 +392,9 @@ func TestUpdateServer_Resize(t *testing.T) {
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
+	// Health check mock (polls for RUNNING status)
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{ServerState: "RUNNING"}, nil)
+
 	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"}, updateTypeResize)
 	assert.NoError(t, err)
 
@@ -410,8 +413,12 @@ func TestUpdateServer_Recreate(t *testing.T) {
 	}, nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
-	// Backup coordinator mocks
-	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{}, nil)
+	// Backup coordinator mocks: GetStatus is called by TriggerWorldSave and WaitForCommandAck.
+	// Return a status that immediately satisfies the command ack ("completed") and the health check (RUNNING).
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{
+		ServerState:          "RUNNING",
+		PendingCommandResult: "completed",
+	}, nil)
 	mockDB.On("UpdateStatus", mock.Anything, "test", mock.AnythingOfType("db.Status")).Return(nil)
 
 	// stampServerConfig mocks
@@ -462,6 +469,21 @@ func TestRevertServerConfig_SnapshotNotFound(t *testing.T) {
 
 	err := svc.RevertServerConfig(context.Background(), "srv1")
 	assert.Error(t, err)
+}
+
+func TestUpdateServer_RecreateBackupFailure(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("ProjectID").Return("")
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	// Backup trigger fails
+	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{}, assert.AnError)
+
+	err := svc.UpdateServer(context.Background(), "srv1", &programs.ServerConfig{Name: "test"}, updateTypeRecreate)
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestStampServerConfig_SetsVersionFields(t *testing.T) {
