@@ -321,6 +321,14 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Save a snapshot of the original config before any mutation, for rollback.
+	originalConfig := *existingConfig
+	if err := dbConn.SaveConfigSnapshot(ctx, serverID, &originalConfig); err != nil {
+		log.Printf("Error saving config snapshot: %v", err)
+		writeJSONError(w, "failed to save config snapshot", http.StatusInternalServerError)
+		return
+	}
+
 	if req.Name != nil {
 		existingConfig.Name = *req.Name
 	}
@@ -346,11 +354,13 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 	// Classify the update type based on which fields changed.
 	updateType := classifyUpdate(req, existingConfig)
 
-	// Save a snapshot of the current config before updating, for rollback.
-	if err := dbConn.SaveConfigSnapshot(ctx, serverID, existingConfig); err != nil {
-		log.Printf("Error saving config snapshot: %v", err)
-		writeJSONError(w, "failed to save config snapshot", http.StatusInternalServerError)
-		return
+	// Validate server state before accepting the update.
+	if updateType == int(UpdateTypeRecreate) || updateType == int(UpdateTypeResize) {
+		status, err := dbConn.GetStatus(ctx, serverID)
+		if err == nil && status.ServerState != "" && !status.ServerState.IsRunning() {
+			writeJSONError(w, fmt.Sprintf("server must be running to update. Current state: %s", status.ServerState), http.StatusBadRequest)
+			return
+		}
 	}
 
 	if err := dbConn.UpdateServerConfig(ctx, serverID, existingConfig); err != nil {
@@ -387,7 +397,17 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		if revertErr := provisioningService.RevertServerConfig(ctx, serverID); revertErr != nil {
 			log.Printf("Error reverting config after failed update: %v", revertErr)
 		}
-		writeJSONError(w, fmt.Sprintf("failed to start update: %s", err.Error()), http.StatusInternalServerError)
+		// Provide user-friendly guidance based on update type.
+		msg := "Server update failed. "
+		switch updateType {
+		case int(UpdateTypeRecreate):
+			msg += "The Minecraft server could not be updated. Your original configuration has been restored. If the problem persists, try stopping the server and retrying."
+		case int(UpdateTypeResize):
+			msg += "The machine type could not be changed. Your original configuration has been restored. The server will be restarted automatically."
+		default:
+			msg += "Your original configuration has been restored. Please try again or contact support."
+		}
+		writeJSONError(w, msg, http.StatusInternalServerError)
 		return
 	}
 
