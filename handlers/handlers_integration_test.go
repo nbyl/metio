@@ -473,6 +473,7 @@ func TestUpdateServer_MinecraftVersionChange(t *testing.T) {
 		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
 		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
 	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "srv1").Return(db.Status{ServerState: "RUNNING"}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
@@ -501,6 +502,7 @@ func TestUpdateServer_MachineTypeChange(t *testing.T) {
 		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
 		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
 	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "srv1").Return(db.Status{ServerState: "RUNNING"}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
@@ -923,6 +925,7 @@ func TestUpdateServer_ValidationError(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	emptyName := ""
 	body, _ := json.Marshal(UpdateServerRequest{Name: &emptyName})
@@ -932,6 +935,64 @@ func TestUpdateServer_ValidationError(t *testing.T) {
 	updateServer(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUpdateServer_ServerNotRunning(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("GetStatus", mock.Anything, "srv1").Return(db.Status{ServerState: "STOPPED"}, nil)
+
+	mt := "e2-medium"
+	body, _ := json.Marshal(UpdateServerRequest{MachineType: &mt})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUpdateServer_SnapshotIsOriginalConfig(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+
+	// The snapshot must contain the ORIGINAL name, not the updated one.
+	var capturedSnapshot *db.ServerConfig
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Run(func(args mock.Arguments) {
+		capturedSnapshot = args.Get(2).(*db.ServerConfig)
+	}).Return(nil)
+	mockDB.On("GetStatus", mock.Anything, "srv1").Return(db.Status{ServerState: "RUNNING"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := provisioningService
+	provisioningService = mockPS
+	defer func() { provisioningService = oldPS }()
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	name := "updated-name"
+	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	updateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	assert.NotNil(t, capturedSnapshot)
+	assert.Equal(t, "test", capturedSnapshot.Name, "snapshot should contain the original name before mutation")
 }
 
 // --- deleteServer full path tests ---
