@@ -1,24 +1,27 @@
 {
 	"name": "Metio Dev Container",
-	"image": "mcr.microsoft.com/devcontainers/go:1-1.24-bullseye",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
 	"runArgs": ["--env-file",".devcontainer/devcontainer.env"],
+	"mounts": [
+		"source=${env:HOME}/.config/opencode,target=/home/vscode/.config/opencode,type=bind",
+		"source=${env:HOME}/.local/share/opencode,target=/home/vscode/.local/share/opencode,type=bind",
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+	],
 	"features": {
 		"ghcr.io/devcontainers/features/node:1": {},
-		"ghcr.io/robbert229/devcontainer-features/opentofu:1": {},
-		"ghcr.io/dhoeric/features/google-cloud-cli:1": {},
-		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {},
-		"ghcr.io/azutake/devcontainer-features/go-packages-install:0": {
-			"PACKAGES": "github.com/air-verse/air@v1.62.0"
-		},
-		"ghcr.io/devcontainers/features/docker-in-docker:1":{
-			"moby": true
-		}
+		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {}
 	},
-	"postCreateCommand": "npm install && go generate ./...",
-	"extensions": [
-		"golang.go",
-		"a-h.templ",
-		"opentofu.vscode-opentofu",
-		"gitlab.gitlab-workflow"
-	]
+	"postCreateCommand": "sudo chmod 666 /var/run/docker.sock && sudo mkdir -p /home/vscode/.local/state && sudo chown vscode:vscode /home/vscode/.local /home/vscode/.local/state && cd frontend && npm install",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"golang.go",
+				"a-h.templ",
+				"opentofu.vscode-opentofu",
+				"gitlab.gitlab-workflow"
+			]
+		}
+	}
 }
