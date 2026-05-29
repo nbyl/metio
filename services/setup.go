@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -40,6 +41,11 @@ func NewSetupService(cfg config.Config, dbConn db.DB, sc StorageClient) *SetupSe
 }
 
 func (s *SetupService) EnsureStateBucket(ctx context.Context) (string, error) {
+	if bucket := os.Getenv("PULUMI_STATE_BUCKET"); bucket != "" {
+		log.Printf("using state bucket from env PULUMI_STATE_BUCKET: %s", bucket)
+		return bucket, nil
+	}
+
 	settings, err := s.db.GetPulumiSettings(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to read Pulumi settings: %w", err)
