@@ -120,10 +120,10 @@ func (s *SetupService) createBucketIfNotExists(ctx context.Context, name string)
 	}
 
 	attrs := &storage.BucketAttrs{
-		Location:                 s.region,
-		StorageClass:             "STANDARD",
-		VersioningEnabled:        true,
-		PublicAccessPrevention:   storage.PublicAccessPreventionEnforced,
+		Location:               s.region,
+		StorageClass:           "STANDARD",
+		VersioningEnabled:      true,
+		PublicAccessPrevention: storage.PublicAccessPreventionEnforced,
 		Labels: map[string]string{
 			"managed-by": "metio",
 			"purpose":    "pulumi-state",

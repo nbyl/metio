@@ -12,7 +12,7 @@ import (
 )
 
 type mockServiceUsageClient struct {
-	getServiceFunc func(name string) (*serviceusage.GoogleApiServiceusageV1Service, error)
+	getServiceFunc  func(name string) (*serviceusage.GoogleApiServiceusageV1Service, error)
 	getServiceCalls int
 }
 
@@ -24,7 +24,7 @@ func (m *mockServiceUsageClient) GetService(ctx context.Context, name string) (*
 func (m *mockServiceUsageClient) Close() error { return nil }
 
 type mockResourceManagerClient struct {
-	testIamPermissionsFunc func(projectID string, permissions []string) ([]string, error)
+	testIamPermissionsFunc  func(projectID string, permissions []string) ([]string, error)
 	testIamPermissionsCalls int
 }
 
@@ -135,8 +135,8 @@ func TestValidate_OnePermissionMissing(t *testing.T) {
 func TestValidate_MixedFailures(t *testing.T) {
 	disabledAPIs := map[string]bool{"iam.googleapis.com": true, "run.googleapis.com": true}
 	missingPerms := map[string]bool{
-		"compute.instances.create": true,
-		"storage.buckets.create":   true,
+		"compute.instances.create":   true,
+		"storage.buckets.create":     true,
 		"iam.serviceAccounts.create": true,
 	}
 

@@ -19,9 +19,9 @@ import (
 type UpdateType int
 
 const (
-	UpdateTypeInPlace   UpdateType = iota // Fields that can be updated without VM disruption
-	UpdateTypeResize                      // Machine type change (stop -> up -> start)
-	UpdateTypeRecreate                    // Minecraft version change (backup -> up -> start)
+	UpdateTypeInPlace  UpdateType = iota // Fields that can be updated without VM disruption
+	UpdateTypeResize                     // Machine type change (stop -> up -> start)
+	UpdateTypeRecreate                   // Minecraft version change (backup -> up -> start)
 )
 
 // ProvisioningServiceInterface defines the methods used by handlers from the provisioning service.
