@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images build-frontend test test-backend test-frontend develop help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images build-frontend test test-backend test-frontend develop lint-frontend verify-backend help
 
 USERNAME := $(shell whoami)
 
@@ -26,9 +26,20 @@ test-backend:
 	go tool cover -html=build/coverage.out -o build/coverage.html
 	@echo "Coverage report generated at build/coverage.html"
 
+# Run Go verification (tidy, verify, fmt, vet)
+verify-backend:
+	go mod tidy
+	go mod verify
+	go fmt ./...
+	go vet ./...
+
 # Run frontend vitest suite
 test-frontend:
 	cd frontend && npm run test:run
+
+# Run frontend linter
+lint-frontend:
+	cd frontend && npm run lint
 
 # Run all tests (backend + frontend)
 test: test-backend test-frontend
