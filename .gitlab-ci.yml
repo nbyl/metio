@@ -52,7 +52,7 @@ backend-test:
   before_script:
     - apk add --no-cache nodejs npm make
   script:
-    - make build-frontend verify-backend test-backend
+    - make verify-backend test-backend
   artifacts:
     reports:
       coverage_report:

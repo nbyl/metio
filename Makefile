@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images build-frontend test test-backend test-frontend develop lint-frontend verify-backend help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-frontend build-frontend test test-backend test-frontend develop lint-frontend verify-backend help
 
 USERNAME := $(shell whoami)
 
@@ -20,25 +20,33 @@ build: build-frontend
 	@echo "All binaries built successfully"
 
 # Run Go tests with coverage
-test-backend:
+test-backend: build-frontend
 	@mkdir -p build
 	go test ./... -coverprofile=build/coverage.out -covermode=atomic
 	go tool cover -html=build/coverage.out -o build/coverage.html
 	@echo "Coverage report generated at build/coverage.html"
 
 # Run Go verification (tidy, verify, fmt, vet)
-verify-backend:
+verify-backend: build-frontend
 	go mod tidy
 	go mod verify
 	go fmt ./...
 	go vet ./...
 
+# Install frontend dependencies
+install-frontend:
+	cd frontend && npm ci
+
+# Build frontend assets
+build-frontend: install-frontend
+	cd frontend && npm run build
+
 # Run frontend vitest suite
-test-frontend:
+test-frontend: install-frontend
 	cd frontend && npm run test:run
 
 # Run frontend linter
-lint-frontend:
+lint-frontend: install-frontend
 	cd frontend && npm run lint
 
 # Run all tests (backend + frontend)
@@ -70,9 +78,6 @@ clean:
 	rm -rf build/
 	rm -rf static/dist/
 
-# Build frontend assets
-build-frontend:
-	cd frontend && npm ci && npm run build
 
 # Build machine-agent Docker image and save tag to file
 build-machine-agent-image:
