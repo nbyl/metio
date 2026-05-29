@@ -10,6 +10,7 @@ export interface ServerConfigPanelProps {
   config: ServerConfig;
   infrahVersion: number;
   outdated: boolean;
+  compact?: boolean;
   className?: string;
 }
 
@@ -31,9 +32,58 @@ export function ServerConfigPanel({
   config,
   infrahVersion,
   outdated,
+  compact,
   className,
 }: ServerConfigPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  if (compact) {
+    return (
+      <div className={cn('space-y-3', className)}>
+        <div className="flex items-center gap-2">
+          <Settings2 className="h-4 w-4 text-slate-400" />
+          <span className="text-sm font-medium text-slate-300">
+            Configuration
+          </span>
+          {outdated && (
+            <Badge variant="transitioning">Update Available</Badge>
+          )}
+        </div>
+        <Separator />
+        <div className="grid grid-cols-1 gap-3 text-sm">
+          <div className="stat">
+            <span className="stat-label">
+              <Globe className="h-3.5 w-3.5" />
+              Region
+            </span>
+            <span className="stat-value">
+              {config.region}/{config.zone}
+            </span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">
+              <Cpu className="h-3.5 w-3.5" />
+              Machine Type
+            </span>
+            <span className="stat-value">{config.machineType}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">
+              Minecraft Version
+            </span>
+            <span className="stat-value">{config.minecraftVersion}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">
+              <HardDrive className="h-3.5 w-3.5" />
+              Disk Size
+            </span>
+            <span className="stat-value">{config.diskSizeGB} GB</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Card className={cn(className)}>

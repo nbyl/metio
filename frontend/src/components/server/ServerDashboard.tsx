@@ -9,6 +9,8 @@ import {
   Loader2,
   Clock,
   Server,
+  Settings,
+  Trash2,
 } from 'lucide-react';
 import { useServers } from '../../hooks/useServers';
 import { useServerStatus } from '../../hooks/useServerStatus';
@@ -34,7 +36,8 @@ import { Tooltip } from '../ui/Tooltip';
 import { Switch } from '../ui/Switch';
 import { StatsGrid, type StatItem } from '../layout/StatsGrid';
 import { ServerConfigPanel } from './ServerConfigPanel';
-import { ServerActions } from './ServerActions';
+import { UpdateModal } from './UpdateModal';
+import { DestroyModal } from './DestroyModal';
 import { EmptyState } from './EmptyState';
 import type { ServerState, UpdateServerRequest, ServerConfig, StatusResponse } from '../../types/server';
 import type { WhitelistPlayer } from '../../types/whitelist';
@@ -395,6 +398,8 @@ function ServerCard({ server }: ServerCardProps) {
   const updateMutation = useUpdateServer();
   const deleteMutation = useDeleteServer();
   const { copy, copied } = useCopyToClipboard();
+  const [showUpdate, setShowUpdate] = useState(false);
+  const [showDestroy, setShowDestroy] = useState(false);
 
   const isMutating = startMutation.isPending || stopMutation.isPending;
 
@@ -414,28 +419,29 @@ function ServerCard({ server }: ServerCardProps) {
   const isTransitioning =
     currentStatus?.serverState === 'STARTING' ||
     currentStatus?.serverState === 'STOPPING';
-  const showStats = currentStatus && !isStopped;
 
-  const stats: StatItem[] = showStats
-    ? [
-        {
-          label: 'Version',
-          value: currentStatus?.version || '-',
-        },
-        {
-          label: 'Players',
-          value: `${currentStatus?.players ?? 0}/${currentStatus?.maxPlayers ?? 0}`,
-        },
-        {
-          label: 'Uptime',
-          value: currentStatus?.uptime || '-',
-        },
-        {
-          label: 'IP',
-          value: currentStatus?.instanceIP || '-',
-        },
-      ]
-    : [];
+  const stats: StatItem[] = [
+    {
+      label: 'State',
+      value: currentStatus
+        ? getStatusLabel(currentStatus.serverState)
+        : 'Unknown',
+    },
+    {
+      label: 'Players',
+      value: currentStatus
+        ? `${currentStatus.players ?? 0}/${currentStatus.maxPlayers ?? 0}`
+        : '-',
+    },
+    {
+      label: 'Uptime',
+      value: currentStatus?.uptime || '-',
+    },
+    {
+      label: 'IP',
+      value: currentStatus?.instanceIP || '-',
+    },
+  ];
 
   const handleUpdate = (data: UpdateServerRequest) => {
     updateMutation.mutate({ id: server.id, data });
@@ -451,37 +457,45 @@ function ServerCard({ server }: ServerCardProps) {
         <CardTitle>
           <span className="flex items-center gap-2">
             <Server className="h-4 w-4" />
-            {server.config.name}
+            Server: {server.config.name}
           </span>
-          {currentStatus?.serverState ? (
-            <Badge variant={getStatusBadgeVariant(currentStatus.serverState)}>
-              {getStatusLabel(currentStatus.serverState)}
-            </Badge>
-          ) : (
-            <Badge variant="offline">Unknown</Badge>
-          )}
+          <span className="flex items-center gap-2">
+            {currentStatus?.serverState ? (
+              <Badge variant={getStatusBadgeVariant(currentStatus.serverState)}>
+                {getStatusLabel(currentStatus.serverState)}
+              </Badge>
+            ) : (
+              <Badge variant="offline">Unknown</Badge>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowUpdate(true)}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </span>
         </CardTitle>
       </CardHeader>
 
       <CardContent>
-        {showStats && (
-          <>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
             <StatsGrid stats={stats} />
-            <Separator />
-          </>
-        )}
+          </div>
+          <div>
+            <ServerConfigPanel
+              compact
+              config={server.config}
+              infrahVersion={server.currentInfraVersion}
+              outdated={server.outdated}
+            />
+          </div>
+        </div>
 
-        <div className="controls">
-          {isRunning && (
-            <Button
-              variant="danger"
-              onClick={() => stopMutation.mutate()}
-              disabled={isMutating}
-              loading={stopMutation.isPending}
-            >
-              Stop Server
-            </Button>
-          )}
+        <Separator className="my-4" />
+
+        <div className="flex flex-wrap gap-3">
           {isStopped && (
             <Button
               variant="primary"
@@ -497,6 +511,16 @@ function ServerCard({ server }: ServerCardProps) {
               {currentStatus?.serverState === 'STARTING'
                 ? 'Starting...'
                 : 'Stopping...'}
+            </Button>
+          )}
+          {isRunning && (
+            <Button
+              variant="danger"
+              onClick={() => stopMutation.mutate()}
+              disabled={isMutating}
+              loading={stopMutation.isPending}
+            >
+              Stop Server
             </Button>
           )}
           {isRunning && currentStatus?.instanceIP && (
@@ -517,30 +541,49 @@ function ServerCard({ server }: ServerCardProps) {
               )}
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={() => setShowUpdate(true)}
+          >
+            <Settings className="h-4 w-4" />
+            Update
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => setShowDestroy(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Destroy
+          </Button>
         </div>
-
-        <ServerActions
-          className="mt-3"
-          config={server.config}
-          onUpdate={handleUpdate}
-          onDestroy={handleDestroy}
-          isUpdatePending={updateMutation.isPending}
-          isDestroyPending={deleteMutation.isPending}
-        />
 
         <WhitelistSection isRunning={isRunning} />
         <ScheduledShutdownSection
           isRunning={isRunning}
           scheduledShutdown={currentStatus?.scheduledShutdown}
         />
-
-        <ServerConfigPanel
-          className="mt-3"
-          config={server.config}
-          infrahVersion={server.currentInfraVersion}
-          outdated={server.outdated}
-        />
       </CardContent>
+
+      <UpdateModal
+        open={showUpdate}
+        config={server.config}
+        onClose={() => setShowUpdate(false)}
+        onUpdate={(data) => {
+          handleUpdate(data);
+          setShowUpdate(false);
+        }}
+        isPending={updateMutation.isPending}
+      />
+      <DestroyModal
+        open={showDestroy}
+        serverName={server.config.name}
+        onClose={() => setShowDestroy(false)}
+        onConfirm={() => {
+          handleDestroy();
+          setShowDestroy(false);
+        }}
+        isPending={deleteMutation.isPending}
+      />
     </Card>
   );
 }
@@ -573,7 +616,12 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
   }
 
   if (!servers || servers.length === 0) {
-    return <EmptyState className={className} />;
+    return (
+      <EmptyState
+        className={className}
+        onCreateServer={() => toast.info('Server creation wizard coming soon!')}
+      />
+    );
   }
 
   return (
