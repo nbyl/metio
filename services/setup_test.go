@@ -15,10 +15,10 @@ import (
 )
 
 type mockBucketHandle struct {
-	attrsErr  error
-	attrs     *storage.BucketAttrs
-	createErr error
-	attrsCalled bool
+	attrsErr     error
+	attrs        *storage.BucketAttrs
+	createErr    error
+	attrsCalled  bool
 	createCalled bool
 }
 

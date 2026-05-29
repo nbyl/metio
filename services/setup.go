@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -40,6 +41,11 @@ func NewSetupService(cfg config.Config, dbConn db.DB, sc StorageClient) *SetupSe
 }
 
 func (s *SetupService) EnsureStateBucket(ctx context.Context) (string, error) {
+	if bucket := os.Getenv("PULUMI_STATE_BUCKET"); bucket != "" {
+		log.Printf("using state bucket from env PULUMI_STATE_BUCKET: %s", bucket)
+		return bucket, nil
+	}
+
 	settings, err := s.db.GetPulumiSettings(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to read Pulumi settings: %w", err)
@@ -114,10 +120,10 @@ func (s *SetupService) createBucketIfNotExists(ctx context.Context, name string)
 	}
 
 	attrs := &storage.BucketAttrs{
-		Location:                 s.region,
-		StorageClass:             "STANDARD",
-		VersioningEnabled:        true,
-		PublicAccessPrevention:   storage.PublicAccessPreventionEnforced,
+		Location:               s.region,
+		StorageClass:           "STANDARD",
+		VersioningEnabled:      true,
+		PublicAccessPrevention: storage.PublicAccessPreventionEnforced,
 		Labels: map[string]string{
 			"managed-by": "metio",
 			"purpose":    "pulumi-state",
