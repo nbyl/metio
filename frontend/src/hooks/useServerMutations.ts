@@ -1,6 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { ServerActionResponse, ServerStatus, APIError } from '../types/server';
+import type {
+  ServerActionResponse,
+  ServerStatus,
+  ServerResponse,
+  UpdateServerRequest,
+  APIError,
+} from '../types/server';
 
 /** Context for mutation rollback */
 interface MutationContext {
@@ -115,6 +121,80 @@ export function useStartServer() {
  * </button>
  * ```
  */
+/**
+ * Mutation hook for updating a server via PUT /api/servers/{id}
+ */
+export function useUpdateServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: UpdateServerRequest;
+    }): Promise<ServerResponse> => {
+      const response = await fetch(`/api/servers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (response.status === 401) {
+        window.location.href = '/auth/login';
+        throw new Error('Session expired');
+      }
+
+      if (!response.ok) {
+        const err: APIError = await response.json();
+        throw new Error(err.error || 'Failed to update server');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success('Server update started');
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+/**
+ * Mutation hook for deleting a server via DELETE /api/servers/{id}
+ */
+export function useDeleteServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const response = await fetch(`/api/servers/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.status === 401) {
+        window.location.href = '/auth/login';
+        throw new Error('Session expired');
+      }
+
+      if (!response.ok) {
+        const err: APIError = await response.json();
+        throw new Error(err.error || 'Failed to delete server');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Server deletion started');
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
 export function useStopServer() {
   const queryClient = useQueryClient();
 
