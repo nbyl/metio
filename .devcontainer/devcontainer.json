@@ -20,7 +20,8 @@
 				"golang.go",
 				"a-h.templ",
 				"opentofu.vscode-opentofu",
-				"gitlab.gitlab-workflow"
+				"gitlab.gitlab-workflow",
+				"sst-dev.opencode"
 			]
 		}
 	}
