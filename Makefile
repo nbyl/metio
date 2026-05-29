@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images build-frontend help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images build-frontend test test-backend test-frontend develop help
 
 USERNAME := $(shell whoami)
 
@@ -19,12 +19,27 @@ build: build-frontend
 	done
 	@echo "All binaries built successfully"
 
-# Run all tests and create coverage report
-test:
+# Run Go tests with coverage
+test-backend:
 	@mkdir -p build
 	go test ./... -coverprofile=build/coverage.out -covermode=atomic
 	go tool cover -html=build/coverage.out -o build/coverage.html
 	@echo "Coverage report generated at build/coverage.html"
+
+# Run frontend vitest suite
+test-frontend:
+	cd frontend && npm run test:run
+
+# Run all tests (backend + frontend)
+test: test-backend test-frontend
+
+# Start backend (air) and frontend (Vite) with hot reload
+develop:
+	@echo "Starting development servers..."
+	@trap 'kill 0' EXIT; \
+	cd frontend && npm run dev & \
+	air & \
+	wait
 
 # Build specific binary (usage: make controller)
 %:
@@ -173,6 +188,14 @@ help:
 	@echo "  build-controller-image   - Build controller Docker image (with timestamp)"
 	@echo "  build-images            - Build both Docker images"
 	@echo ""
+	@echo "Test targets:"
+	@echo "  test                    - Run all tests (backend + frontend)"
+	@echo "  test-backend            - Run Go tests with coverage report"
+	@echo "  test-frontend           - Run frontend Vitest suite"
+	@echo ""
+	@echo "Development:"
+	@echo "  develop                 - Start backend (air) and frontend (Vite) with hot reload"
+	@echo ""
 	@echo "Deployment targets:"
 	@echo "  deploy                  - Deploy full system (alias for deploy-full)"
 	@echo "  deploy-full             - Build both images and deploy all infrastructure"
@@ -191,6 +214,10 @@ help:
 	@echo "  - Use cleanup-old-images to prevent registry bloat"
 	@echo ""
 	@echo "Examples:"
+	@echo "  make test                     # Run all tests"
+	@echo "  make test-backend             # Run Go tests only"
+	@echo "  make test-frontend            # Run frontend tests only"
+	@echo "  make develop                  # Start dev servers with hot reload"
 	@echo "  make deploy-full              # Deploy everything with new images"
 	@echo "  make deploy-infrastructure    # Update infrastructure without rebuilding"
 	@echo "  make deploy-machine-agent     # Update only machine-agent (triggers VM recreation)"
