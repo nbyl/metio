@@ -3,7 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { Header } from './components/layout/Header';
-import { ServerStatusCard } from './components/server';
+import { ServerDashboard } from './components/server';
 
 /**
  * Dashboard component - main server control panel
@@ -14,7 +14,7 @@ function Dashboard() {
   return (
     <Layout>
       <Header email={user?.email} showUser />
-      <ServerStatusCard />
+      <ServerDashboard />
     </Layout>
   );
 }

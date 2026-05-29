@@ -43,7 +43,7 @@ func main() {
 	// Initialize services
 	svcs, err := initServices()
 	if err != nil {
-		log.Printf("Warning: services not fully available: %v", err)
+		log.Fatalf("Failed to initialize services: %v", err)
 	}
 
 	r := handlers.New(svcs.provisioning, svcs.validation)

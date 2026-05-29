@@ -28,9 +28,9 @@ const (
 )
 
 const (
-	updateTypeInPlace   = 0
-	updateTypeResize    = 1
-	updateTypeRecreate  = 2
+	updateTypeInPlace  = 0
+	updateTypeResize   = 1
+	updateTypeRecreate = 2
 )
 
 const errMsgOperationInProgress = "operation already in progress for server %s"
@@ -41,27 +41,27 @@ var errOperationInProgress = errors.New("operation already in progress")
 var errNoOperationInProgress = errors.New("no operation in progress")
 
 type ProvisioningService struct {
-	workspaceManager pulumi.WorkspaceManagerInterface
-	db               db.DB
-	backupCoord      *BackupCoordinator
+	workspaceManager  pulumi.WorkspaceManagerInterface
+	db                db.DB
+	backupCoord       *BackupCoordinator
 	controllerVersion string
-	operations       map[string]context.CancelFunc
-	mu               sync.RWMutex
-	operationTimeout time.Duration
-	retryAttempts    int
-	retryDelay       time.Duration
+	operations        map[string]context.CancelFunc
+	mu                sync.RWMutex
+	operationTimeout  time.Duration
+	retryAttempts     int
+	retryDelay        time.Duration
 }
 
 func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB, controllerVersion string) *ProvisioningService {
 	return &ProvisioningService{
-		workspaceManager: workspaceManager,
-		db:               dbConn,
-		backupCoord:      NewBackupCoordinator(dbConn),
+		workspaceManager:  workspaceManager,
+		db:                dbConn,
+		backupCoord:       NewBackupCoordinator(dbConn),
 		controllerVersion: controllerVersion,
-		operations:       make(map[string]context.CancelFunc),
-		operationTimeout: 30 * time.Minute,
-		retryAttempts:    3,
-		retryDelay:       5 * time.Second,
+		operations:        make(map[string]context.CancelFunc),
+		operationTimeout:  30 * time.Minute,
+		retryAttempts:     3,
+		retryDelay:        5 * time.Second,
 	}
 }
 

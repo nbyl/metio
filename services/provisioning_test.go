@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/pulumi"
 	"gitlab.com/nbyl/metio/pulumi/programs"
