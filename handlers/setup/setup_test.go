@@ -1,4 +1,4 @@
-package handlers
+package setup
 
 import (
 	"context"
@@ -22,10 +22,10 @@ func (m *mockValidationService) Validate(ctx context.Context) (*services.Validat
 }
 
 func TestValidateSetupHandler_Valid(t *testing.T) {
-	original := validationService
-	defer func() { validationService = original }()
+	original := ValidationService
+	defer func() { ValidationService = original }()
 
-	validationService = &mockValidationService{
+	ValidationService = &mockValidationService{
 		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
 			return &services.ValidationResult{
 				Valid:       true,
@@ -39,7 +39,7 @@ func TestValidateSetupHandler_Valid(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/setup/validate", nil)
 	w := httptest.NewRecorder()
 
-	validateSetupHandler(w, req)
+	ValidateSetupHandler(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
@@ -53,10 +53,10 @@ func TestValidateSetupHandler_Valid(t *testing.T) {
 }
 
 func TestValidateSetupHandler_InvalidWithFixes(t *testing.T) {
-	original := validationService
-	defer func() { validationService = original }()
+	original := ValidationService
+	defer func() { ValidationService = original }()
 
-	validationService = &mockValidationService{
+	ValidationService = &mockValidationService{
 		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
 			return &services.ValidationResult{
 				Valid: false,
@@ -71,7 +71,7 @@ func TestValidateSetupHandler_InvalidWithFixes(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/setup/validate", nil)
 	w := httptest.NewRecorder()
 
-	validateSetupHandler(w, req)
+	ValidateSetupHandler(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -85,10 +85,10 @@ func TestValidateSetupHandler_InvalidWithFixes(t *testing.T) {
 }
 
 func TestValidateSetupHandler_ServiceError(t *testing.T) {
-	original := validationService
-	defer func() { validationService = original }()
+	original := ValidationService
+	defer func() { ValidationService = original }()
 
-	validationService = &mockValidationService{
+	ValidationService = &mockValidationService{
 		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
 			return nil, errors.New("gcp api error")
 		},
@@ -97,7 +97,7 @@ func TestValidateSetupHandler_ServiceError(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/setup/validate", nil)
 	w := httptest.NewRecorder()
 
-	validateSetupHandler(w, req)
+	ValidateSetupHandler(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 
