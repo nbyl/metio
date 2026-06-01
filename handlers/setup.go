@@ -17,7 +17,7 @@ func validateSetupHandler(w http.ResponseWriter, r *http.Request) {
 	result, err := validationService.Validate(r.Context())
 	if err != nil {
 		log.Printf("validation handler error: %v", err)
-		writeJSONError(w, "validation failed", http.StatusInternalServerError)
+		WriteJSONError(w, "validation failed", http.StatusInternalServerError)
 		return
 	}
 
