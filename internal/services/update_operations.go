@@ -8,7 +8,7 @@ import (
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
-	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/internal/db"
 )
 
 // stopInstanceFn and startInstanceFn are function variables for testability.

@@ -9,7 +9,7 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
-	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/internal/db"
 )
 
 // Config holds the configuration needed for database connections and service identification.

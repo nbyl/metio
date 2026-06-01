@@ -10,10 +10,10 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/internal/db"
 	"gitlab.com/nbyl/metio/pulumi"
 	"gitlab.com/nbyl/metio/pulumi/programs"
-	"gitlab.com/nbyl/metio/testutil"
+	"gitlab.com/nbyl/metio/internal/testutil"
 )
 
 // Re-export for backward compatibility within this test file

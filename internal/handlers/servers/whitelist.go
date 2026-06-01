@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/db"
-	"gitlab.com/nbyl/metio/services"
+	"gitlab.com/nbyl/metio/internal/db"
+	"gitlab.com/nbyl/metio/internal/services"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"

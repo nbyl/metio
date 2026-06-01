@@ -48,6 +48,7 @@
 - **Styling**: TailwindCSS 4 with `cn()` utility (clsx + tailwind-merge)
 - **State management**: React Query for server state, React Context for auth
 - **Components**: Located in `frontend/src/components/`
+- **Go packages**: Now under `internal/` (e.g., `internal/handlers/`, `internal/services/`, `internal/db/`, `internal/config/`)
 - **Hooks**: Custom hooks in `frontend/src/hooks/`
 - **Dev server**: `cd frontend && npm run dev` (proxies `/api` and `/auth` to `:8080`)
 - **Lint**: `cd frontend && npm run lint` (ESLint)
