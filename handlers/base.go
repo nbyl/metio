@@ -12,12 +12,11 @@ import (
 	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/handlers/servers"
+	"gitlab.com/nbyl/metio/handlers/setup"
 	"gitlab.com/nbyl/metio/static"
 )
 
 var provisioningService servers.ProvisioningServiceInterface
-
-var validationService ValidationServiceInterface
 
 var getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
 	cfg := config.Load()
@@ -31,9 +30,9 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func New(ps servers.ProvisioningServiceInterface, vs ValidationServiceInterface) *mux.Router {
+func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInterface) *mux.Router {
 	provisioningService = ps
-	validationService = vs
+	setup.ValidationService = vs
 
 	servers.ProvisioningService = ps
 	servers.GetDBConnection = getDBConnection
@@ -44,7 +43,6 @@ func New(ps servers.ProvisioningServiceInterface, vs ValidationServiceInterface)
 		}
 		return &servers.MojangProfile{ID: profile.ID, Name: profile.Name}, nil
 	}
-	servers.GetUserEmail = getUserEmail
 	servers.GetUserEmail = getUserEmail
 	servers.WriteJSONError = WriteJSONError
 
@@ -62,7 +60,7 @@ func New(ps servers.ProvisioningServiceInterface, vs ValidationServiceInterface)
 
 	servers.RegisterRoutes(apiRouter)
 
-	apiRouter.HandleFunc("/setup/validate", validateSetupHandler).Methods("GET")
+	setup.RegisterRoutes(apiRouter)
 
 	r.PathPrefix("/").Handler(spaHandler())
 	return r
