@@ -17,6 +17,7 @@ import (
 	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/handlers/servers"
+	"gitlab.com/nbyl/metio/services"
 	"gitlab.com/nbyl/metio/testutil"
 )
 
@@ -1345,8 +1346,8 @@ func TestAddWhitelistByID_Success(t *testing.T) {
 	defer cleanupDB()
 
 	oldLookup := servers.LookupMinecraftUser
-	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
-		return &servers.MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*services.MojangProfile, error) {
+		return &services.MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
 	}
 	defer func() { servers.LookupMinecraftUser = oldLookup }()
 
@@ -1370,8 +1371,8 @@ func TestAddWhitelistByID_NotFound(t *testing.T) {
 	defer cleanupDB()
 
 	oldLookup := servers.LookupMinecraftUser
-	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
-		return &servers.MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*services.MojangProfile, error) {
+		return &services.MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
 	}
 	defer func() { servers.LookupMinecraftUser = oldLookup }()
 
@@ -1407,7 +1408,7 @@ func TestAddWhitelistByID_EmptyUsername(t *testing.T) {
 
 func TestAddWhitelistByID_MojangError(t *testing.T) {
 	oldLookup := servers.LookupMinecraftUser
-	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*services.MojangProfile, error) {
 		return nil, fmt.Errorf("mojang API down")
 	}
 	defer func() { servers.LookupMinecraftUser = oldLookup }()
@@ -1423,7 +1424,7 @@ func TestAddWhitelistByID_MojangError(t *testing.T) {
 
 func TestAddWhitelistByID_UserNotFound(t *testing.T) {
 	oldLookup := servers.LookupMinecraftUser
-	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*services.MojangProfile, error) {
 		return nil, nil
 	}
 	defer func() { servers.LookupMinecraftUser = oldLookup }()
