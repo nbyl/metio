@@ -1,4 +1,4 @@
-package handlers
+package servers
 
 import (
 	"encoding/json"
@@ -9,44 +9,23 @@ import (
 
 	"github.com/gorilla/mux"
 	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/services"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// WhitelistResponse represents the whitelist data returned by GET /api/server/whitelist
-type WhitelistResponse struct {
-	Enabled bool              `json:"enabled"`
-	Players []WhitelistPlayer `json:"players"`
-}
-
-// WhitelistPlayer represents a player in the whitelist response
-type WhitelistPlayer struct {
-	Username string `json:"username"`
-	UUID     string `json:"uuid"`
-	AddedAt  string `json:"addedAt"`
-	AddedBy  string `json:"addedBy"`
-}
-
-// AddPlayerRequest represents the request body for POST /api/server/whitelist
-type AddPlayerRequest struct {
-	Username string `json:"username"`
-}
-
-// SetEnabledRequest represents the request body for PUT /api/server/whitelist/enabled
-type SetEnabledRequest struct {
-	Enabled bool `json:"enabled"`
-}
-
-// getWhitelistHandler returns the whitelist configuration and players
-func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
+func GetWhitelistByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tracer := otel.Tracer("whitelist-handler")
-	ctx, span := tracer.Start(ctx, "getWhitelistHandler")
+	ctx, span := tracer.Start(ctx, "getWhitelistByID")
 	defer span.End()
 
-	dbConn, cfg, err := getDBConnection(ctx)
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -54,15 +33,20 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	serverConfig, err := dbConn.GetServerConfig(ctx, serverID)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_config_failed"))
+		log.Printf("Error getting server config: %v", err)
+		writeJSONError(w, "server not found", http.StatusNotFound)
+		return
+	}
+
 	span.SetAttributes(
-		attribute.String("instance.name", cfg.InstanceName),
-		attribute.String("database.id", cfg.DatabaseID()),
+		attribute.String("instance.name", serverConfig.Name),
 	)
 
-	// Get whitelist config
-	whitelistConfig, err := dbConn.GetWhitelistConfig(ctx, cfg.InstanceName)
+	whitelistConfig, err := dbConn.GetWhitelistConfig(ctx, serverConfig.Name)
 	if err != nil {
-		// If not found, use default (disabled)
 		if status.Code(err) == codes.NotFound {
 			whitelistConfig = db.WhitelistConfig{Enabled: false}
 		} else {
@@ -73,8 +57,7 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get whitelist entries
-	entries, err := dbConn.GetWhitelistEntries(ctx, cfg.InstanceName)
+	entries, err := dbConn.GetWhitelistEntries(ctx, serverConfig.Name)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "get_entries_failed"))
 		log.Printf("Error getting whitelist entries: %v", err)
@@ -82,7 +65,6 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to response format
 	players := make([]WhitelistPlayer, 0, len(entries))
 	for _, entry := range entries {
 		players = append(players, WhitelistPlayer{
@@ -105,14 +87,15 @@ func getWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// addWhitelistHandler adds a player to the whitelist
-func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
+func AddWhitelistByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tracer := otel.Tracer("whitelist-handler")
-	ctx, span := tracer.Start(ctx, "addWhitelistHandler")
+	ctx, span := tracer.Start(ctx, "addWhitelistByID")
 	defer span.End()
 
-	// Parse request body
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+
 	var req AddPlayerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		span.SetAttributes(attribute.String("error", "invalid_request_body"))
@@ -128,7 +111,6 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.String("username", req.Username))
 
-	// Validate username via Mojang API
 	profile, err := LookupMinecraftUser(ctx, req.Username)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "mojang_api_failed"))
@@ -148,13 +130,12 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		attribute.String("mojang.name", profile.Name),
 	)
 
-	// Get the authenticated user's email
-	userEmail := getUserEmail(r)
+	userEmail := GetUserEmail(r)
 	if userEmail == "" {
 		userEmail = "unknown"
 	}
 
-	dbConn, cfg, err := getDBConnection(ctx)
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -162,15 +143,22 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create whitelist entry with formatted UUID
+	serverConfig, err := dbConn.GetServerConfig(ctx, serverID)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_config_failed"))
+		log.Printf("Error getting server config: %v", err)
+		writeJSONError(w, "server not found", http.StatusNotFound)
+		return
+	}
+
 	entry := db.WhitelistEntry{
-		Username: profile.Name, // Use the case-corrected name from Mojang
-		UUID:     FormatUUID(profile.ID),
+		Username: profile.Name,
+		UUID:     services.FormatUUID(profile.ID),
 		AddedAt:  time.Now(),
 		AddedBy:  userEmail,
 	}
 
-	if err := dbConn.AddWhitelistEntry(ctx, cfg.InstanceName, entry); err != nil {
+	if err := dbConn.AddWhitelistEntry(ctx, serverConfig.Name, entry); err != nil {
 		span.SetAttributes(attribute.String("error", "add_entry_failed"))
 		log.Printf("Error adding whitelist entry: %v", err)
 		writeJSONError(w, "failed to add player to whitelist", http.StatusInternalServerError)
@@ -189,14 +177,14 @@ func addWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// removeWhitelistHandler removes a player from the whitelist
-func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
+func RemoveWhitelistByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tracer := otel.Tracer("whitelist-handler")
-	ctx, span := tracer.Start(ctx, "removeWhitelistHandler")
+	ctx, span := tracer.Start(ctx, "removeWhitelistByID")
 	defer span.End()
 
 	vars := mux.Vars(r)
+	serverID := vars["id"]
 	uuid := vars["uuid"]
 
 	if uuid == "" {
@@ -207,7 +195,7 @@ func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.String("uuid", uuid))
 
-	dbConn, cfg, err := getDBConnection(ctx)
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
@@ -215,7 +203,15 @@ func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := dbConn.RemoveWhitelistEntry(ctx, cfg.InstanceName, uuid); err != nil {
+	serverConfig, err := dbConn.GetServerConfig(ctx, serverID)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_config_failed"))
+		log.Printf("Error getting server config: %v", err)
+		writeJSONError(w, "server not found", http.StatusNotFound)
+		return
+	}
+
+	if err := dbConn.RemoveWhitelistEntry(ctx, serverConfig.Name, uuid); err != nil {
 		span.SetAttributes(attribute.String("error", "remove_entry_failed"))
 		log.Printf("Error removing whitelist entry: %v", err)
 		writeJSONError(w, "failed to remove player from whitelist", http.StatusInternalServerError)
@@ -228,14 +224,15 @@ func removeWhitelistHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
-// setWhitelistEnabledHandler enables or disables the whitelist
-func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
+func SetWhitelistEnabledByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tracer := otel.Tracer("whitelist-handler")
-	ctx, span := tracer.Start(ctx, "setWhitelistEnabledHandler")
+	ctx, span := tracer.Start(ctx, "setWhitelistEnabledByID")
 	defer span.End()
 
-	// Parse request body
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+
 	var req SetEnabledRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		span.SetAttributes(attribute.String("error", "invalid_request_body"))
@@ -245,17 +242,24 @@ func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
 
 	span.SetAttributes(attribute.Bool("enabled", req.Enabled))
 
-	dbConn, cfg, err := getDBConnection(ctx)
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "database_connection_failed"))
 		log.Printf("Error connecting to database: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
 		return
 	}
-	_ = cfg
+
+	serverConfig, err := dbConn.GetServerConfig(ctx, serverID)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_config_failed"))
+		log.Printf("Error getting server config: %v", err)
+		writeJSONError(w, "server not found", http.StatusNotFound)
+		return
+	}
 
 	whitelistConfig := db.WhitelistConfig{Enabled: req.Enabled}
-	if err := dbConn.SetWhitelistConfig(ctx, cfg.InstanceName, whitelistConfig); err != nil {
+	if err := dbConn.SetWhitelistConfig(ctx, serverConfig.Name, whitelistConfig); err != nil {
 		span.SetAttributes(attribute.String("error", "set_config_failed"))
 		log.Printf("Error setting whitelist config: %v", err)
 		writeJSONError(w, "failed to update whitelist config", http.StatusInternalServerError)
@@ -266,19 +270,4 @@ func setWhitelistEnabledHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"enabled": req.Enabled})
-}
-
-// getUserEmail extracts the user's email from the session
-func getUserEmail(r *http.Request) string {
-	session, err := getSessionStore().Get(r, sessionName)
-	if err != nil {
-		log.Printf("getUserEmail: error retrieving session: %v", err)
-		return ""
-	}
-	email, ok := session.Values["email"].(string)
-	if !ok {
-		log.Printf("getUserEmail: email not found in session (isNew=%v, keys=%v)", session.IsNew, len(session.Values))
-		return ""
-	}
-	return email
 }
