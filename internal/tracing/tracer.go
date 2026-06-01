@@ -12,7 +12,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
-	"gitlab.com/nbyl/metio/config"
+	"gitlab.com/nbyl/metio/internal/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/oauth"
 )
