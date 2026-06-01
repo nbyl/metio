@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.com/nbyl/metio/db"
-	"gitlab.com/nbyl/metio/tracing"
+	"gitlab.com/nbyl/metio/internal/db"
+	"gitlab.com/nbyl/metio/internal/tracing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )

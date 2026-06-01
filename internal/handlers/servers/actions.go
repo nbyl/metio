@@ -8,7 +8,7 @@ import (
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/internal/db"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"

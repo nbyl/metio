@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/config"
-	"gitlab.com/nbyl/metio/db"
-	"gitlab.com/nbyl/metio/handlers/servers"
-	"gitlab.com/nbyl/metio/handlers/setup"
-	"gitlab.com/nbyl/metio/services"
+	"gitlab.com/nbyl/metio/internal/config"
+	"gitlab.com/nbyl/metio/internal/db"
+	"gitlab.com/nbyl/metio/internal/handlers/servers"
+	"gitlab.com/nbyl/metio/internal/handlers/setup"
+	"gitlab.com/nbyl/metio/internal/services"
 	"gitlab.com/nbyl/metio/static"
 )
 

@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
-	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/internal/db"
 	"gitlab.com/nbyl/metio/pulumi/programs"
 )
 

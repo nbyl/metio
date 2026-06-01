@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/internal/db"
 	"gitlab.com/nbyl/metio/pulumi"
 	"gitlab.com/nbyl/metio/pulumi/programs"
 )
