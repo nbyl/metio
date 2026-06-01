@@ -3,7 +3,6 @@ package servers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -19,11 +18,6 @@ type ProvisioningServiceInterface interface {
 	DestroyServer(ctx context.Context, serverID string) error
 	GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error)
 	RevertServerConfig(ctx context.Context, serverID string) error
-}
-
-type MojangProfile struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
 }
 
 type ShutdownScheduleInput struct {
@@ -267,19 +261,6 @@ func calculateProgress(status *db.ProvisioningStatus) int {
 	}
 
 	return (completed * 100) / len(status.Steps)
-}
-
-func FormatUUID(uuid string) string {
-	if len(uuid) != 32 {
-		return uuid
-	}
-	return fmt.Sprintf("%s-%s-%s-%s-%s",
-		uuid[0:8],
-		uuid[8:12],
-		uuid[12:16],
-		uuid[16:20],
-		uuid[20:32],
-	)
 }
 
 func writeJSONError(w http.ResponseWriter, message string, statusCode int) {

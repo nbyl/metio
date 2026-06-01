@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/services"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
@@ -152,7 +153,7 @@ func AddWhitelistByID(w http.ResponseWriter, r *http.Request) {
 
 	entry := db.WhitelistEntry{
 		Username: profile.Name,
-		UUID:     FormatUUID(profile.ID),
+		UUID:     services.FormatUUID(profile.ID),
 		AddedAt:  time.Now(),
 		AddedBy:  userEmail,
 	}

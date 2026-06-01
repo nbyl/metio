@@ -13,6 +13,7 @@ import (
 	"gitlab.com/nbyl/metio/db"
 	"gitlab.com/nbyl/metio/handlers/servers"
 	"gitlab.com/nbyl/metio/handlers/setup"
+	"gitlab.com/nbyl/metio/services"
 	"gitlab.com/nbyl/metio/static"
 )
 
@@ -36,13 +37,7 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 
 	servers.ProvisioningService = ps
 	servers.GetDBConnection = getDBConnection
-	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
-		profile, err := LookupMinecraftUser(ctx, username)
-		if err != nil {
-			return nil, err
-		}
-		return &servers.MojangProfile{ID: profile.ID, Name: profile.Name}, nil
-	}
+	servers.LookupMinecraftUser = services.LookupMinecraftUser
 	servers.GetUserEmail = getUserEmail
 	servers.WriteJSONError = WriteJSONError
 
