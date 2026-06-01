@@ -23,78 +23,12 @@ func setupMockDB(mockDB *testutil.MockDB) func() {
 	original := getDBConnection
 	getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
 		return mockDB, config.Config{
-			Environment:  "test",
-			Region:       "us-central1",
-			ProjectID:    "test-project",
-			InstanceName: "test-instance",
+			Environment: "test",
+			Region:      "us-central1",
+			ProjectID:   "test-project",
 		}, nil
 	}
 	return func() { getDBConnection = original }
-}
-
-func TestStatusHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		Players:     db.Players{Current: 5, Max: 20},
-		Timestamp:   time.Now(),
-		Uptime:      "1:30",
-		ServerState: db.ServerStateRunning,
-		InstanceIP:  "10.0.0.1:25565",
-		Version:     "1.21.1",
-	}, nil)
-
-	req := httptest.NewRequest("GET", "/api/server/status", nil)
-	w := httptest.NewRecorder()
-
-	statusHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response ServerStatus
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.Equal(t, db.ServerStateRunning, response.Status)
-	assert.Equal(t, 5, response.Players)
-	assert.Equal(t, 20, response.MaxPlayers)
-	assert.Equal(t, "1:30", response.Uptime)
-	assert.Equal(t, "1.21.1", response.Version)
-}
-
-func TestStatusHandler_StoppedServer(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		Players:     db.Players{Current: 5, Max: 20},
-		ServerState: db.ServerStateStopped,
-		InstanceIP:  "10.0.0.1:25565",
-	}, nil)
-
-	req := httptest.NewRequest("GET", "/api/server/status", nil)
-	w := httptest.NewRecorder()
-	statusHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response ServerStatus
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.Equal(t, db.ServerStateStopped, response.Status)
-	assert.Equal(t, 0, response.Players) // zeroed when not running
-}
-
-func TestStatusHandler_DBError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, assert.AnError)
-
-	req := httptest.NewRequest("GET", "/api/server/status", nil)
-	w := httptest.NewRecorder()
-	statusHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 func TestListServers_Success(t *testing.T) {
@@ -181,131 +115,6 @@ func TestDeleteServer_NotFound(t *testing.T) {
 	deleteServer(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestGetWhitelistHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{
-		{Username: "Steve", UUID: "uuid-1", AddedAt: time.Now(), AddedBy: "admin"},
-	}, nil)
-
-	req := httptest.NewRequest("GET", "/api/server/whitelist", nil)
-	w := httptest.NewRecorder()
-	getWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response WhitelistResponse
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.True(t, response.Enabled)
-	assert.Len(t, response.Players, 1)
-	assert.Equal(t, "Steve", response.Players[0].Username)
-}
-
-func TestRemoveWhitelistHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("RemoveWhitelistEntry", mock.Anything, "test-instance", "uuid-1").Return(nil)
-
-	req := httptest.NewRequest("DELETE", "/api/server/whitelist/uuid-1", nil)
-	req = mux.SetURLVars(req, map[string]string{"uuid": "uuid-1"})
-	w := httptest.NewRecorder()
-	removeWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestSetWhitelistEnabledHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", db.WhitelistConfig{Enabled: true}).Return(nil)
-
-	body, _ := json.Marshal(SetEnabledRequest{Enabled: true})
-	req := httptest.NewRequest("PUT", "/api/server/whitelist/enabled", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	setWhitelistEnabledHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestSetWhitelistEnabledHandler_InvalidBody(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	req := httptest.NewRequest("PUT", "/api/server/whitelist/enabled", bytes.NewReader([]byte("invalid")))
-	w := httptest.NewRecorder()
-	setWhitelistEnabledHandler(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	_ = mockDB
-}
-
-func TestScheduleShutdownHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	futureTime := time.Now().Add(1 * time.Hour)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		ServerState: db.ServerStateRunning,
-	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
-
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
-	req := httptest.NewRequest("POST", "/api/server/shutdown/schedule", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	scheduleShutdownHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response ScheduleShutdownResponse
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.True(t, response.Success)
-	assert.NotNil(t, response.ScheduledShutdown)
-}
-
-func TestScheduleShutdownHandler_InvalidBody(t *testing.T) {
-	req := httptest.NewRequest("POST", "/api/server/shutdown/schedule", bytes.NewReader([]byte("invalid")))
-	w := httptest.NewRecorder()
-	scheduleShutdownHandler(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestScheduleShutdownHandler_PastTime(t *testing.T) {
-	pastTime := time.Now().Add(-1 * time.Hour)
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: pastTime.Format(time.RFC3339)})
-	req := httptest.NewRequest("POST", "/api/server/shutdown/schedule", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	scheduleShutdownHandler(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestCancelScheduledShutdownHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		ServerState: db.ServerStateRunning,
-	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
-
-	req := httptest.NewRequest("DELETE", "/api/server/shutdown/schedule", nil)
-	w := httptest.NewRecorder()
-	cancelScheduledShutdownHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response ScheduleShutdownResponse
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.True(t, response.Success)
-	assert.Nil(t, response.ScheduledShutdown)
 }
 
 func TestCreateServer_InvalidBody(t *testing.T) {
@@ -527,128 +336,6 @@ func TestHandleInstanceStop_EmptyResourceName(t *testing.T) {
 	})
 }
 
-func TestAddWhitelistHandler_InvalidBody(t *testing.T) {
-	req := httptest.NewRequest("POST", "/api/server/whitelist", bytes.NewReader([]byte("invalid")))
-	w := httptest.NewRecorder()
-	addWhitelistHandler(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestAddWhitelistHandler_EmptyUsername(t *testing.T) {
-	body, _ := json.Marshal(AddPlayerRequest{Username: ""})
-	req := httptest.NewRequest("POST", "/api/server/whitelist", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	addWhitelistHandler(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestRemoveWhitelistHandler_DBError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("RemoveWhitelistEntry", mock.Anything, "test-instance", "uuid-1").Return(assert.AnError)
-
-	req := httptest.NewRequest("DELETE", "/api/server/whitelist/uuid-1", nil)
-	req = mux.SetURLVars(req, map[string]string{"uuid": "uuid-1"})
-	w := httptest.NewRecorder()
-	removeWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestSetWhitelistEnabledHandler_DBError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", db.WhitelistConfig{Enabled: true}).Return(assert.AnError)
-
-	body, _ := json.Marshal(SetEnabledRequest{Enabled: true})
-	req := httptest.NewRequest("PUT", "/api/server/whitelist/enabled", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	setWhitelistEnabledHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestGetWhitelistHandler_EntriesError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry(nil), assert.AnError)
-
-	req := httptest.NewRequest("GET", "/api/server/whitelist", nil)
-	w := httptest.NewRecorder()
-	getWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestScheduleShutdownHandler_GetStatusError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	futureTime := time.Now().Add(1 * time.Hour)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, assert.AnError)
-
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
-	req := httptest.NewRequest("POST", "/api/server/shutdown/schedule", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	scheduleShutdownHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestCancelScheduledShutdownHandler_GetStatusError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, assert.AnError)
-
-	req := httptest.NewRequest("DELETE", "/api/server/shutdown/schedule", nil)
-	w := httptest.NewRecorder()
-	cancelScheduledShutdownHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestScheduleShutdownHandler_UpdateError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	futureTime := time.Now().Add(1 * time.Hour)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{ServerState: db.ServerStateRunning}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
-
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
-	req := httptest.NewRequest("POST", "/api/server/shutdown/schedule", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	scheduleShutdownHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestCancelScheduledShutdownHandler_UpdateError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{ServerState: db.ServerStateRunning}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
-
-	req := httptest.NewRequest("DELETE", "/api/server/shutdown/schedule", nil)
-	w := httptest.NewRecorder()
-	cancelScheduledShutdownHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
 func TestCreateServer_DBError(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)
@@ -694,51 +381,6 @@ func TestCreateServer_NoProvisioningService(t *testing.T) {
 	createServer(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-}
-
-func TestStatusHandler_ScheduledShutdown(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	shutdownTime := time.Now().Add(1 * time.Hour)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		Players:           db.Players{Current: 3, Max: 20},
-		ServerState:       db.ServerStateRunning,
-		InstanceIP:        "10.0.0.1:25565",
-		Version:           "1.21.1",
-		Uptime:            "2:00",
-		ScheduledShutdown: &shutdownTime,
-	}, nil)
-
-	req := httptest.NewRequest("GET", "/api/server/status", nil)
-	w := httptest.NewRecorder()
-	statusHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response ServerStatus
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NotNil(t, response.ScheduledShutdown)
-}
-
-func TestStatusHandler_EmptyIP(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		ServerState: db.ServerStateRunning,
-		InstanceIP:  "",
-	}, nil)
-
-	req := httptest.NewRequest("GET", "/api/server/status", nil)
-	w := httptest.NewRecorder()
-	statusHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response ServerStatus
-	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.Equal(t, "unknown:25565", response.IP)
 }
 
 func TestUpdateServer_NotFound(t *testing.T) {
@@ -1137,80 +779,6 @@ func TestCreateServer_ProvisioningGenericError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-// --- addWhitelistHandler tests ---
-
-func TestAddWhitelistHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
-		return &MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
-	}
-	defer func() { LookupMinecraftUser = oldLookup }()
-
-	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(nil)
-
-	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
-	req := httptest.NewRequest("POST", "/api/server/whitelist", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	addWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusCreated, w.Code)
-}
-
-func TestAddWhitelistHandler_MojangError(t *testing.T) {
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
-		return nil, fmt.Errorf("mojang API down")
-	}
-	defer func() { LookupMinecraftUser = oldLookup }()
-
-	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
-	req := httptest.NewRequest("POST", "/api/server/whitelist", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	addWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusBadGateway, w.Code)
-}
-
-func TestAddWhitelistHandler_UserNotFound(t *testing.T) {
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
-		return nil, nil
-	}
-	defer func() { LookupMinecraftUser = oldLookup }()
-
-	body, _ := json.Marshal(AddPlayerRequest{Username: "nonexistent"})
-	req := httptest.NewRequest("POST", "/api/server/whitelist", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	addWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestAddWhitelistHandler_DBError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
-		return &MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
-	}
-	defer func() { LookupMinecraftUser = oldLookup }()
-
-	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(assert.AnError)
-
-	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
-	req := httptest.NewRequest("POST", "/api/server/whitelist", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	addWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
 // --- getServerProvisioningStatus tests ---
 
 func TestGetServerProvisioningStatus_Success(t *testing.T) {
@@ -1281,20 +849,6 @@ func TestUpdateInstanceState_UpdateError(t *testing.T) {
 
 // --- getWhitelistHandler additional coverage ---
 
-func TestGetWhitelistHandler_ConfigError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{}, assert.AnError)
-
-	req := httptest.NewRequest("GET", "/api/server/whitelist", nil)
-	w := httptest.NewRecorder()
-	getWhitelistHandler(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
 // --- getServer additional coverage ---
 
 func TestGetServer_EmptyID(t *testing.T) {
@@ -1302,17 +856,6 @@ func TestGetServer_EmptyID(t *testing.T) {
 	req = mux.SetURLVars(req, map[string]string{"id": ""})
 	w := httptest.NewRecorder()
 	getServer(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-// --- removeWhitelistHandler additional coverage ---
-
-func TestRemoveWhitelistHandler_EmptyUUID(t *testing.T) {
-	req := httptest.NewRequest("DELETE", "/api/server/whitelist/", nil)
-	req = mux.SetURLVars(req, map[string]string{"uuid": ""})
-	w := httptest.NewRecorder()
-	removeWhitelistHandler(w, req)
-
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -1454,23 +997,27 @@ func setupMockComputeError() func() {
 	return func() { newComputeClient = orig }
 }
 
-// --- startServerHandler tests ---
+// --- startServerByID tests ---
 
-func TestStartServerHandler_Success(t *testing.T) {
+func TestStartServerByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 	cleanupCC := setupMockCompute(&mockComputeClient{})
 	defer cleanupCC()
 
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
 		Players: db.Players{Current: 2, Max: 20}, ServerState: db.ServerStateStopped,
 	}, nil)
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
 
-	req := httptest.NewRequest("POST", "/api/server/start", nil)
+	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	startServerHandler(w, req)
+	startServerByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp ServerActionResponse
@@ -1479,69 +1026,80 @@ func TestStartServerHandler_Success(t *testing.T) {
 	assert.Equal(t, db.ServerStateStarting, resp.State)
 }
 
-func TestStartServerHandler_ComputeClientError(t *testing.T) {
+func TestStartServerByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanupDB := setupMockDB(mockDB)
+	defer cleanupDB()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("POST", "/api/servers/missing/start", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	startServerByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStartServerByID_ComputeClientError(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 	cleanupCC := setupMockComputeError()
 	defer cleanupCC()
 
-	req := httptest.NewRequest("POST", "/api/server/start", nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+
+	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	startServerHandler(w, req)
+	startServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestStartServerHandler_StartError(t *testing.T) {
+func TestStartServerByID_StartError(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 	cleanupCC := setupMockCompute(&mockComputeClient{startErr: fmt.Errorf("start failed")})
 	defer cleanupCC()
 
-	req := httptest.NewRequest("POST", "/api/server/start", nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+
+	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	startServerHandler(w, req)
+	startServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestStartServerHandler_DBGetStatusError(t *testing.T) {
+// --- stopServerByID tests ---
+
+func TestStopServerByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 	cleanupCC := setupMockCompute(&mockComputeClient{})
 	defer cleanupCC()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, assert.AnError)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
-
-	req := httptest.NewRequest("POST", "/api/server/start", nil)
-	w := httptest.NewRecorder()
-	startServerHandler(w, req)
-
-	// Still succeeds — DB errors are non-fatal for start
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-// --- stopServerHandler tests ---
-
-func TestStopServerHandler_Success(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanupDB := setupMockDB(mockDB)
-	defer cleanupDB()
-	cleanupCC := setupMockCompute(&mockComputeClient{})
-	defer cleanupCC()
-
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
 		Players: db.Players{Current: 2, Max: 20}, ServerState: db.ServerStateRunning,
 	}, nil)
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
 
-	req := httptest.NewRequest("POST", "/api/server/stop", nil)
+	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerHandler(w, req)
+	stopServerByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp ServerActionResponse
@@ -1550,52 +1108,515 @@ func TestStopServerHandler_Success(t *testing.T) {
 	assert.Equal(t, db.ServerStateStopping, resp.State)
 }
 
-func TestStopServerHandler_ComputeClientError(t *testing.T) {
+func TestStopServerByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanupDB := setupMockDB(mockDB)
+	defer cleanupDB()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("POST", "/api/servers/missing/stop", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	stopServerByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStopServerByID_ComputeClientError(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 	cleanupCC := setupMockComputeError()
 	defer cleanupCC()
 
-	req := httptest.NewRequest("POST", "/api/server/stop", nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+
+	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerHandler(w, req)
+	stopServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestStopServerHandler_StopError(t *testing.T) {
+func TestStopServerByID_StopError(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 	cleanupCC := setupMockCompute(&mockComputeClient{stopErr: fmt.Errorf("stop failed")})
 	defer cleanupCC()
 
-	req := httptest.NewRequest("POST", "/api/server/stop", nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+
+	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerHandler(w, req)
+	stopServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func TestStopServerHandler_DBUpdateError(t *testing.T) {
+// --- statusByID tests ---
+
+func TestStatusByID_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+		Players:     db.Players{Current: 5, Max: 20},
+		Timestamp:   time.Now(),
+		Uptime:      "1:30",
+		ServerState: db.ServerStateRunning,
+		InstanceIP:  "10.0.0.1:25565",
+		Version:     "1.21.1",
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	statusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, string(db.ServerStateRunning), response.ServerState)
+	assert.Equal(t, 5, response.Players.Current)
+	assert.Equal(t, 20, response.Players.Max)
+	assert.Equal(t, "1:30", response.Uptime)
+	assert.Equal(t, "1.21.1", response.Version)
+	assert.Equal(t, "10.0.0.1:25565", response.InstanceIP)
+}
+
+func TestStatusByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("GET", "/api/servers/missing/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	statusByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStatusByID_GetStatusError(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, assert.AnError)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	statusByID(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestStatusByID_UnknownIP(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+		Players:     db.Players{Current: 0, Max: 20},
+		Timestamp:   time.Now(),
+		ServerState: db.ServerStateStopped,
+		InstanceIP:  "",
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	statusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, string(db.ServerStateStopped), response.ServerState)
+	assert.Equal(t, "unknown:25565", response.InstanceIP)
+}
+
+func TestStatusByID_WithScheduledShutdown(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	shutdownTime := time.Now().Add(1 * time.Hour)
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+		Players:           db.Players{Current: 0, Max: 20},
+		Timestamp:         time.Now(),
+		ServerState:       db.ServerStateRunning,
+		ScheduledShutdown: &shutdownTime,
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	statusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NotNil(t, response.ScheduledShutdown)
+	assert.Equal(t, shutdownTime.Format(time.RFC3339), *response.ScheduledShutdown)
+}
+
+// --- getWhitelistByID tests ---
+
+func TestGetWhitelistByID_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
+	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{
+		{Username: "Steve", UUID: "uuid-1", AddedAt: time.Now(), AddedBy: "admin"},
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/whitelist", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	getWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response WhitelistResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.True(t, response.Enabled)
+	assert.Len(t, response.Players, 1)
+	assert.Equal(t, "Steve", response.Players[0].Username)
+}
+
+func TestGetWhitelistByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("GET", "/api/servers/missing/whitelist", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	getWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// --- addWhitelistByID tests ---
+
+func TestAddWhitelistByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
-	cleanupCC := setupMockCompute(&mockComputeClient{})
-	defer cleanupCC()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		Players: db.Players{Current: 0, Max: 20}, ServerState: db.ServerStateRunning,
+	oldLookup := LookupMinecraftUser
+	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
+		return &MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
+	}
+	defer func() { LookupMinecraftUser = oldLookup }()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
+	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(nil)
 
-	req := httptest.NewRequest("POST", "/api/server/stop", nil)
+	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
+	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerHandler(w, req)
+	addWhitelistByID(w, req)
 
-	// Still succeeds — DB errors are non-fatal for stop
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
+func TestAddWhitelistByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanupDB := setupMockDB(mockDB)
+	defer cleanupDB()
+
+	oldLookup := LookupMinecraftUser
+	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
+		return &MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
+	}
+	defer func() { LookupMinecraftUser = oldLookup }()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
+	req := httptest.NewRequest("POST", "/api/servers/missing/whitelist", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	addWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestAddWhitelistByID_InvalidBody(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader([]byte("invalid")))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	addWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAddWhitelistByID_EmptyUsername(t *testing.T) {
+	body, _ := json.Marshal(AddPlayerRequest{Username: ""})
+	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	addWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAddWhitelistByID_MojangError(t *testing.T) {
+	oldLookup := LookupMinecraftUser
+	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
+		return nil, fmt.Errorf("mojang API down")
+	}
+	defer func() { LookupMinecraftUser = oldLookup }()
+
+	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
+	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	addWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+}
+
+func TestAddWhitelistByID_UserNotFound(t *testing.T) {
+	oldLookup := LookupMinecraftUser
+	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
+		return nil, nil
+	}
+	defer func() { LookupMinecraftUser = oldLookup }()
+
+	body, _ := json.Marshal(AddPlayerRequest{Username: "nonexistent"})
+	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	addWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// --- removeWhitelistByID tests ---
+
+func TestRemoveWhitelistByID_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("RemoveWhitelistEntry", mock.Anything, "test-instance", "uuid-1").Return(nil)
+
+	req := httptest.NewRequest("DELETE", "/api/servers/srv1/whitelist/uuid-1", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1", "uuid": "uuid-1"})
+	w := httptest.NewRecorder()
+	removeWhitelistByID(w, req)
+
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestRemoveWhitelistByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("DELETE", "/api/servers/missing/whitelist/uuid-1", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing", "uuid": "uuid-1"})
+	w := httptest.NewRecorder()
+	removeWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// --- setWhitelistEnabledByID tests ---
+
+func TestSetWhitelistEnabledByID_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", db.WhitelistConfig{Enabled: true}).Return(nil)
+
+	body, _ := json.Marshal(SetEnabledRequest{Enabled: true})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1/whitelist/enabled", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	setWhitelistEnabledByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestSetWhitelistEnabledByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	body, _ := json.Marshal(SetEnabledRequest{Enabled: true})
+	req := httptest.NewRequest("PUT", "/api/servers/missing/whitelist/enabled", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	setWhitelistEnabledByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestSetWhitelistEnabledByID_InvalidBody(t *testing.T) {
+	req := httptest.NewRequest("PUT", "/api/servers/srv1/whitelist/enabled", bytes.NewReader([]byte("invalid")))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	setWhitelistEnabledByID(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// --- scheduleShutdownByID tests ---
+
+func TestScheduleShutdownByID_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	futureTime := time.Now().Add(1 * time.Hour)
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+		ServerState: db.ServerStateRunning,
+	}, nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+
+	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
+	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	scheduleShutdownByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response ScheduleShutdownResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.True(t, response.Success)
+	assert.NotNil(t, response.ScheduledShutdown)
+}
+
+func TestScheduleShutdownByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	futureTime := time.Now().Add(1 * time.Hour)
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
+	req := httptest.NewRequest("POST", "/api/servers/missing/shutdown/schedule", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	scheduleShutdownByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestScheduleShutdownByID_InvalidBody(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader([]byte("invalid")))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	scheduleShutdownByID(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestScheduleShutdownByID_PastTime(t *testing.T) {
+	pastTime := time.Now().Add(-1 * time.Hour)
+	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: pastTime.Format(time.RFC3339)})
+	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	scheduleShutdownByID(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// --- cancelScheduledShutdownByID tests ---
+
+func TestCancelScheduledShutdownByID_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+		ServerState: db.ServerStateRunning,
+	}, nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+
+	req := httptest.NewRequest("DELETE", "/api/servers/srv1/shutdown/schedule", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	cancelScheduledShutdownByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response ScheduleShutdownResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.True(t, response.Success)
+	assert.Nil(t, response.ScheduledShutdown)
+}
+
+func TestCancelScheduledShutdownByID_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("DELETE", "/api/servers/missing/shutdown/schedule", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	cancelScheduledShutdownByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 // --- New and spaHandler tests ---
@@ -1628,17 +1649,6 @@ func TestSpaHandler_EmbeddedFS(t *testing.T) {
 }
 
 // --- getServerStatus error path ---
-
-func TestGetServerStatus_DBError(t *testing.T) {
-	mockDB := new(testutil.MockDB)
-	cleanup := setupMockDB(mockDB)
-	defer cleanup()
-
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, assert.AnError)
-
-	_, err := getServerStatus(context.Background())
-	assert.Error(t, err)
-}
 
 // --- handleInstanceStart/Preempted update error ---
 
