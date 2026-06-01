@@ -7,11 +7,8 @@ import type {
 } from '../types/whitelist';
 import type { APIError } from '../types/server';
 
-/**
- * Fetches the whitelist from the API
- */
-async function fetchWhitelist(): Promise<WhitelistResponse> {
-  const response = await fetch('/api/server/whitelist', {
+async function fetchWhitelist(serverId: string): Promise<WhitelistResponse> {
+  const response = await fetch(`/api/servers/${serverId}/whitelist`, {
     credentials: 'include',
   });
   if (!response.ok) {
@@ -21,11 +18,8 @@ async function fetchWhitelist(): Promise<WhitelistResponse> {
   return response.json();
 }
 
-/**
- * Adds a player to the whitelist
- */
-async function addPlayer(username: string): Promise<WhitelistPlayer> {
-  const response = await fetch('/api/server/whitelist', {
+async function addPlayer(serverId: string, username: string): Promise<WhitelistPlayer> {
+  const response = await fetch(`/api/servers/${serverId}/whitelist`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username } as AddPlayerRequest),
@@ -38,11 +32,8 @@ async function addPlayer(username: string): Promise<WhitelistPlayer> {
   return response.json();
 }
 
-/**
- * Removes a player from the whitelist
- */
-async function removePlayer(uuid: string): Promise<void> {
-  const response = await fetch(`/api/server/whitelist/${uuid}`, {
+async function removePlayer(serverId: string, uuid: string): Promise<void> {
+  const response = await fetch(`/api/servers/${serverId}/whitelist/${uuid}`, {
     method: 'DELETE',
     credentials: 'include',
   });
@@ -52,11 +43,8 @@ async function removePlayer(uuid: string): Promise<void> {
   }
 }
 
-/**
- * Sets whitelist enabled status
- */
-async function setWhitelistEnabled(enabled: boolean): Promise<void> {
-  const response = await fetch('/api/server/whitelist/enabled', {
+async function setWhitelistEnabled(serverId: string, enabled: boolean): Promise<void> {
+  const response = await fetch(`/api/servers/${serverId}/whitelist/enabled`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -68,29 +56,22 @@ async function setWhitelistEnabled(enabled: boolean): Promise<void> {
   }
 }
 
-/**
- * Hook to fetch and poll whitelist data
- */
-export function useWhitelist() {
+export function useWhitelist(serverId: string) {
   return useQuery({
-    queryKey: ['whitelist'],
-    queryFn: fetchWhitelist,
-    refetchInterval: 10000, // Poll every 10 seconds
+    queryKey: ['whitelist', serverId],
+    queryFn: () => fetchWhitelist(serverId),
+    refetchInterval: 10000,
     refetchIntervalInBackground: false,
   });
 }
 
-/**
- * Hook to add a player to the whitelist
- */
-export function useAddPlayer() {
+export function useAddPlayer(serverId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: addPlayer,
+    mutationFn: (username: string) => addPlayer(serverId, username),
     onSuccess: (newPlayer) => {
-      // Optimistically update the cache
-      queryClient.setQueryData<WhitelistResponse>(['whitelist'], (old) => {
+      queryClient.setQueryData<WhitelistResponse>(['whitelist', serverId], (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -98,7 +79,7 @@ export function useAddPlayer() {
         };
       });
       toast.success(`Added ${newPlayer.username} to whitelist`);
-      queryClient.invalidateQueries({ queryKey: ['whitelist'] });
+      queryClient.invalidateQueries({ queryKey: ['whitelist', serverId] });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -106,24 +87,18 @@ export function useAddPlayer() {
   });
 }
 
-/**
- * Hook to remove a player from the whitelist
- */
-export function useRemovePlayer() {
+export function useRemovePlayer(serverId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: removePlayer,
+    mutationFn: (uuid: string) => removePlayer(serverId, uuid),
     onMutate: async (uuid) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['whitelist'] });
+      await queryClient.cancelQueries({ queryKey: ['whitelist', serverId] });
 
-      // Snapshot the previous value
       const previousWhitelist =
-        queryClient.getQueryData<WhitelistResponse>(['whitelist']);
+        queryClient.getQueryData<WhitelistResponse>(['whitelist', serverId]);
 
-      // Optimistically update
-      queryClient.setQueryData<WhitelistResponse>(['whitelist'], (old) => {
+      queryClient.setQueryData<WhitelistResponse>(['whitelist', serverId], (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -135,34 +110,29 @@ export function useRemovePlayer() {
     },
     onSuccess: () => {
       toast.success('Player removed from whitelist');
-      queryClient.invalidateQueries({ queryKey: ['whitelist'] });
+      queryClient.invalidateQueries({ queryKey: ['whitelist', serverId] });
     },
     onError: (error: Error, _uuid, context) => {
-      // Rollback on error
       if (context?.previousWhitelist) {
-        queryClient.setQueryData(['whitelist'], context.previousWhitelist);
+        queryClient.setQueryData(['whitelist', serverId], context.previousWhitelist);
       }
       toast.error(error.message);
     },
   });
 }
 
-/**
- * Hook to toggle whitelist enabled status
- */
-export function useToggleWhitelist() {
+export function useToggleWhitelist(serverId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: setWhitelistEnabled,
+    mutationFn: (enabled: boolean) => setWhitelistEnabled(serverId, enabled),
     onMutate: async (enabled) => {
-      await queryClient.cancelQueries({ queryKey: ['whitelist'] });
+      await queryClient.cancelQueries({ queryKey: ['whitelist', serverId] });
 
       const previousWhitelist =
-        queryClient.getQueryData<WhitelistResponse>(['whitelist']);
+        queryClient.getQueryData<WhitelistResponse>(['whitelist', serverId]);
 
-      // Optimistically update
-      queryClient.setQueryData<WhitelistResponse>(['whitelist'], (old) => {
+      queryClient.setQueryData<WhitelistResponse>(['whitelist', serverId], (old) => {
         if (!old) return old;
         return { ...old, enabled };
       });
@@ -171,12 +141,12 @@ export function useToggleWhitelist() {
     },
     onSuccess: (_data, enabled) => {
       toast.success(`Whitelist ${enabled ? 'enabled' : 'disabled'}`);
-      queryClient.invalidateQueries({ queryKey: ['whitelist'] });
-      queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['whitelist', serverId] });
+      queryClient.invalidateQueries({ queryKey: ['serverStatus', serverId] });
     },
     onError: (error: Error, _enabled, context) => {
       if (context?.previousWhitelist) {
-        queryClient.setQueryData(['whitelist'], context.previousWhitelist);
+        queryClient.setQueryData(['whitelist', serverId], context.previousWhitelist);
       }
       toast.error(error.message);
     },

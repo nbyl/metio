@@ -228,3 +228,16 @@ func meHandler(w http.ResponseWriter, r *http.Request) {
 		Email:         email,
 	})
 }
+
+func getUserEmail(r *http.Request) string {
+	session, err := getSessionStore().Get(r, sessionName)
+	if err != nil {
+		log.Printf("getUserEmail: error retrieving session: %v", err)
+		return ""
+	}
+	email, ok := session.Values[emailKey].(string)
+	if !ok {
+		return ""
+	}
+	return email
+}

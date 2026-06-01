@@ -83,6 +83,11 @@ func main() {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
+	instanceName, err := getInstanceName()
+	if err != nil {
+		log.Fatalf("Error getting instance name from metadata: %v", err)
+	}
+
 	ctx := context.Background()
 	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {
@@ -94,7 +99,7 @@ func main() {
 	handlePendingCommandFunc = handlePendingCommand
 
 	// Import whitelist on startup if Firestore is empty
-	if err := importWhitelistIfEmptyFunc(ctx, dbConn, cfg.InstanceName); err != nil {
+	if err := importWhitelistIfEmptyFunc(ctx, dbConn, instanceName); err != nil {
 		log.Printf("Error during initial whitelist import: %v", err)
 	}
 
@@ -103,7 +108,7 @@ func main() {
 
 	go func() {
 		for range ticker.C {
-			if err := runStatusUpdate(ctx, dbConn, cfg.InstanceName); err != nil {
+			if err := runStatusUpdate(ctx, dbConn, instanceName); err != nil {
 				log.Printf("Error in status update: %v", err)
 			}
 		}

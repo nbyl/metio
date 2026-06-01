@@ -111,17 +111,18 @@ function ServerListSkeleton({ className }: { className?: string }) {
 }
 
 interface WhitelistSectionProps {
+  serverId: string;
   isRunning: boolean;
 }
 
-function WhitelistSection({ isRunning }: WhitelistSectionProps) {
+function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [newUsername, setNewUsername] = useState('');
 
-  const { data: whitelist, isLoading } = useWhitelist();
-  const addPlayerMutation = useAddPlayer();
-  const removePlayerMutation = useRemovePlayer();
-  const toggleWhitelistMutation = useToggleWhitelist();
+  const { data: whitelist, isLoading } = useWhitelist(serverId);
+  const addPlayerMutation = useAddPlayer(serverId);
+  const removePlayerMutation = useRemovePlayer(serverId);
+  const toggleWhitelistMutation = useToggleWhitelist(serverId);
 
   if (!isRunning) {
     return null;
@@ -240,19 +241,21 @@ function WhitelistSection({ isRunning }: WhitelistSectionProps) {
 }
 
 interface ScheduledShutdownSectionProps {
+  serverId: string;
   isRunning: boolean;
   scheduledShutdown?: string;
 }
 
 function ScheduledShutdownSection({
+  serverId,
   isRunning,
   scheduledShutdown,
 }: ScheduledShutdownSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [shutdownTime, setShutdownTime] = useState('');
 
-  const scheduleShutdownMutation = useScheduleShutdown();
-  const cancelShutdownMutation = useCancelScheduledShutdown();
+  const scheduleShutdownMutation = useScheduleShutdown(serverId);
+  const cancelShutdownMutation = useCancelScheduledShutdown(serverId);
 
   if (!isRunning) {
     return null;
@@ -392,9 +395,9 @@ interface ServerCardProps {
 }
 
 function ServerCard({ server }: ServerCardProps) {
-  const { data: status } = useServerStatus();
-  const startMutation = useStartServer();
-  const stopMutation = useStopServer();
+  const { data: status } = useServerStatus(server.id);
+  const startMutation = useStartServer(server.id);
+  const stopMutation = useStopServer(server.id);
   const updateMutation = useUpdateServer();
   const deleteMutation = useDeleteServer();
   const { copy, copied } = useCopyToClipboard();
@@ -430,7 +433,7 @@ function ServerCard({ server }: ServerCardProps) {
     {
       label: 'Players',
       value: currentStatus
-        ? `${currentStatus.players ?? 0}/${currentStatus.maxPlayers ?? 0}`
+        ? `${currentStatus.players.current}/${currentStatus.players.max}`
         : '-',
     },
     {
@@ -557,8 +560,9 @@ function ServerCard({ server }: ServerCardProps) {
           </Button>
         </div>
 
-        <WhitelistSection isRunning={isRunning} />
+        <WhitelistSection serverId={server.id} isRunning={isRunning} />
         <ScheduledShutdownSection
+          serverId={server.id}
           isRunning={isRunning}
           scheduledShutdown={currentStatus?.scheduledShutdown}
         />
