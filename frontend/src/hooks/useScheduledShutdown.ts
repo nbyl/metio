@@ -1,19 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type {
-  ScheduleShutdownRequest,
-  ScheduleShutdownResponse,
   APIError,
-  ServerStatus,
+  StatusResponse,
 } from '../types/server';
 
-/**
- * Schedules a server shutdown
- */
+interface ScheduleShutdownRequest {
+  shutdownTime: string;
+}
+
+interface ScheduleShutdownResponse {
+  success: boolean;
+  scheduledShutdown?: string;
+}
+
 async function scheduleShutdown(
+  serverId: string,
   shutdownTime: string
 ): Promise<ScheduleShutdownResponse> {
-  const response = await fetch('/api/server/shutdown/schedule', {
+  const response = await fetch(`/api/servers/${serverId}/shutdown/schedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ shutdownTime } as ScheduleShutdownRequest),
@@ -25,11 +30,10 @@ async function scheduleShutdown(
   return response.json();
 }
 
-/**
- * Cancels a scheduled shutdown
- */
-async function cancelScheduledShutdown(): Promise<ScheduleShutdownResponse> {
-  const response = await fetch('/api/server/shutdown/schedule', {
+async function cancelScheduledShutdown(
+  serverId: string
+): Promise<ScheduleShutdownResponse> {
+  const response = await fetch(`/api/servers/${serverId}/shutdown/schedule`, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -39,24 +43,18 @@ async function cancelScheduledShutdown(): Promise<ScheduleShutdownResponse> {
   return response.json();
 }
 
-/**
- * Hook to schedule a server shutdown
- */
-export function useScheduleShutdown() {
+export function useScheduleShutdown(serverId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: scheduleShutdown,
+    mutationFn: (shutdownTime: string) => scheduleShutdown(serverId, shutdownTime),
     onMutate: async (shutdownTime) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['serverStatus'] });
+      await queryClient.cancelQueries({ queryKey: ['serverStatus', serverId] });
 
-      // Snapshot the previous value
       const previousStatus =
-        queryClient.getQueryData<ServerStatus>(['serverStatus']);
+        queryClient.getQueryData<StatusResponse>(['serverStatus', serverId]);
 
-      // Optimistically update
-      queryClient.setQueryData<ServerStatus>(['serverStatus'], (old) => {
+      queryClient.setQueryData<StatusResponse>(['serverStatus', serverId], (old) => {
         if (!old) return old;
         return { ...old, scheduledShutdown: shutdownTime };
       });
@@ -68,36 +66,29 @@ export function useScheduleShutdown() {
         ? new Date(data.scheduledShutdown).toLocaleTimeString()
         : '';
       toast.success(`Shutdown scheduled for ${time}`);
-      queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['serverStatus', serverId] });
     },
     onError: (error: Error, _shutdownTime, context) => {
-      // Rollback on error
       if (context?.previousStatus) {
-        queryClient.setQueryData(['serverStatus'], context.previousStatus);
+        queryClient.setQueryData(['serverStatus', serverId], context.previousStatus);
       }
       toast.error(error.message);
     },
   });
 }
 
-/**
- * Hook to cancel a scheduled shutdown
- */
-export function useCancelScheduledShutdown() {
+export function useCancelScheduledShutdown(serverId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: cancelScheduledShutdown,
+    mutationFn: () => cancelScheduledShutdown(serverId),
     onMutate: async () => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['serverStatus'] });
+      await queryClient.cancelQueries({ queryKey: ['serverStatus', serverId] });
 
-      // Snapshot the previous value
       const previousStatus =
-        queryClient.getQueryData<ServerStatus>(['serverStatus']);
+        queryClient.getQueryData<StatusResponse>(['serverStatus', serverId]);
 
-      // Optimistically update
-      queryClient.setQueryData<ServerStatus>(['serverStatus'], (old) => {
+      queryClient.setQueryData<StatusResponse>(['serverStatus', serverId], (old) => {
         if (!old) return old;
         return { ...old, scheduledShutdown: undefined };
       });
@@ -106,12 +97,11 @@ export function useCancelScheduledShutdown() {
     },
     onSuccess: () => {
       toast.success('Scheduled shutdown cancelled');
-      queryClient.invalidateQueries({ queryKey: ['serverStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['serverStatus', serverId] });
     },
     onError: (error: Error, _vars, context) => {
-      // Rollback on error
       if (context?.previousStatus) {
-        queryClient.setQueryData(['serverStatus'], context.previousStatus);
+        queryClient.setQueryData(['serverStatus', serverId], context.previousStatus);
       }
       toast.error(error.message);
     },

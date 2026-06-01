@@ -12,7 +12,6 @@ func TestLoad_Defaults(t *testing.T) {
 	// Clear any env vars that might be set
 	os.Unsetenv("ENVIRONMENT")
 	os.Unsetenv("REGION")
-	os.Unsetenv("INSTANCE_NAME")
 	os.Unsetenv("GCP_PROJECT")
 	viper.Reset()
 	viper.AutomaticEnv()
@@ -21,7 +20,6 @@ func TestLoad_Defaults(t *testing.T) {
 
 	assert.Equal(t, DefaultEnvironment, cfg.Environment)
 	assert.Equal(t, DefaultRegion, cfg.Region)
-	assert.Equal(t, DefaultInstanceName, cfg.InstanceName)
 	assert.Equal(t, "", cfg.ProjectID)
 }
 
@@ -31,14 +29,12 @@ func TestLoad_WithEnvVars(t *testing.T) {
 
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("REGION", "europe-west1")
-	t.Setenv("INSTANCE_NAME", "my-server")
 	t.Setenv("GCP_PROJECT", "my-project")
 
 	cfg := Load()
 
 	assert.Equal(t, "production", cfg.Environment)
 	assert.Equal(t, "europe-west1", cfg.Region)
-	assert.Equal(t, "my-server", cfg.InstanceName)
 	assert.Equal(t, "my-project", cfg.ProjectID)
 }
 
@@ -48,14 +44,12 @@ func TestLoad_PartialEnvVars(t *testing.T) {
 
 	os.Unsetenv("ENVIRONMENT")
 	os.Unsetenv("REGION")
-	t.Setenv("INSTANCE_NAME", "custom-server")
 	t.Setenv("GCP_PROJECT", "proj-123")
 
 	cfg := Load()
 
 	assert.Equal(t, DefaultEnvironment, cfg.Environment)
 	assert.Equal(t, DefaultRegion, cfg.Region)
-	assert.Equal(t, "custom-server", cfg.InstanceName)
 	assert.Equal(t, "proj-123", cfg.ProjectID)
 }
 
