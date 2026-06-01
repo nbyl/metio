@@ -16,11 +16,14 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gitlab.com/nbyl/metio/config"
 	"gitlab.com/nbyl/metio/db"
+	"gitlab.com/nbyl/metio/handlers/servers"
 	"gitlab.com/nbyl/metio/testutil"
 )
 
 func setupMockDB(mockDB *testutil.MockDB) func() {
-	original := getDBConnection
+	origHandlers := getDBConnection
+	origServers := servers.GetDBConnection
+	origGetUserEmail := servers.GetUserEmail
 	getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
 		return mockDB, config.Config{
 			Environment: "test",
@@ -28,7 +31,13 @@ func setupMockDB(mockDB *testutil.MockDB) func() {
 			ProjectID:   "test-project",
 		}, nil
 	}
-	return func() { getDBConnection = original }
+	servers.GetDBConnection = getDBConnection
+	servers.GetUserEmail = func(r *http.Request) string { return "test@example.com" }
+	return func() {
+		getDBConnection = origHandlers
+		servers.GetDBConnection = origServers
+		servers.GetUserEmail = origGetUserEmail
+	}
 }
 
 func TestListServers_Success(t *testing.T) {
@@ -42,10 +51,10 @@ func TestListServers_Success(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/servers", nil)
 	w := httptest.NewRecorder()
-	listServers(w, req)
+	servers.ListServers(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response []ServerResponse
+	var response []servers.ServerResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Len(t, response, 1)
 	assert.Equal(t, "srv1", response[0].ID)
@@ -60,7 +69,7 @@ func TestListServers_DBError(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/servers", nil)
 	w := httptest.NewRecorder()
-	listServers(w, req)
+	servers.ListServers(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -78,10 +87,10 @@ func TestGetServer_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	getServer(w, req)
+	servers.GetServer(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response ServerResponse
+	var response servers.ServerResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, "srv1", response.ID)
 	assert.Equal(t, "server-one", response.Config.Name)
@@ -97,7 +106,7 @@ func TestGetServer_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/missing", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	getServer(w, req)
+	servers.GetServer(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -112,7 +121,7 @@ func TestDeleteServer_NotFound(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/missing", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	deleteServer(w, req)
+	servers.DeleteServer(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -120,12 +129,12 @@ func TestDeleteServer_NotFound(t *testing.T) {
 func TestCreateServer_InvalidBody(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader([]byte("invalid")))
 	w := httptest.NewRecorder()
-	createServer(w, req)
+	servers.CreateServer(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestCreateServer_ValidationError(t *testing.T) {
-	body, _ := json.Marshal(CreateServerRequest{
+	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name:        "x", // too short
 		Region:      "invalid",
 		Zone:        "invalid",
@@ -134,19 +143,19 @@ func TestCreateServer_ValidationError(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
 	w := httptest.NewRecorder()
-	createServer(w, req)
+	servers.CreateServer(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestGetServerProvisioningStatus_NoService(t *testing.T) {
-	oldPS := provisioningService
-	provisioningService = nil
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = nil
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	req := httptest.NewRequest("GET", "/api/servers/srv1/provisioning", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	getServerProvisioningStatus(w, req)
+	servers.GetServerProvisioningStatus(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
@@ -155,7 +164,7 @@ func TestGetServerProvisioningStatus_EmptyID(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers//provisioning", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": ""})
 	w := httptest.NewRecorder()
-	getServerProvisioningStatus(w, req)
+	servers.GetServerProvisioningStatus(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
@@ -211,14 +220,14 @@ func TestUpdateServer_ImmutableRegion(t *testing.T) {
 	}, nil)
 
 	region := "europe-west3"
-	body, _ := json.Marshal(UpdateServerRequest{Region: &region})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Region: &region})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	var errResp ErrorResponse
+	var errResp servers.ErrorResponse
 	json.NewDecoder(w.Body).Decode(&errResp)
 	assert.Contains(t, errResp.Error, "region is immutable")
 }
@@ -233,14 +242,14 @@ func TestUpdateServer_ImmutableZone(t *testing.T) {
 	}, nil)
 
 	zone := "us-central1-b"
-	body, _ := json.Marshal(UpdateServerRequest{Zone: &zone})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Zone: &zone})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	var errResp ErrorResponse
+	var errResp servers.ErrorResponse
 	json.NewDecoder(w.Body).Decode(&errResp)
 	assert.Contains(t, errResp.Error, "zone is immutable")
 }
@@ -256,14 +265,14 @@ func TestUpdateServer_DiskSizeDecrease(t *testing.T) {
 	}, nil)
 
 	small := 20
-	body, _ := json.Marshal(UpdateServerRequest{DiskSizeGB: &small})
+	body, _ := json.Marshal(servers.UpdateServerRequest{DiskSizeGB: &small})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	var errResp ErrorResponse
+	var errResp servers.ErrorResponse
 	json.NewDecoder(w.Body).Decode(&errResp)
 	assert.Contains(t, errResp.Error, "disk size can only be increased")
 }
@@ -274,9 +283,9 @@ func TestUpdateServer_MinecraftVersionChange(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
 		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
@@ -288,11 +297,11 @@ func TestUpdateServer_MinecraftVersionChange(t *testing.T) {
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
 	v := "1.21.4"
-	body, _ := json.Marshal(UpdateServerRequest{MinecraftVersion: &v})
+	body, _ := json.Marshal(servers.UpdateServerRequest{MinecraftVersion: &v})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
@@ -303,9 +312,9 @@ func TestUpdateServer_MachineTypeChange(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
 		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a",
@@ -317,11 +326,11 @@ func TestUpdateServer_MachineTypeChange(t *testing.T) {
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
 	mt := "e2-medium"
-	body, _ := json.Marshal(UpdateServerRequest{MachineType: &mt})
+	body, _ := json.Marshal(servers.UpdateServerRequest{MachineType: &mt})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
@@ -343,7 +352,7 @@ func TestCreateServer_DBError(t *testing.T) {
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(assert.AnError)
 
-	body, _ := json.Marshal(CreateServerRequest{
+	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name:             "test-server",
 		Region:           "us-central1",
 		Zone:             "us-central1-a",
@@ -353,7 +362,7 @@ func TestCreateServer_DBError(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
 	w := httptest.NewRecorder()
-	createServer(w, req)
+	servers.CreateServer(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -362,13 +371,13 @@ func TestCreateServer_NoProvisioningService(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)
 	defer cleanup()
-	oldPS := provisioningService
-	provisioningService = nil
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = nil
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
-	body, _ := json.Marshal(CreateServerRequest{
+	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name:             "test-server",
 		Region:           "us-central1",
 		Zone:             "us-central1-a",
@@ -378,7 +387,7 @@ func TestCreateServer_NoProvisioningService(t *testing.T) {
 	})
 	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
 	w := httptest.NewRecorder()
-	createServer(w, req)
+	servers.CreateServer(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
@@ -391,16 +400,16 @@ func TestUpdateServer_NotFound(t *testing.T) {
 	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
 
 	name := "updated"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/missing", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// --- updateServer full path tests ---
+// --- servers.UpdateServer full path tests ---
 
 func TestUpdateServer_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -408,9 +417,9 @@ func TestUpdateServer_Success(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	existing := &db.ServerConfig{
 		ID: "srv1", Name: "old", Region: "us-central1", Zone: "us-central1-a",
@@ -422,11 +431,11 @@ func TestUpdateServer_Success(t *testing.T) {
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
 	name := "new-name"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
@@ -435,7 +444,7 @@ func TestUpdateServer_EmptyID(t *testing.T) {
 	req := httptest.NewRequest("PUT", "/api/servers/", bytes.NewReader([]byte("{}")))
 	req = mux.SetURLVars(req, map[string]string{"id": ""})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -443,7 +452,7 @@ func TestUpdateServer_InvalidBody(t *testing.T) {
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader([]byte("bad")))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -461,11 +470,11 @@ func TestUpdateServer_UpdateDBError(t *testing.T) {
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(assert.AnError)
 
 	name := "new"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -474,9 +483,9 @@ func TestUpdateServer_NoProvisioningService(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)
 	defer cleanup()
-	oldPS := provisioningService
-	provisioningService = nil
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = nil
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	existing := &db.ServerConfig{
 		ID: "srv1", Name: "old", Region: "us-central1", Zone: "us-central1-a",
@@ -487,11 +496,11 @@ func TestUpdateServer_NoProvisioningService(t *testing.T) {
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	name := "new"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
@@ -502,9 +511,9 @@ func TestUpdateServer_ProvisioningConflict(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	existing := &db.ServerConfig{
 		ID: "srv1", Name: "old", Region: "us-central1", Zone: "us-central1-a",
@@ -517,11 +526,11 @@ func TestUpdateServer_ProvisioningConflict(t *testing.T) {
 		fmt.Errorf("operation already in progress for server srv1"))
 
 	name := "new"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
@@ -532,9 +541,9 @@ func TestUpdateServer_ProvisioningError(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	existing := &db.ServerConfig{
 		ID: "srv1", Name: "old", Region: "us-central1", Zone: "us-central1-a",
@@ -548,11 +557,11 @@ func TestUpdateServer_ProvisioningError(t *testing.T) {
 	mockPS.On("RevertServerConfig", mock.Anything, "srv1").Return(nil)
 
 	name := "new"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -570,11 +579,11 @@ func TestUpdateServer_ValidationError(t *testing.T) {
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	emptyName := ""
-	body, _ := json.Marshal(UpdateServerRequest{Name: &emptyName})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &emptyName})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
@@ -592,11 +601,11 @@ func TestUpdateServer_ServerNotRunning(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "srv1").Return(db.Status{ServerState: "STOPPED"}, nil)
 
 	mt := "e2-medium"
-	body, _ := json.Marshal(UpdateServerRequest{MachineType: &mt})
+	body, _ := json.Marshal(servers.UpdateServerRequest{MachineType: &mt})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
@@ -620,24 +629,24 @@ func TestUpdateServer_SnapshotIsOriginalConfig(t *testing.T) {
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
 	name := "updated-name"
-	body, _ := json.Marshal(UpdateServerRequest{Name: &name})
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	updateServer(w, req)
+	servers.UpdateServer(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	assert.NotNil(t, capturedSnapshot)
 	assert.Equal(t, "test", capturedSnapshot.Name, "snapshot should contain the original name before mutation")
 }
 
-// --- deleteServer full path tests ---
+// --- servers.DeleteServer full path tests ---
 
 func TestDeleteServer_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -645,9 +654,9 @@ func TestDeleteServer_Success(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
 	mockPS.On("DestroyServer", mock.Anything, "srv1").Return(nil)
@@ -655,7 +664,7 @@ func TestDeleteServer_Success(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	deleteServer(w, req)
+	servers.DeleteServer(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
@@ -664,7 +673,7 @@ func TestDeleteServer_EmptyID(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": ""})
 	w := httptest.NewRecorder()
-	deleteServer(w, req)
+	servers.DeleteServer(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -672,16 +681,16 @@ func TestDeleteServer_NoProvisioningService(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)
 	defer cleanup()
-	oldPS := provisioningService
-	provisioningService = nil
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = nil
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
 
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	deleteServer(w, req)
+	servers.DeleteServer(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
@@ -692,9 +701,9 @@ func TestDeleteServer_Conflict(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
 	mockPS.On("DestroyServer", mock.Anything, "srv1").Return(fmt.Errorf("operation already in progress for server srv1"))
@@ -702,7 +711,7 @@ func TestDeleteServer_Conflict(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	deleteServer(w, req)
+	servers.DeleteServer(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
@@ -713,9 +722,9 @@ func TestDeleteServer_DestroyError(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
 	mockPS.On("DestroyServer", mock.Anything, "srv1").Return(fmt.Errorf("infra error"))
@@ -723,12 +732,12 @@ func TestDeleteServer_DestroyError(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	deleteServer(w, req)
+	servers.DeleteServer(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-// --- createServer full path tests ---
+// --- servers.CreateServer full path tests ---
 
 func TestCreateServer_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -736,20 +745,20 @@ func TestCreateServer_Success(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("CreateServer", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*programs.ServerConfig")).Return(nil)
 
-	body, _ := json.Marshal(CreateServerRequest{
+	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name: "test-server", Region: "us-central1", Zone: "us-central1-a",
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	})
 	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
 	w := httptest.NewRecorder()
-	createServer(w, req)
+	servers.CreateServer(w, req)
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
@@ -760,32 +769,32 @@ func TestCreateServer_ProvisioningGenericError(t *testing.T) {
 	defer cleanup()
 
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("CreateServer", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*programs.ServerConfig")).Return(
 		fmt.Errorf("some error"))
 
-	body, _ := json.Marshal(CreateServerRequest{
+	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name: "test-server", Region: "us-central1", Zone: "us-central1-a",
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	})
 	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
 	w := httptest.NewRecorder()
-	createServer(w, req)
+	servers.CreateServer(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-// --- getServerProvisioningStatus tests ---
+// --- servers.GetServerProvisioningStatus tests ---
 
 func TestGetServerProvisioningStatus_Success(t *testing.T) {
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	now := time.Now()
 	mockPS.On("GetProvisioningStatus", mock.Anything, "srv1").Return(&db.ProvisioningStatus{
@@ -800,23 +809,23 @@ func TestGetServerProvisioningStatus_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1/provisioning", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	getServerProvisioningStatus(w, req)
+	servers.GetServerProvisioningStatus(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestGetServerProvisioningStatus_NotFound(t *testing.T) {
 	mockPS := new(testutil.MockProvisioningService)
-	oldPS := provisioningService
-	provisioningService = mockPS
-	defer func() { provisioningService = oldPS }()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockPS.On("GetProvisioningStatus", mock.Anything, "srv1").Return(nil, assert.AnError)
 
 	req := httptest.NewRequest("GET", "/api/servers/srv1/provisioning", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	getServerProvisioningStatus(w, req)
+	servers.GetServerProvisioningStatus(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -849,13 +858,13 @@ func TestUpdateInstanceState_UpdateError(t *testing.T) {
 
 // --- getWhitelistHandler additional coverage ---
 
-// --- getServer additional coverage ---
+// --- servers.GetServer additional coverage ---
 
 func TestGetServer_EmptyID(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": ""})
 	w := httptest.NewRecorder()
-	getServer(w, req)
+	servers.GetServer(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -981,23 +990,23 @@ func (m *mockComputeClient) Stop(ctx context.Context, req *computepb.StopInstanc
 
 func (m *mockComputeClient) Close() error { return nil }
 
-func setupMockCompute(cc ComputeClient) func() {
-	orig := newComputeClient
-	newComputeClient = func(ctx context.Context) (ComputeClient, error) {
+func setupMockCompute(cc servers.ComputeClient) func() {
+	orig := servers.NewComputeClient
+	servers.NewComputeClient = func(ctx context.Context) (servers.ComputeClient, error) {
 		return cc, nil
 	}
-	return func() { newComputeClient = orig }
+	return func() { servers.NewComputeClient = orig }
 }
 
 func setupMockComputeError() func() {
-	orig := newComputeClient
-	newComputeClient = func(ctx context.Context) (ComputeClient, error) {
+	orig := servers.NewComputeClient
+	servers.NewComputeClient = func(ctx context.Context) (servers.ComputeClient, error) {
 		return nil, fmt.Errorf("compute client error")
 	}
-	return func() { newComputeClient = orig }
+	return func() { servers.NewComputeClient = orig }
 }
 
-// --- startServerByID tests ---
+// --- servers.StartServerByID tests ---
 
 func TestStartServerByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1017,10 +1026,10 @@ func TestStartServerByID_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	startServerByID(w, req)
+	servers.StartServerByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp ServerActionResponse
+	var resp servers.ServerActionResponse
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.True(t, resp.Success)
 	assert.Equal(t, db.ServerStateStarting, resp.State)
@@ -1036,7 +1045,7 @@ func TestStartServerByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/missing/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	startServerByID(w, req)
+	servers.StartServerByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -1055,7 +1064,7 @@ func TestStartServerByID_ComputeClientError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	startServerByID(w, req)
+	servers.StartServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -1074,12 +1083,12 @@ func TestStartServerByID_StartError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	startServerByID(w, req)
+	servers.StartServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-// --- stopServerByID tests ---
+// --- servers.StopServerByID tests ---
 
 func TestStopServerByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1099,10 +1108,10 @@ func TestStopServerByID_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerByID(w, req)
+	servers.StopServerByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp ServerActionResponse
+	var resp servers.ServerActionResponse
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.True(t, resp.Success)
 	assert.Equal(t, db.ServerStateStopping, resp.State)
@@ -1118,7 +1127,7 @@ func TestStopServerByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/missing/stop", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	stopServerByID(w, req)
+	servers.StopServerByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -1137,7 +1146,7 @@ func TestStopServerByID_ComputeClientError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerByID(w, req)
+	servers.StopServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -1156,12 +1165,12 @@ func TestStopServerByID_StopError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	stopServerByID(w, req)
+	servers.StopServerByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-// --- statusByID tests ---
+// --- servers.StatusByID tests ---
 
 func TestStatusByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1183,10 +1192,10 @@ func TestStatusByID_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	statusByID(w, req)
+	servers.StatusByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response StatusResponse
+	var response servers.StatusResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, string(db.ServerStateRunning), response.ServerState)
 	assert.Equal(t, 5, response.Players.Current)
@@ -1206,7 +1215,7 @@ func TestStatusByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/missing/status", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	statusByID(w, req)
+	servers.StatusByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -1224,7 +1233,7 @@ func TestStatusByID_GetStatusError(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	statusByID(w, req)
+	servers.StatusByID(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -1247,10 +1256,10 @@ func TestStatusByID_UnknownIP(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	statusByID(w, req)
+	servers.StatusByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response StatusResponse
+	var response servers.StatusResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, string(db.ServerStateStopped), response.ServerState)
 	assert.Equal(t, "unknown:25565", response.InstanceIP)
@@ -1276,16 +1285,16 @@ func TestStatusByID_WithScheduledShutdown(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	statusByID(w, req)
+	servers.StatusByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response StatusResponse
+	var response servers.StatusResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NotNil(t, response.ScheduledShutdown)
 	assert.Equal(t, shutdownTime.Format(time.RFC3339), *response.ScheduledShutdown)
 }
 
-// --- getWhitelistByID tests ---
+// --- servers.GetWhitelistByID tests ---
 
 func TestGetWhitelistByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1303,10 +1312,10 @@ func TestGetWhitelistByID_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/srv1/whitelist", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	getWhitelistByID(w, req)
+	servers.GetWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response WhitelistResponse
+	var response servers.WhitelistResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.True(t, response.Enabled)
 	assert.Len(t, response.Players, 1)
@@ -1323,34 +1332,34 @@ func TestGetWhitelistByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/servers/missing/whitelist", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	getWhitelistByID(w, req)
+	servers.GetWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// --- addWhitelistByID tests ---
+// --- servers.AddWhitelistByID tests ---
 
 func TestAddWhitelistByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
-		return &MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
+	oldLookup := servers.LookupMinecraftUser
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
+		return &servers.MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
 	}
-	defer func() { LookupMinecraftUser = oldLookup }()
+	defer func() { servers.LookupMinecraftUser = oldLookup }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
 		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
 	}, nil)
 	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(nil)
 
-	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
+	body, _ := json.Marshal(servers.AddPlayerRequest{Username: "TestPlayer"})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	addWhitelistByID(w, req)
+	servers.AddWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 }
@@ -1360,19 +1369,19 @@ func TestAddWhitelistByID_NotFound(t *testing.T) {
 	cleanupDB := setupMockDB(mockDB)
 	defer cleanupDB()
 
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
-		return &MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
+	oldLookup := servers.LookupMinecraftUser
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
+		return &servers.MojangProfile{ID: "abcd1234", Name: "TestPlayer"}, nil
 	}
-	defer func() { LookupMinecraftUser = oldLookup }()
+	defer func() { servers.LookupMinecraftUser = oldLookup }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
 
-	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
+	body, _ := json.Marshal(servers.AddPlayerRequest{Username: "TestPlayer"})
 	req := httptest.NewRequest("POST", "/api/servers/missing/whitelist", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	addWhitelistByID(w, req)
+	servers.AddWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -1381,54 +1390,54 @@ func TestAddWhitelistByID_InvalidBody(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader([]byte("invalid")))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	addWhitelistByID(w, req)
+	servers.AddWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestAddWhitelistByID_EmptyUsername(t *testing.T) {
-	body, _ := json.Marshal(AddPlayerRequest{Username: ""})
+	body, _ := json.Marshal(servers.AddPlayerRequest{Username: ""})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	addWhitelistByID(w, req)
+	servers.AddWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestAddWhitelistByID_MojangError(t *testing.T) {
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
+	oldLookup := servers.LookupMinecraftUser
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
 		return nil, fmt.Errorf("mojang API down")
 	}
-	defer func() { LookupMinecraftUser = oldLookup }()
+	defer func() { servers.LookupMinecraftUser = oldLookup }()
 
-	body, _ := json.Marshal(AddPlayerRequest{Username: "TestPlayer"})
+	body, _ := json.Marshal(servers.AddPlayerRequest{Username: "TestPlayer"})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	addWhitelistByID(w, req)
+	servers.AddWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusBadGateway, w.Code)
 }
 
 func TestAddWhitelistByID_UserNotFound(t *testing.T) {
-	oldLookup := LookupMinecraftUser
-	LookupMinecraftUser = func(ctx context.Context, username string) (*MojangProfile, error) {
+	oldLookup := servers.LookupMinecraftUser
+	servers.LookupMinecraftUser = func(ctx context.Context, username string) (*servers.MojangProfile, error) {
 		return nil, nil
 	}
-	defer func() { LookupMinecraftUser = oldLookup }()
+	defer func() { servers.LookupMinecraftUser = oldLookup }()
 
-	body, _ := json.Marshal(AddPlayerRequest{Username: "nonexistent"})
+	body, _ := json.Marshal(servers.AddPlayerRequest{Username: "nonexistent"})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	addWhitelistByID(w, req)
+	servers.AddWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// --- removeWhitelistByID tests ---
+// --- servers.RemoveWhitelistByID tests ---
 
 func TestRemoveWhitelistByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1443,7 +1452,7 @@ func TestRemoveWhitelistByID_Success(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1/whitelist/uuid-1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1", "uuid": "uuid-1"})
 	w := httptest.NewRecorder()
-	removeWhitelistByID(w, req)
+	servers.RemoveWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
@@ -1458,12 +1467,12 @@ func TestRemoveWhitelistByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/missing/whitelist/uuid-1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing", "uuid": "uuid-1"})
 	w := httptest.NewRecorder()
-	removeWhitelistByID(w, req)
+	servers.RemoveWhitelistByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// --- setWhitelistEnabledByID tests ---
+// --- servers.SetWhitelistEnabledByID tests ---
 
 func TestSetWhitelistEnabledByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1475,11 +1484,11 @@ func TestSetWhitelistEnabledByID_Success(t *testing.T) {
 	}, nil)
 	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", db.WhitelistConfig{Enabled: true}).Return(nil)
 
-	body, _ := json.Marshal(SetEnabledRequest{Enabled: true})
+	body, _ := json.Marshal(servers.SetEnabledRequest{Enabled: true})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1/whitelist/enabled", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	setWhitelistEnabledByID(w, req)
+	servers.SetWhitelistEnabledByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
@@ -1491,11 +1500,11 @@ func TestSetWhitelistEnabledByID_NotFound(t *testing.T) {
 
 	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
 
-	body, _ := json.Marshal(SetEnabledRequest{Enabled: true})
+	body, _ := json.Marshal(servers.SetEnabledRequest{Enabled: true})
 	req := httptest.NewRequest("PUT", "/api/servers/missing/whitelist/enabled", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	setWhitelistEnabledByID(w, req)
+	servers.SetWhitelistEnabledByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -1504,12 +1513,12 @@ func TestSetWhitelistEnabledByID_InvalidBody(t *testing.T) {
 	req := httptest.NewRequest("PUT", "/api/servers/srv1/whitelist/enabled", bytes.NewReader([]byte("invalid")))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	setWhitelistEnabledByID(w, req)
+	servers.SetWhitelistEnabledByID(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// --- scheduleShutdownByID tests ---
+// --- servers.ScheduleShutdownByID tests ---
 
 func TestScheduleShutdownByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1526,14 +1535,14 @@ func TestScheduleShutdownByID_Success(t *testing.T) {
 	}, nil)
 	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
 
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
+	body, _ := json.Marshal(servers.ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	scheduleShutdownByID(w, req)
+	servers.ScheduleShutdownByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response ScheduleShutdownResponse
+	var response servers.ScheduleShutdownResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.ScheduledShutdown)
@@ -1548,11 +1557,11 @@ func TestScheduleShutdownByID_NotFound(t *testing.T) {
 
 	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
 
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
+	body, _ := json.Marshal(servers.ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
 	req := httptest.NewRequest("POST", "/api/servers/missing/shutdown/schedule", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	scheduleShutdownByID(w, req)
+	servers.ScheduleShutdownByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -1561,23 +1570,23 @@ func TestScheduleShutdownByID_InvalidBody(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader([]byte("invalid")))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	scheduleShutdownByID(w, req)
+	servers.ScheduleShutdownByID(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestScheduleShutdownByID_PastTime(t *testing.T) {
 	pastTime := time.Now().Add(-1 * time.Hour)
-	body, _ := json.Marshal(ScheduleShutdownRequest{ShutdownTime: pastTime.Format(time.RFC3339)})
+	body, _ := json.Marshal(servers.ScheduleShutdownRequest{ShutdownTime: pastTime.Format(time.RFC3339)})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	scheduleShutdownByID(w, req)
+	servers.ScheduleShutdownByID(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// --- cancelScheduledShutdownByID tests ---
+// --- servers.CancelScheduledShutdownByID tests ---
 
 func TestCancelScheduledShutdownByID_Success(t *testing.T) {
 	mockDB := new(testutil.MockDB)
@@ -1595,10 +1604,10 @@ func TestCancelScheduledShutdownByID_Success(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1/shutdown/schedule", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
-	cancelScheduledShutdownByID(w, req)
+	servers.CancelScheduledShutdownByID(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var response ScheduleShutdownResponse
+	var response servers.ScheduleShutdownResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.True(t, response.Success)
 	assert.Nil(t, response.ScheduledShutdown)
@@ -1614,7 +1623,7 @@ func TestCancelScheduledShutdownByID_NotFound(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/servers/missing/shutdown/schedule", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
 	w := httptest.NewRecorder()
-	cancelScheduledShutdownByID(w, req)
+	servers.CancelScheduledShutdownByID(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
