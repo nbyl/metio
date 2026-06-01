@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,27 +9,6 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestConfigHandler(t *testing.T) {
-	viper.Reset()
-	viper.AutomaticEnv()
-	t.Setenv("GCP_PROJECT", "test-project")
-	t.Setenv("INSTANCE_NAME", "test-instance")
-
-	req := httptest.NewRequest("GET", "/api/config", nil)
-	w := httptest.NewRecorder()
-
-	configHandler(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-	var response AppConfig
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "test-project", response.GCPProject)
-	assert.Equal(t, "test-instance", response.InstanceName)
-}
 
 func TestCORSMiddleware_Production(t *testing.T) {
 	os.Unsetenv("DEV_MODE")

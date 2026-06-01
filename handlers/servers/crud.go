@@ -1,4 +1,4 @@
-package handlers
+package servers
 
 import (
 	"encoding/json"
@@ -14,114 +14,7 @@ import (
 	"gitlab.com/nbyl/metio/pulumi/programs"
 )
 
-type ShutdownScheduleInput struct {
-	Enabled  bool   `json:"enabled"`
-	Time     string `json:"time,omitempty"`
-	Timezone string `json:"timezone,omitempty"`
-}
-
-type CreateServerRequest struct {
-	Name             string                 `json:"name"`
-	Region           string                 `json:"region"`
-	Zone             string                 `json:"zone"`
-	MachineType      string                 `json:"machineType"`
-	MinecraftVersion string                 `json:"minecraftVersion"`
-	DiskSizeGB       int                    `json:"diskSizeGB,omitempty"`
-	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
-}
-
-type UpdateServerRequest struct {
-	Name             *string                `json:"name,omitempty"`
-	Region           *string                `json:"region,omitempty"`
-	Zone             *string                `json:"zone,omitempty"`
-	MachineType      *string                `json:"machineType,omitempty"`
-	MinecraftVersion *string                `json:"minecraftVersion,omitempty"`
-	DiskSizeGB       *int                   `json:"diskSizeGB,omitempty"`
-	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
-}
-
-type ServerConfigJSON struct {
-	Name                        string                 `json:"name"`
-	Region                      string                 `json:"region"`
-	Zone                        string                 `json:"zone"`
-	MachineType                 string                 `json:"machineType"`
-	MinecraftVersion            string                 `json:"minecraftVersion"`
-	DiskSizeGB                  int                    `json:"diskSizeGB"`
-	InfraVersion                int                    `json:"infraVersion,omitempty"`
-	DeployedByControllerVersion string                 `json:"deployedByControllerVersion,omitempty"`
-	ShutdownSchedule            *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
-	CreatedAt                   string                 `json:"createdAt"`
-	UpdatedAt                   string                 `json:"updatedAt"`
-}
-
-type StatusResponse struct {
-	Players           PlayersJSON `json:"players"`
-	Timestamp         string      `json:"timestamp"`
-	Uptime            string      `json:"uptime"`
-	ServerState       string      `json:"serverState"`
-	InstanceIP        string      `json:"instanceIP"`
-	Version           string      `json:"version"`
-	WhitelistEnabled  bool        `json:"whitelistEnabled"`
-	ScheduledShutdown *string     `json:"scheduledShutdown,omitempty"`
-}
-
-type PlayersJSON struct {
-	Current int `json:"current"`
-	Max     int `json:"max"`
-}
-
-type ServerResponse struct {
-	ID                  string           `json:"id"`
-	Config              ServerConfigJSON `json:"config"`
-	Status              *StatusResponse  `json:"status,omitempty"`
-	CurrentInfraVersion int              `json:"currentInfraVersion"`
-	Outdated            bool             `json:"outdated"`
-}
-
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
-}
-
-func shutdownScheduleToInput(s *db.ShutdownSchedule) *ShutdownScheduleInput {
-	if s == nil {
-		return nil
-	}
-	return &ShutdownScheduleInput{
-		Enabled:  s.Enabled,
-		Time:     s.Time,
-		Timezone: s.Timezone,
-	}
-}
-
-func shutdownScheduleFromInput(s *ShutdownScheduleInput) *db.ShutdownSchedule {
-	if s == nil {
-		return nil
-	}
-	return &db.ShutdownSchedule{
-		Enabled:  s.Enabled,
-		Time:     s.Time,
-		Timezone: s.Timezone,
-	}
-}
-
-func serverConfigToJSON(cfg *db.ServerConfig) ServerConfigJSON {
-	return ServerConfigJSON{
-		Name:                        cfg.Name,
-		Region:                      cfg.Region,
-		Zone:                        cfg.Zone,
-		MachineType:                 cfg.MachineType,
-		MinecraftVersion:            cfg.MinecraftVersion,
-		DiskSizeGB:                  cfg.DiskSizeGB,
-		InfraVersion:                cfg.InfraVersion,
-		DeployedByControllerVersion: cfg.DeployedByControllerVersion,
-		ShutdownSchedule:            shutdownScheduleToInput(cfg.ShutdownSchedule),
-		CreatedAt:                   cfg.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:                   cfg.UpdatedAt.Format(time.RFC3339),
-	}
-}
-
-func createServer(w http.ResponseWriter, r *http.Request) {
+func CreateServer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req CreateServerRequest
@@ -148,7 +41,7 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbConn, cfg, err := getDBConnection(ctx)
+	dbConn, cfg, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -164,7 +57,7 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if provisioningService == nil {
+	if ProvisioningService == nil {
 		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
@@ -182,7 +75,7 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		GCPProject:        cfg.ProjectID,
 	}
 
-	if err := provisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
+	if err := ProvisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
 		log.Printf("Error starting server provisioning: %v", err)
 		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
 			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)
@@ -199,14 +92,14 @@ func createServer(w http.ResponseWriter, r *http.Request) {
 		ID:                  serverID,
 		Config:              serverConfigToJSON(serverConfig),
 		CurrentInfraVersion: programs.CurrentInfraVersion,
-		Outdated:            true, // newly created server is outdated until provisioning completes
+		Outdated:            true,
 	})
 }
 
-func listServers(w http.ResponseWriter, r *http.Request) {
+func ListServers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	dbConn, _, err := getDBConnection(ctx)
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -235,7 +128,7 @@ func listServers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(responses)
 }
 
-func getServer(w http.ResponseWriter, r *http.Request) {
+func GetServer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	vars := mux.Vars(r)
@@ -245,7 +138,7 @@ func getServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbConn, _, err := getDBConnection(ctx)
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -275,7 +168,7 @@ func getServer(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func updateServer(w http.ResponseWriter, r *http.Request) {
+func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	vars := mux.Vars(r)
@@ -291,7 +184,7 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbConn, cfg, err := getDBConnection(ctx)
+	dbConn, cfg, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -305,7 +198,6 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject immutable field changes: region and zone.
 	if req.Region != nil {
 		writeJSONError(w, "region is immutable; create a new server to change location", http.StatusBadRequest)
 		return
@@ -315,13 +207,11 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject disk size decreases.
 	if req.DiskSizeGB != nil && *req.DiskSizeGB < existingConfig.DiskSizeGB {
 		writeJSONError(w, "disk size can only be increased", http.StatusBadRequest)
 		return
 	}
 
-	// Save a snapshot of the original config before any mutation, for rollback.
 	originalConfig := *existingConfig
 	if err := dbConn.SaveConfigSnapshot(ctx, serverID, &originalConfig); err != nil {
 		log.Printf("Error saving config snapshot: %v", err)
@@ -351,10 +241,8 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Classify the update type based on which fields changed.
 	updateType := classifyUpdate(req, existingConfig)
 
-	// Validate server state before accepting the update.
 	if updateType == int(UpdateTypeRecreate) || updateType == int(UpdateTypeResize) {
 		status, err := dbConn.GetStatus(ctx, serverID)
 		if err == nil && status.ServerState != "" && !status.ServerState.IsRunning() {
@@ -369,7 +257,7 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if provisioningService == nil {
+	if ProvisioningService == nil {
 		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
@@ -387,17 +275,15 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		GCPProject:        cfg.ProjectID,
 	}
 
-	if err := provisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {
+	if err := ProvisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {
 		log.Printf("Error starting server update: %v", err)
 		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
 			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)
 			return
 		}
-		// Revert config snapshot on provisioning failure.
-		if revertErr := provisioningService.RevertServerConfig(ctx, serverID); revertErr != nil {
+		if revertErr := ProvisioningService.RevertServerConfig(ctx, serverID); revertErr != nil {
 			log.Printf("Error reverting config after failed update: %v", revertErr)
 		}
-		// Provide user-friendly guidance based on update type.
 		msg := "Server update failed. "
 		switch updateType {
 		case int(UpdateTypeRecreate):
@@ -418,11 +304,18 @@ func updateServer(w http.ResponseWriter, r *http.Request) {
 		ID:                  serverID,
 		Config:              serverConfigToJSON(existingConfig),
 		CurrentInfraVersion: programs.CurrentInfraVersion,
-		Outdated:            true, // outdated until provisioning completes
+		Outdated:            true,
 	})
 }
 
-// classifyUpdate determines the UpdateType based on which fields were changed in the request.
+type UpdateType int
+
+const (
+	UpdateTypeInPlace UpdateType = iota
+	UpdateTypeResize
+	UpdateTypeRecreate
+)
+
 func classifyUpdate(req UpdateServerRequest, config *db.ServerConfig) int {
 	if req.MinecraftVersion != nil {
 		return int(UpdateTypeRecreate)
@@ -433,7 +326,7 @@ func classifyUpdate(req UpdateServerRequest, config *db.ServerConfig) int {
 	return int(UpdateTypeInPlace)
 }
 
-func deleteServer(w http.ResponseWriter, r *http.Request) {
+func DeleteServer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	vars := mux.Vars(r)
@@ -443,7 +336,7 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbConn, _, err := getDBConnection(ctx)
+	dbConn, _, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -456,12 +349,12 @@ func deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if provisioningService == nil {
+	if ProvisioningService == nil {
 		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	if err := provisioningService.DestroyServer(ctx, serverID); err != nil {
+	if err := ProvisioningService.DestroyServer(ctx, serverID); err != nil {
 		log.Printf("Error starting server destruction: %v", err)
 		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
 			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)

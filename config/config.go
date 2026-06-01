@@ -14,17 +14,15 @@ import (
 
 // Config holds the configuration needed for database connections and service identification.
 type Config struct {
-	Environment  string
-	Region       string
-	ProjectID    string
-	InstanceName string
+	Environment string
+	Region      string
+	ProjectID   string
 }
 
 // Default values for configuration
 const (
-	DefaultEnvironment  = "development"
-	DefaultRegion       = "us-central1"
-	DefaultInstanceName = "minecraft-server"
+	DefaultEnvironment = "development"
+	DefaultRegion      = "us-central1"
 )
 
 // Load reads configuration from environment variables via viper.
@@ -40,16 +38,10 @@ func Load() Config {
 		region = DefaultRegion
 	}
 
-	instanceName := viper.GetString("INSTANCE_NAME")
-	if instanceName == "" {
-		instanceName = DefaultInstanceName
-	}
-
 	return Config{
-		Environment:  environment,
-		Region:       region,
-		ProjectID:    viper.GetString("GCP_PROJECT"),
-		InstanceName: instanceName,
+		Environment: environment,
+		Region:      region,
+		ProjectID:   viper.GetString("GCP_PROJECT"),
 	}
 }
 
