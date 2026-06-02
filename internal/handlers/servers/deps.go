@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"gitlab.com/nbyl/metio/config"
-	"gitlab.com/nbyl/metio/db"
-	"gitlab.com/nbyl/metio/services"
+	"gitlab.com/nbyl/metio/internal/config"
+	"gitlab.com/nbyl/metio/internal/db"
+	"gitlab.com/nbyl/metio/internal/services"
 )
 
 var GetDBConnection func(ctx context.Context) (db.DB, config.Config, error)

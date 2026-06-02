@@ -1,5 +1,5 @@
 locals {
-  user_data = templatefile("${path.module}/../templates/server_cloud_config.tftpl", {
+  user_data = templatefile("${path.module}/templates/server_cloud_config.tftpl", {
     region            = var.region
     gcpProject        = var.project_id
     environment       = var.environment

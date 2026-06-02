@@ -247,8 +247,13 @@ metio/
 │   │   ├── hooks/       # Custom hooks (React Query)
 │   │   └── types/       # TypeScript types
 │   └── package.json
-├── handlers/            # HTTP handlers
-├── db/                  # Firestore client
+├── internal/
+│   ├── handlers/        # HTTP handlers
+│   ├── db/              # Firestore client
+│   ├── services/        # Business logic
+│   ├── config/          # Configuration
+│   ├── tracing/         # OpenTelemetry
+│   └── testutil/        # Test helpers
 ├── cloud/               # OpenTofu infrastructure
 ├── static/dist/         # Built frontend (embedded in binary)
 └── Makefile

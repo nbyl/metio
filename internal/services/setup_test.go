@@ -8,9 +8,9 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gitlab.com/nbyl/metio/config"
-	"gitlab.com/nbyl/metio/db"
-	"gitlab.com/nbyl/metio/testutil"
+	"gitlab.com/nbyl/metio/internal/config"
+	"gitlab.com/nbyl/metio/internal/db"
+	"gitlab.com/nbyl/metio/internal/testutil"
 	"google.golang.org/api/googleapi"
 )
 
