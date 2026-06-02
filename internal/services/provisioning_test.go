@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/pulumi"
-	"gitlab.com/nbyl/metio/pulumi/programs"
+	"gitlab.com/nbyl/metio/internal/pulumi"
+	"gitlab.com/nbyl/metio/internal/pulumi/programs"
 	"gitlab.com/nbyl/metio/internal/testutil"
 )
 
