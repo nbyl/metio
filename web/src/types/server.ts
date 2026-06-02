@@ -89,6 +89,34 @@ export interface UpdateServerRequest {
 /**
  * Provisioning step from backend StepResponse
  */
+export interface CreateServerRequest {
+  name: string;
+  region: string;
+  zone: string;
+  machineType: string;
+  minecraftVersion: string;
+  diskSizeGB?: number;
+  shutdownSchedule?: ShutdownScheduleInput;
+}
+
+export interface MachineTypeOption {
+  id: string;
+  vcpus: number;
+  memoryGB: number;
+  monthlyCost: number;
+}
+
+export interface RegionOption {
+  id: string;
+  zones: string[];
+}
+
+export interface SetupOptions {
+  machineTypes: MachineTypeOption[];
+  regions: RegionOption[];
+  minecraftVersions: string[];
+}
+
 export interface ProvisioningStep {
   name: string;
   status: string;

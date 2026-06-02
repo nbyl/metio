@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Copy,
@@ -593,6 +594,8 @@ function ServerCard({ server }: ServerCardProps) {
 }
 
 export function ServerDashboard({ className }: ServerDashboardProps) {
+  const navigate = useNavigate();
+
   const {
     data: servers,
     isLoading,
@@ -623,7 +626,7 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
     return (
       <EmptyState
         className={className}
-        onCreateServer={() => toast.info('Server creation wizard coming soon!')}
+        onCreateServer={() => navigate('/servers/new')}
       />
     );
   }
