@@ -2,7 +2,7 @@
 
 ## Build/Test Commands
 - **Development server**: `air` (auto-reloads on file changes)
-- **Frontend dev server**: `cd frontend && npm run dev` (Vite with hot reload)
+- **Frontend dev server**: `cd web && npm run dev` (Vite with hot reload)
 - **Build single binary**: `make <binary_name>` (e.g., `make controller`)
 - **Build all binaries**: `make` or `make all` (builds frontend + all cmd/*/main.go files)
 - **Run tests**: `make test` (generates coverage report at build/coverage.html)
@@ -25,10 +25,10 @@
 - **Coverage report**: Generated at `build/coverage.html`
 
 ### Frontend Tests
-- **Run tests**: `cd frontend && npm run test:run`
-- **Watch mode**: `cd frontend && npm run test`
-- **With coverage**: `cd frontend && npm run test:coverage`
-- **Coverage report**: Generated at `frontend/coverage/`
+- **Run tests**: `cd web && npm run test:run`
+- **Watch mode**: `cd web && npm run test`
+- **With coverage**: `cd web && npm run test:coverage`
+- **Coverage report**: Generated at `web/coverage/`
 - **Coverage threshold**: 80% (configured in `vitest.config.ts`)
 
 ## Code Style Guidelines
@@ -44,15 +44,15 @@
 
 ### Frontend
 - **Framework**: React 19 with TypeScript
-- **Build tool**: Vite (config in `frontend/vite.config.ts`)
+- **Build tool**: Vite (config in `web/vite.config.ts`)
 - **Styling**: TailwindCSS 4 with `cn()` utility (clsx + tailwind-merge)
 - **State management**: React Query for server state, React Context for auth
-- **Components**: Located in `frontend/src/components/`
+- **Components**: Located in `web/src/components/`
 - **Go packages**: Now under `internal/` (e.g., `internal/handlers/`, `internal/services/`, `internal/db/`, `internal/config/`)
-- **Hooks**: Custom hooks in `frontend/src/hooks/`
-- **Dev server**: `cd frontend && npm run dev` (proxies `/api` and `/auth` to `:8080`)
-- **Lint**: `cd frontend && npm run lint` (ESLint)
-- **Format**: `cd frontend && npm run format` (Prettier)
+- **Hooks**: Custom hooks in `web/src/hooks/`
+- **Dev server**: `cd web && npm run dev` (proxies `/api` and `/auth` to `:8080`)
+- **Lint**: `cd web && npm run lint` (ESLint)
+- **Format**: `cd web && npm run format` (Prettier)
 - **Static files**: Built to `static/dist/`, embedded in Go binary via `go:embed`
 
 ### Infrastructure

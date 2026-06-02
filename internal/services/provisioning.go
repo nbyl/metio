@@ -11,8 +11,8 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/pulumi"
-	"gitlab.com/nbyl/metio/pulumi/programs"
+	"gitlab.com/nbyl/metio/internal/pulumi"
+	"gitlab.com/nbyl/metio/internal/pulumi/programs"
 )
 
 const (
