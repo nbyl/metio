@@ -3,10 +3,10 @@
 # Stage 1: Frontend build
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci
-COPY frontend/ ./frontend/
-RUN cd frontend && npm run build
+COPY web/package*.json ./web/
+RUN cd web && npm ci
+COPY web/ ./web/
+RUN cd web && npm run build
 
 # Stage 2: Go build
 FROM golang:1.25-alpine AS builder
