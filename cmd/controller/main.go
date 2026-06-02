@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/internal/config"
 	"gitlab.com/nbyl/metio/internal/handlers"
-	"gitlab.com/nbyl/metio/pulumi"
+	"gitlab.com/nbyl/metio/internal/pulumi"
 	"gitlab.com/nbyl/metio/internal/services"
 	"gitlab.com/nbyl/metio/internal/tracing"
 	"google.golang.org/api/cloudresourcemanager/v1"
