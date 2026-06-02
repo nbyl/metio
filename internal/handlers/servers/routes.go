@@ -19,4 +19,6 @@ func RegisterRoutes(api *mux.Router) {
 	s.HandleFunc("/{id}/whitelist/enabled", SetWhitelistEnabledByID).Methods("PUT")
 	s.HandleFunc("/{id}/shutdown/schedule", ScheduleShutdownByID).Methods("POST")
 	s.HandleFunc("/{id}/shutdown/schedule", CancelScheduledShutdownByID).Methods("DELETE")
+
+	api.HandleFunc("/options", ListOptions).Methods("GET")
 }
