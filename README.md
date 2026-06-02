@@ -60,7 +60,7 @@ A self-hosted Minecraft server management application running on Google Cloud Pl
 
 2. Install frontend dependencies:
    ```bash
-   cd frontend && npm ci
+   cd web && npm ci
    ```
 
 3. Configure GCP authentication:
@@ -88,7 +88,7 @@ A self-hosted Minecraft server management application running on Google Cloud Pl
 
 ```bash
 # Terminal 1: Frontend dev server with hot reload
-cd frontend && npm run dev
+cd web && npm run dev
 
 # Terminal 2: Go backend with auto-reload
 air
@@ -104,7 +104,7 @@ air
 DEV_MODE=true air
 ```
 
-This serves the pre-built frontend from `static/dist/`. Run `cd frontend && npm run build` first.
+This serves the pre-built frontend from `static/dist/`. Run `cd web && npm run build` first.
 
 ## Environment Variables
 
@@ -151,14 +151,14 @@ make test
 # Coverage report: build/coverage.html
 
 # Run frontend tests
-cd frontend && npm run test:run
+cd web && npm run test:run
 
 # Run frontend tests with coverage
-cd frontend && npm run test:coverage
-# Coverage report: frontend/coverage/
+cd web && npm run test:coverage
+# Coverage report: web/coverage/
 
 # Run frontend tests in watch mode
-cd frontend && npm run test
+cd web && npm run test
 ```
 
 ## Deployment
@@ -196,7 +196,7 @@ make deploy-infrastructure
 
 3. Initialize and apply infrastructure:
    ```bash
-   cd cloud
+   cd deploy
    tofu init
    tofu apply
    ```
@@ -231,7 +231,7 @@ The policy runs daily and automatically removes images that:
 | CORS errors in development | Ensure Vite dev server is running (`npm run dev`) and proxying to backend |
 | "Not authenticated" errors | Check `ALLOWED_USERS` includes your email address |
 | Firebase/OAuth not working | Verify `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are correct |
-| Frontend changes not showing | Run `cd frontend && npm run build` or use the Vite dev server |
+| Frontend changes not showing | Run `cd web && npm run build` or use the Vite dev server |
 | VM not starting | Check GCP quotas and Compute Engine API is enabled |
 
 ## Project Structure
@@ -241,7 +241,7 @@ metio/
 ├── cmd/
 │   ├── controller/      # Web server (Cloud Run)
 │   └── machine-agent/   # VM status reporter
-├── frontend/            # React SPA (Vite)
+├── web/            # React SPA (Vite)
 │   ├── src/
 │   │   ├── components/  # React components
 │   │   ├── hooks/       # Custom hooks (React Query)
@@ -254,7 +254,7 @@ metio/
 │   ├── config/          # Configuration
 │   ├── tracing/         # OpenTelemetry
 │   └── testutil/        # Test helpers
-├── cloud/               # OpenTofu infrastructure
+├── deploy/               # OpenTofu infrastructure
 ├── static/dist/         # Built frontend (embedded in binary)
 └── Makefile
 ```

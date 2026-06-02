@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-frontend build-frontend test test-backend test-frontend develop lint-frontend verify-backend help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend help
 
 USERNAME := $(shell whoami)
 
@@ -6,7 +6,7 @@ USERNAME := $(shell whoami)
 all: build
 
 # Build all binaries from cmd/*/main.go
-build: build-frontend
+build: build-web
 	@mkdir -p build
 	@for dir in cmd/*/; do \
 		if [ -f "$$dir/main.go" ]; then \
@@ -20,43 +20,43 @@ build: build-frontend
 	@echo "All binaries built successfully"
 
 # Run Go tests with coverage
-test-backend: build-frontend
+test-backend: build-web
 	@mkdir -p build
 	go test ./... -coverprofile=build/coverage.out -covermode=atomic
 	go tool cover -html=build/coverage.out -o build/coverage.html
 	@echo "Coverage report generated at build/coverage.html"
 
 # Run Go verification (tidy, verify, fmt, vet)
-verify-backend: build-frontend
+verify-backend: build-web
 	go mod tidy
 	go mod verify
 	go fmt ./...
 	go vet ./...
 
 # Install frontend dependencies
-install-frontend:
-	cd frontend && npm ci
+install-web:
+	cd web && npm ci
 
 # Build frontend assets
-build-frontend: install-frontend
-	cd frontend && npm run build
+build-web: install-web
+	cd web && npm run build
 
 # Run frontend vitest suite
-test-frontend: install-frontend
-	cd frontend && npm run test:run
+test-web: install-web
+	cd web && npm run test:run
 
 # Run frontend linter
-lint-frontend: install-frontend
-	cd frontend && npm run lint
+lint-web: install-web
+	cd web && npm run lint
 
 # Run all tests (backend + frontend)
-test: test-backend test-frontend
+test: test-backend test-web
 
 # Start backend (air) and frontend (Vite) with hot reload
 develop:
 	@echo "Starting development servers..."
 	@trap 'kill 0' EXIT; \
-	cd frontend && npm run dev & \
+	cd web && npm run dev & \
 	air & \
 	wait
 
@@ -122,7 +122,7 @@ deploy-full: build-images
 	echo "Deploying full system with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Deploy infrastructure only: use existing images or defaults
 deploy-infrastructure:
@@ -142,7 +142,7 @@ deploy-infrastructure:
 	echo "Deploying infrastructure only with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Deploy machine-agent only: build machine-agent image and deploy infrastructure
 deploy-machine-agent: build-machine-agent-image
@@ -161,7 +161,7 @@ deploy-machine-agent: build-machine-agent-image
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=cloud apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Deploy controller only: build controller image and update Cloud Run service
 deploy-controller: build-controller-image
@@ -173,7 +173,7 @@ deploy-controller: build-controller-image
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=cloud apply -target=google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -target=google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:
@@ -207,7 +207,7 @@ help:
 	@echo "Test targets:"
 	@echo "  test                    - Run all tests (backend + frontend)"
 	@echo "  test-backend            - Run Go tests with coverage report"
-	@echo "  test-frontend           - Run frontend Vitest suite"
+	@echo "  test-web           - Run frontend Vitest suite"
 	@echo ""
 	@echo "Development:"
 	@echo "  develop                 - Start backend (air) and frontend (Vite) with hot reload"
@@ -232,7 +232,7 @@ help:
 	@echo "Examples:"
 	@echo "  make test                     # Run all tests"
 	@echo "  make test-backend             # Run Go tests only"
-	@echo "  make test-frontend            # Run frontend tests only"
+	@echo "  make test-web            # Run frontend tests only"
 	@echo "  make develop                  # Start dev servers with hot reload"
 	@echo "  make deploy-full              # Deploy everything with new images"
 	@echo "  make deploy-infrastructure    # Update infrastructure without rebuilding"
