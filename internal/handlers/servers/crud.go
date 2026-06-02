@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/pulumi/programs"
+	"gitlab.com/nbyl/metio/internal/pulumi/programs"
 )
 
 func CreateServer(w http.ResponseWriter, r *http.Request) {

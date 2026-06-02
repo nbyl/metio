@@ -20,7 +20,7 @@ type TemplateConfig struct {
 func RenderCloudConfig(config *TemplateConfig) (string, error) {
 	// Try to read from the shared templates directory
 	paths := []string{
-		filepath.Join("cloud", "templates", "server_cloud_config.tftpl"),
+		filepath.Join("deploy", "templates", "server_cloud_config.tftpl"),
 		filepath.Join("..", "templates", "server_cloud_config.tftpl"),
 		filepath.Join("templates", "server_cloud_config.tftpl"),
 		"server_cloud_config.tftpl",
