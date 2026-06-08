@@ -1,0 +1,9 @@
+name: metio
+runtime: yaml
+description: >
+  Empty Pulumi program used to manually destroy orphaned per-server stacks in
+  the Metio state backend.
+
+  The project name MUST be "metio" — this matches the project name used by
+  the controller's Automation API (internal/pulumi/workspace.go). Without this
+  match, `pulumi stack ls` will not discover stacks created by the controller.
