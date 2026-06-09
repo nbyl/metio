@@ -211,5 +211,5 @@ views/*_templ.go
 # Frontend build output
 static/dist/
 
-controller
-machine-agent
+/controller
+/machine-agent
