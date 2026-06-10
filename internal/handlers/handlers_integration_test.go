@@ -1632,7 +1632,7 @@ func TestCancelScheduledShutdownByID_NotFound(t *testing.T) {
 // --- New and spaHandler tests ---
 
 func TestNew_ReturnsRouter(t *testing.T) {
-	r := New(nil, nil)
+	r := New(nil, nil, nil)
 	assert.NotNil(t, r)
 }
 

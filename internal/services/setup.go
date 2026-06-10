@@ -161,6 +161,44 @@ func (s *SetupService) classifyGCPError(err error) error {
 	return err
 }
 
+func (s *SetupService) ServerCount(ctx context.Context) (int, error) {
+	ids, err := s.db.ListAllServerIDs(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
+func (s *SetupService) IsInitialized(ctx context.Context) bool {
+	if os.Getenv("PULUMI_STATE_BUCKET") != "" {
+		return true
+	}
+	settings, err := s.db.GetPulumiSettings(ctx)
+	if err != nil {
+		return false
+	}
+	return settings != nil && settings.Initialized
+}
+
+func (s *SetupService) Initialize(ctx context.Context) error {
+	bucketName, err := s.EnsureStateBucket(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	pulumiSettings := &db.PulumiSettings{
+		StateBucket:   bucketName,
+		Initialized:   true,
+		InitializedAt: now,
+		InitializedBy: "setup-wizard",
+	}
+	if err := s.db.SetPulumiSettings(ctx, pulumiSettings); err != nil {
+		return fmt.Errorf("failed to persist Pulumi settings: %w", err)
+	}
+	return nil
+}
+
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
