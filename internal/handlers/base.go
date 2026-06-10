@@ -31,9 +31,10 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInterface) *mux.Router {
+func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInterface, ss setup.SetupServiceInterface) *mux.Router {
 	provisioningService = ps
 	setup.ValidationService = vs
+	setup.SetupService = ss
 
 	servers.ProvisioningService = ps
 	servers.GetDBConnection = getDBConnection
