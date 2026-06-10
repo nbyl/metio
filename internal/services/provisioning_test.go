@@ -601,7 +601,7 @@ func TestDestroyServer_Success(t *testing.T) {
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
-	err := svc.DestroyServer(context.Background(), "srv1")
+	err := svc.DestroyServer(context.Background(), "srv1", false)
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
@@ -613,7 +613,7 @@ func TestDestroyServer_Error(t *testing.T) {
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(errors.New("destroy failed"))
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
-	err := svc.DestroyServer(context.Background(), "srv1")
+	err := svc.DestroyServer(context.Background(), "srv1", false)
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
