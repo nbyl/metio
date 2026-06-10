@@ -354,7 +354,9 @@ func DeleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ProvisioningService.DestroyServer(ctx, serverID); err != nil {
+	createBackup := r.URL.Query().Get("backup") == "true"
+
+	if err := ProvisioningService.DestroyServer(ctx, serverID, createBackup); err != nil {
 		log.Printf("Error starting server destruction: %v", err)
 		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
 			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)
