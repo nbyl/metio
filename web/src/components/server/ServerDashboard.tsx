@@ -464,14 +464,17 @@ function ServerCard({ server }: ServerCardProps) {
     );
   };
 
-  const handleDestroy = () => {
-    deleteMutation.mutate(server.id, {
-      onSuccess: () => {
-        navigate(`/servers/${server.id}/provisioning`, {
-          state: { serverName: server.config.name },
-        });
-      },
-    });
+  const handleDestroy = (createBackup: boolean) => {
+    deleteMutation.mutate(
+      { id: server.id, createBackup },
+      {
+        onSuccess: () => {
+          navigate(`/servers/${server.id}/provisioning`, {
+            state: { serverName: server.config.name },
+          });
+        },
+      }
+    );
   };
 
   return (
@@ -627,9 +630,10 @@ function ServerCard({ server }: ServerCardProps) {
       <DestroyModal
         open={showDestroy}
         serverName={server.config.name}
+        serverState={currentStatus?.serverState}
         onClose={() => setShowDestroy(false)}
-        onConfirm={() => {
-          handleDestroy();
+        onConfirm={(createBackup) => {
+          handleDestroy(createBackup);
           setShowDestroy(false);
         }}
         isPending={deleteMutation.isPending}

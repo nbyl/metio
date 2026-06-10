@@ -157,8 +157,15 @@ export function useDeleteServer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
-      const response = await fetch(`/api/servers/${id}`, {
+    mutationFn: async ({
+      id,
+      createBackup,
+    }: {
+      id: string;
+      createBackup: boolean;
+    }): Promise<void> => {
+      const params = createBackup ? '?backup=true' : '';
+      const response = await fetch(`/api/servers/${id}${params}`, {
         method: 'DELETE',
       });
 
