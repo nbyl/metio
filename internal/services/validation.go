@@ -113,6 +113,7 @@ type ValidationResult struct {
 
 type ValidationService struct {
 	projectID       string
+	environment     string
 	serviceUsage    ServiceUsageClient
 	resourceManager ResourceManagerClient
 	cache           *validationCache
@@ -121,6 +122,7 @@ type ValidationService struct {
 func NewValidationService(cfg config.Config, su ServiceUsageClient, rm ResourceManagerClient) *ValidationService {
 	return &ValidationService{
 		projectID:       cfg.ProjectID,
+		environment:     cfg.Environment,
 		serviceUsage:    su,
 		resourceManager: rm,
 		cache:           newValidationCache(5 * time.Minute),
@@ -147,13 +149,10 @@ func (v *ValidationService) InvalidateCache() {
 
 func (v *ValidationService) runValidation(ctx context.Context) (*ValidationResult, error) {
 	apis, apiErr := v.checkAPIs(ctx)
-	perms, permErr := v.checkPermissions(ctx)
+	perms, _ := v.checkPermissions(ctx)
 
 	if apiErr != nil {
 		log.Printf("validation: API check failed: %v", apiErr)
-	}
-	if permErr != nil {
-		return nil, fmt.Errorf("permission check failed: %w", permErr)
 	}
 
 	fixes := v.buildFixes(apis, perms)
@@ -173,6 +172,13 @@ func (v *ValidationService) runValidation(ctx context.Context) (*ValidationResul
 
 func (v *ValidationService) checkAPIs(ctx context.Context) (map[string]APICheckResult, error) {
 	results := make(map[string]APICheckResult)
+	if v.projectID == "" {
+		log.Print("validation: GCP_PROJECT not set, skipping API check")
+		for _, api := range requiredAPIs {
+			results[api] = APICheckResult{Enabled: false}
+		}
+		return results, nil
+	}
 	for _, api := range requiredAPIs {
 		name := fmt.Sprintf("projects/%s/services/%s", v.projectID, api)
 		svc, err := v.serviceUsage.GetService(ctx, name)
@@ -187,9 +193,30 @@ func (v *ValidationService) checkAPIs(ctx context.Context) (map[string]APICheckR
 }
 
 func (v *ValidationService) checkPermissions(ctx context.Context) (map[string]PermissionCheckResult, error) {
+	if v.projectID == "" {
+		log.Print("validation: GCP_PROJECT not set, skipping permission check")
+		results := make(map[string]PermissionCheckResult, len(requiredPermissions))
+		for _, p := range requiredPermissions {
+			results[p] = PermissionCheckResult{Granted: false}
+		}
+		return results, nil
+	}
+	if v.environment == "development" {
+		log.Print("validation: development mode, skipping permission check")
+		results := make(map[string]PermissionCheckResult, len(requiredPermissions))
+		for _, p := range requiredPermissions {
+			results[p] = PermissionCheckResult{Granted: false}
+		}
+		return results, nil
+	}
 	granted, err := v.resourceManager.TestIamPermissions(ctx, v.projectID, requiredPermissions)
 	if err != nil {
-		return nil, err
+		log.Printf("validation: permission check unavailable: %v", err)
+		results := make(map[string]PermissionCheckResult, len(requiredPermissions))
+		for _, p := range requiredPermissions {
+			results[p] = PermissionCheckResult{Granted: false}
+		}
+		return results, nil
 	}
 
 	grantedSet := make(map[string]bool, len(granted))

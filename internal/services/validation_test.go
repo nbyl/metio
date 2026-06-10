@@ -218,10 +218,15 @@ func TestValidate_TestIamPermissionsError(t *testing.T) {
 	}
 
 	svc := newTestValidationService(su, rm)
-	_, err := svc.Validate(context.Background())
+	result, err := svc.Validate(context.Background())
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "permission denied")
+	require.NoError(t, err)
+	assert.False(t, result.Valid)
+	assert.Len(t, result.Permissions, len(requiredPermissions))
+	for _, permResult := range result.Permissions {
+		assert.False(t, permResult.Granted, "all permissions should be false when check fails")
+	}
+	assert.Len(t, result.Fixes, len(requiredPermissions), "all permissions should appear as fixes")
 }
 
 func TestValidate_CacheHit(t *testing.T) {

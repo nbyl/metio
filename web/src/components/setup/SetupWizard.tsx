@@ -43,7 +43,6 @@ function WelcomeStep({ status, isLoading }: StepProps) {
 
 function ValidationStep({ status, isLoading }: StepProps) {
   const checks = status?.checks;
-  const checksLoading = isLoading || !checks;
 
   const apiCount = checks ? Object.keys(checks.apis).length : 0;
   const enabledApis = checks
@@ -56,10 +55,20 @@ function ValidationStep({ status, isLoading }: StepProps) {
 
   return (
     <CardContent>
-      {checksLoading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center gap-2 py-8 text-slate-400">
           <Loader2 className="h-5 w-5 animate-spin" />
           Running validation...
+        </div>
+      ) : !checks ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <AlertCircle className="h-12 w-12 text-yellow-400 mb-4" />
+          <p className="text-slate-300 mb-2">
+            Validation is temporarily unavailable
+          </p>
+          <p className="text-sm text-slate-500 mb-4">
+            Could not check GCP project configuration. The setup may still work.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
