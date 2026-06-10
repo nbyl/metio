@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
 	"testing"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
@@ -143,4 +144,39 @@ func TestCloudConfigHash_SameInputProducesSameHash(t *testing.T) {
 
 func TestCurrentInfraVersion_IsPositive(t *testing.T) {
 	assert.Greater(t, CurrentInfraVersion, 0, "CurrentInfraVersion should be > 0")
+}
+
+func TestGCPTagValueRegex_RejectsUUIDs(t *testing.T) {
+	// GCP requires tag values to match: ^[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$
+	re := regexp.MustCompile(`^[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$`)
+
+	tests := []struct {
+		value string
+		valid bool
+	}{
+		{"test1234", true},
+		{"my-server", true},
+		{"development", true},
+		{"0dcbaca4-2a26-489c-b4a3-d2fad8bb6483", false},
+		{"Server-1", false},
+		{"-server", false},
+		{"server-", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			assert.Equal(t, tt.valid, re.MatchString(tt.value))
+		})
+	}
+}
+
+func TestServerID_BelongsInLabelsNotTags(t *testing.T) {
+	serverID := "0dcbaca4-2a26-489c-b4a3-d2fad8bb6483"
+	tagRe := regexp.MustCompile(`^[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$`)
+	labelRe := regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9_]{0,61}[a-z0-9])?$`)
+
+	assert.False(t, tagRe.MatchString(serverID),
+		"ServerID UUID must not be a GCP instance tag")
+	assert.True(t, labelRe.MatchString(serverID),
+		"ServerID UUID must be valid as a GCP label value")
 }
