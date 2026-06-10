@@ -108,7 +108,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			Name:                     pulumi.String(backupBucketName),
 			Location:                 pulumi.String(config.Region),
 			UniformBucketLevelAccess: pulumi.Bool(true),
-			ForceDestroy:             pulumi.Bool(false),
+			ForceDestroy:             pulumi.Bool(true),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create backup bucket: %w", err)
