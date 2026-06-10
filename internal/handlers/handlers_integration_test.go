@@ -660,7 +660,7 @@ func TestDeleteServer_Success(t *testing.T) {
 	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
-	mockPS.On("DestroyServer", mock.Anything, "srv1").Return(nil)
+	mockPS.On("DestroyServer", mock.Anything, "srv1", false).Return(nil)
 
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -707,7 +707,7 @@ func TestDeleteServer_Conflict(t *testing.T) {
 	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
-	mockPS.On("DestroyServer", mock.Anything, "srv1").Return(fmt.Errorf("operation already in progress for server srv1"))
+	mockPS.On("DestroyServer", mock.Anything, "srv1", false).Return(fmt.Errorf("operation already in progress for server srv1"))
 
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -728,7 +728,7 @@ func TestDeleteServer_DestroyError(t *testing.T) {
 	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{ID: "srv1"}, nil)
-	mockPS.On("DestroyServer", mock.Anything, "srv1").Return(fmt.Errorf("infra error"))
+	mockPS.On("DestroyServer", mock.Anything, "srv1", false).Return(fmt.Errorf("infra error"))
 
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
