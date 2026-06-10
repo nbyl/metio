@@ -3,3 +3,4 @@ export { ServerConfigPanel, type ServerConfigPanelProps } from './ServerConfigPa
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { UpdateModal, type UpdateModalProps } from './UpdateModal';
 export { DestroyModal, type DestroyModalProps } from './DestroyModal';
+export { ServerSetupWizard, type ServerSetupWizardProps } from './ServerSetupWizard';

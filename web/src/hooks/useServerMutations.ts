@@ -4,6 +4,7 @@ import type {
   StatusResponse,
   ServerResponse,
   UpdateServerRequest,
+  CreateServerRequest,
   APIError,
 } from '../types/server';
 
@@ -46,6 +47,39 @@ async function stopServer(serverId: string): Promise<ServerActionResponse> {
   }
 
   return response.json();
+}
+
+export function useCreateServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateServerRequest): Promise<{ id: string }> => {
+      const response = await fetch('/api/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (response.status === 401) {
+        window.location.href = '/auth/login';
+        throw new Error('Session expired');
+      }
+
+      if (!response.ok) {
+        const err: APIError = await response.json();
+        throw new Error(err.error || 'Failed to create server');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success('Server creation started');
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 }
 
 export function useStartServer(serverId: string) {
