@@ -150,7 +150,9 @@ func TestCompleteStep(t *testing.T) {
 		},
 	}
 
-	service.completeStep(status, "test-server", stepUpsertStack)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	service.completeStep(context.Background(), status, "test-server", stepUpsertStack)
 
 	assert.Equal(t, db.ProvisioningStateCompleted, status.Steps[0].Status)
 	assert.Equal(t, "Completed", status.Steps[0].Message)
@@ -163,13 +165,15 @@ func TestCompleteStepNotFound(t *testing.T) {
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB, "test-version")
 
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
 	status := &db.ProvisioningStatus{
 		Steps: []db.ProvisioningStep{
 			{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
 		},
 	}
 
-	service.completeStep(status, "test-server", "non_existent_step")
+	service.completeStep(context.Background(), status, "test-server", "non_existent_step")
 
 	assert.Equal(t, db.ProvisioningStatePending, status.Steps[0].Status)
 	assert.Equal(t, "non_existent_step", status.CurrentStep)
@@ -180,7 +184,19 @@ func TestUpdateStep(t *testing.T) {
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 	service := NewProvisioningService(wm, mockDB, "test-version")
 
-	service.updateStep(context.Background(), "test-server", stepDeployInfrastructure, "Deploying infrastructure...")
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	status := &db.ProvisioningStatus{
+		Steps: []db.ProvisioningStep{
+			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure...", Timestamp: time.Now()},
+		},
+	}
+
+	service.updateStep(context.Background(), status, "test-server", stepDeployInfrastructure, "Deploying infrastructure...")
+
+	assert.Equal(t, db.ProvisioningStateInProgress, status.Steps[0].Status)
+	assert.Equal(t, "Deploying infrastructure...", status.Steps[0].Message)
+	assert.Equal(t, stepDeployInfrastructure, status.CurrentStep)
 }
 
 func TestHandleError(t *testing.T) {

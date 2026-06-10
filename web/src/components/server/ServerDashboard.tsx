@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useServers } from '../../hooks/useServers';
 import { useServerStatus } from '../../hooks/useServerStatus';
+import { useServerProvisioning } from '../../hooks/useServerProvisioning';
 import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
 import { useUpdateServer, useDeleteServer } from '../../hooks/useServerMutations';
 import {
@@ -396,7 +397,9 @@ interface ServerCardProps {
 }
 
 function ServerCard({ server }: ServerCardProps) {
+  const navigate = useNavigate();
   const { data: status } = useServerStatus(server.id);
+  const { data: provisioning } = useServerProvisioning(server.id);
   const startMutation = useStartServer(server.id);
   const stopMutation = useStopServer(server.id);
   const updateMutation = useUpdateServer();
@@ -406,6 +409,7 @@ function ServerCard({ server }: ServerCardProps) {
   const [showDestroy, setShowDestroy] = useState(false);
 
   const isMutating = startMutation.isPending || stopMutation.isPending;
+  const isProvisioning = provisioning && provisioning.state !== 'COMPLETED' && provisioning.state !== 'FAILED';
 
   const handleCopyIP = async (ip: string) => {
     const success = await copy(ip);
@@ -448,11 +452,26 @@ function ServerCard({ server }: ServerCardProps) {
   ];
 
   const handleUpdate = (data: UpdateServerRequest) => {
-    updateMutation.mutate({ id: server.id, data });
+    updateMutation.mutate(
+      { id: server.id, data },
+      {
+        onSuccess: () => {
+          navigate(`/servers/${server.id}/provisioning`, {
+            state: { serverName: server.config.name },
+          });
+        },
+      }
+    );
   };
 
   const handleDestroy = () => {
-    deleteMutation.mutate(server.id);
+    deleteMutation.mutate(server.id, {
+      onSuccess: () => {
+        navigate(`/servers/${server.id}/provisioning`, {
+          state: { serverName: server.config.name },
+        });
+      },
+    });
   };
 
   return (
@@ -496,6 +515,32 @@ function ServerCard({ server }: ServerCardProps) {
             />
           </div>
         </div>
+
+        {isProvisioning && provisioning && (
+          <div
+            className="mt-4 cursor-pointer"
+            onClick={() =>
+              navigate(`/servers/${server.id}/provisioning`, {
+                state: { serverName: server.config.name },
+              })
+            }
+          >
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="text-blue-300 font-medium">
+                {provisioning.operation === 'CREATE' && 'Creating...'}
+                {provisioning.operation === 'UPDATE' && 'Updating...'}
+                {provisioning.operation === 'DESTROY' && 'Destroying...'}
+              </span>
+              <span className="text-slate-400">{provisioning.progress}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                style={{ width: `${provisioning.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         <Separator className="my-4" />
 

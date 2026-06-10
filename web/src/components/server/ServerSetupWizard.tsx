@@ -497,8 +497,10 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
     };
 
     createServer.mutate(payload, {
-      onSuccess: () => {
-        navigate('/');
+      onSuccess: (data) => {
+        navigate(`/servers/${data.id}/provisioning`, {
+          state: { serverName: form.name },
+        });
       },
     });
   };
