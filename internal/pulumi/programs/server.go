@@ -200,7 +200,6 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			Tags: pulumi.StringArray{
 				pulumi.String(config.Name),
 				pulumi.String(config.Environment),
-				pulumi.String(config.ServerID),
 			},
 			ServiceAccount: &compute.InstanceServiceAccountArgs{
 				Email: sa.Email,
@@ -211,6 +210,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			Labels: pulumi.StringMap{
 				"cloud_config_hash": pulumi.String(cloudConfigHash),
 				"infra_version":     pulumi.String(fmt.Sprintf("%d", CurrentInfraVersion)),
+				"server_id":         pulumi.String(config.ServerID),
 			},
 			Metadata: pulumi.StringMap{
 				"user-data": pulumi.String(userData),

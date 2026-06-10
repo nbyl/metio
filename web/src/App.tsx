@@ -3,7 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { Header } from './components/layout/Header';
-import { ServerDashboard } from './components/server';
+import { ServerDashboard, ServerSetupWizard } from './components/server';
 
 /**
  * Dashboard component - main server control panel
@@ -30,6 +30,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/servers/new"
+        element={
+          <ProtectedRoute>
+            <ServerSetupWizard />
           </ProtectedRoute>
         }
       />

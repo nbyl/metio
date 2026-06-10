@@ -237,6 +237,34 @@ func ValidateMachineType(machineType string) error {
 	return nil
 }
 
+func ListRegions() []string {
+	regions := make([]string, 0, len(validGCPRegions))
+	for r := range validGCPRegions {
+		regions = append(regions, r)
+	}
+	return regions
+}
+
+func ListZonesByRegion(region string) []string {
+	zones, ok := validGCPTZonesByRegion[region]
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(zones))
+	for z := range zones {
+		result = append(result, z)
+	}
+	return result
+}
+
+func ListMachineTypes() map[string]MachineTypeSpec {
+	result := make(map[string]MachineTypeSpec, len(MachineTypes))
+	for k, v := range MachineTypes {
+		result[k] = v
+	}
+	return result
+}
+
 func ValidateDiskSize(diskSizeGB int) error {
 	if diskSizeGB < 10 {
 		return fmt.Errorf("disk size must be at least 10 GB, got %d", diskSizeGB)
