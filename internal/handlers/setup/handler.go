@@ -1,9 +1,11 @@
 package setup
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
 type StatusResponse struct {
@@ -13,7 +15,9 @@ type StatusResponse struct {
 }
 
 func ValidateSetupHandler(w http.ResponseWriter, r *http.Request) {
-	result, err := ValidationService.Validate(r.Context())
+	vCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := ValidationService.Validate(vCtx)
 	if err != nil {
 		log.Printf("validation handler error: %v", err)
 		writeJSONError(w, "validation failed", http.StatusInternalServerError)
@@ -36,11 +40,11 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checks, err := ValidationService.Validate(r.Context())
+	vCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	checks, err := ValidationService.Validate(vCtx)
 	if err != nil {
-		log.Printf("status handler: validation error: %v", err)
-		writeJSONError(w, "validation failed", http.StatusInternalServerError)
-		return
+		log.Printf("status handler: validation error (returning partial data): %v", err)
 	}
 
 	resp := StatusResponse{
