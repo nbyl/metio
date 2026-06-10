@@ -33,6 +33,7 @@ type DB interface {
 	DeleteConfigSnapshot(ctx context.Context, serverID string) error
 	GetPulumiSettings(ctx context.Context) (*PulumiSettings, error)
 	SetPulumiSettings(ctx context.Context, settings *PulumiSettings) error
+	ListAllServerIDs(ctx context.Context) ([]string, error)
 }
 
 type FirestoreDB struct {

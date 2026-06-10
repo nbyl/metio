@@ -21,6 +21,24 @@ func (m *mockValidationService) Validate(ctx context.Context) (*services.Validat
 	return m.validateFunc(ctx)
 }
 
+type mockSetupService struct {
+	isInitializedFunc func(ctx context.Context) bool
+	initializeFunc    func(ctx context.Context) error
+	serverCountFunc   func(ctx context.Context) (int, error)
+}
+
+func (m *mockSetupService) IsInitialized(ctx context.Context) bool {
+	return m.isInitializedFunc(ctx)
+}
+
+func (m *mockSetupService) Initialize(ctx context.Context) error {
+	return m.initializeFunc(ctx)
+}
+
+func (m *mockSetupService) ServerCount(ctx context.Context) (int, error) {
+	return m.serverCountFunc(ctx)
+}
+
 func TestValidateSetupHandler_Valid(t *testing.T) {
 	original := ValidationService
 	defer func() { ValidationService = original }()
@@ -105,4 +123,143 @@ func TestValidateSetupHandler_ServiceError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &errResp)
 	require.NoError(t, err)
 	assert.Equal(t, "validation failed", errResp["error"])
+}
+
+func TestStatusHandler_NotInitialized(t *testing.T) {
+	origVS := ValidationService
+	origSS := SetupService
+	defer func() {
+		ValidationService = origVS
+		SetupService = origSS
+	}()
+
+	ValidationService = &mockValidationService{
+		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
+			return &services.ValidationResult{
+				Valid: true,
+				APIs:  map[string]services.APICheckResult{},
+			}, nil
+		},
+	}
+
+	SetupService = &mockSetupService{
+		isInitializedFunc: func(ctx context.Context) bool { return false },
+		serverCountFunc:   func(ctx context.Context) (int, error) { return 0, nil },
+	}
+
+	req := httptest.NewRequest("GET", "/api/setup/status", nil)
+	w := httptest.NewRecorder()
+
+	StatusHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp StatusResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.False(t, resp.Initialized)
+	assert.Equal(t, 0, resp.ServerCount)
+	assert.NotNil(t, resp.Checks)
+}
+
+func TestStatusHandler_Initialized(t *testing.T) {
+	origVS := ValidationService
+	origSS := SetupService
+	defer func() {
+		ValidationService = origVS
+		SetupService = origSS
+	}()
+
+	ValidationService = &mockValidationService{
+		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
+			return &services.ValidationResult{Valid: true}, nil
+		},
+	}
+
+	SetupService = &mockSetupService{
+		isInitializedFunc: func(ctx context.Context) bool { return true },
+		serverCountFunc:   func(ctx context.Context) (int, error) { return 3, nil },
+	}
+
+	req := httptest.NewRequest("GET", "/api/setup/status", nil)
+	w := httptest.NewRecorder()
+
+	StatusHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp StatusResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.True(t, resp.Initialized)
+	assert.Equal(t, 3, resp.ServerCount)
+}
+
+func TestStatusHandler_ServerCountError(t *testing.T) {
+	origVS := ValidationService
+	origSS := SetupService
+	defer func() {
+		ValidationService = origVS
+		SetupService = origSS
+	}()
+
+	ValidationService = &mockValidationService{
+		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
+			return &services.ValidationResult{Valid: true}, nil
+		},
+	}
+
+	SetupService = &mockSetupService{
+		isInitializedFunc: func(ctx context.Context) bool { return false },
+		serverCountFunc:   func(ctx context.Context) (int, error) { return 0, errors.New("db error") },
+	}
+
+	req := httptest.NewRequest("GET", "/api/setup/status", nil)
+	w := httptest.NewRecorder()
+
+	StatusHandler(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestInitializeHandler_Success(t *testing.T) {
+	origSS := SetupService
+	defer func() { SetupService = origSS }()
+
+	SetupService = &mockSetupService{
+		initializeFunc: func(ctx context.Context) error { return nil },
+	}
+
+	req := httptest.NewRequest("POST", "/api/setup/initialize", nil)
+	w := httptest.NewRecorder()
+
+	InitializeHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]bool
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.True(t, resp["success"])
+}
+
+func TestInitializeHandler_Error(t *testing.T) {
+	origSS := SetupService
+	defer func() { SetupService = origSS }()
+
+	SetupService = &mockSetupService{
+		initializeFunc: func(ctx context.Context) error { return errors.New("init error") },
+	}
+
+	req := httptest.NewRequest("POST", "/api/setup/initialize", nil)
+	w := httptest.NewRecorder()
+
+	InitializeHandler(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var errResp map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &errResp)
+	require.NoError(t, err)
+	assert.Equal(t, "initialization failed", errResp["error"])
 }
