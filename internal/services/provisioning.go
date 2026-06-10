@@ -82,9 +82,9 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
 
-		s.completeStep(status, serverID, stepUpsertStack)
+		s.completeStep(opCtx, status, serverID, stepUpsertStack)
 
-		s.updateStep(opCtx, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
+		s.updateStep(opCtx, status, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
 		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
 			return s.workspaceManager.UpStack(opCtx, stack)
 		})
@@ -92,7 +92,7 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 			return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
 		}
 
-		s.completeStep(status, serverID, stepDeployInfrastructure)
+		s.completeStep(opCtx, status, serverID, stepDeployInfrastructure)
 
 		// Stamp the server config with the current infrastructure and controller versions.
 		if err := s.stampServerConfig(opCtx, serverID); err != nil {
@@ -143,11 +143,11 @@ func (s *ProvisioningService) runResizeUpdate(opCtx context.Context, status *db.
 	}
 	s.updateStatus(opCtx, serverID, status)
 
-	s.updateStep(opCtx, serverID, stepStopInstance, "Stopping VM instance...")
+	s.updateStep(opCtx, status, serverID, stepStopInstance, "Stopping VM instance...")
 	if err := StopInstance(opCtx, config.GCPProject, config.Zone, config.Name); err != nil {
 		return s.handleError(status, opCtx, serverID, stepStopInstance, err)
 	}
-	s.completeStep(status, serverID, stepStopInstance)
+	s.completeStep(opCtx, status, serverID, stepStopInstance)
 
 	if err := s.runPulumiUpdate(opCtx, status, serverID, config); err != nil {
 		// If pulumi fails after stopping, attempt to start the VM back.
@@ -157,17 +157,17 @@ func (s *ProvisioningService) runResizeUpdate(opCtx context.Context, status *db.
 		return err
 	}
 
-	s.updateStep(opCtx, serverID, stepStartInstance, "Starting VM instance...")
+	s.updateStep(opCtx, status, serverID, stepStartInstance, "Starting VM instance...")
 	if err := StartInstance(opCtx, config.GCPProject, config.Zone, config.Name); err != nil {
 		return s.handleError(status, opCtx, serverID, stepStartInstance, err)
 	}
-	s.completeStep(status, serverID, stepStartInstance)
+	s.completeStep(opCtx, status, serverID, stepStartInstance)
 
-	s.updateStep(opCtx, serverID, stepHealthCheck, "Waiting for server to become healthy...")
+	s.updateStep(opCtx, status, serverID, stepHealthCheck, "Waiting for server to become healthy...")
 	if err := WaitForServerHealthy(opCtx, s.db, config.Name, 120*time.Second); err != nil {
 		log.Printf("Warning: server %s did not become healthy after resize: %v", serverID, err)
 	}
-	s.completeStep(status, serverID, stepHealthCheck)
+	s.completeStep(opCtx, status, serverID, stepHealthCheck)
 
 	return nil
 }
@@ -179,7 +179,7 @@ func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *d
 	}
 	s.updateStatus(opCtx, serverID, status)
 
-	s.updateStep(opCtx, serverID, stepSaveWorld, "Saving world data...")
+	s.updateStep(opCtx, status, serverID, stepSaveWorld, "Saving world data...")
 	if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("failed to trigger world save: %w", err))
@@ -189,17 +189,17 @@ func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *d
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("world save failed: result=%s, %w", result, err))
 	}
-	s.completeStep(status, serverID, stepSaveWorld)
+	s.completeStep(opCtx, status, serverID, stepSaveWorld)
 
 	if err := s.runPulumiUpdate(opCtx, status, serverID, config); err != nil {
 		return err
 	}
 
-	s.updateStep(opCtx, serverID, stepHealthCheck, "Waiting for server to become healthy...")
+	s.updateStep(opCtx, status, serverID, stepHealthCheck, "Waiting for server to become healthy...")
 	if err := WaitForServerHealthy(opCtx, s.db, config.Name, 180*time.Second); err != nil {
 		log.Printf("Warning: server %s did not become healthy after recreate: %v", serverID, err)
 	}
-	s.completeStep(status, serverID, stepHealthCheck)
+	s.completeStep(opCtx, status, serverID, stepHealthCheck)
 
 	return nil
 }
@@ -214,9 +214,9 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 	}
 
-	s.completeStep(status, serverID, stepUpsertStack)
+	s.completeStep(opCtx, status, serverID, stepUpsertStack)
 
-	s.updateStep(opCtx, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
+	s.updateStep(opCtx, status, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
 	result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
 		return s.workspaceManager.UpStack(opCtx, stack)
 	})
@@ -224,7 +224,7 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 		return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
 	}
 
-	s.completeStep(status, serverID, stepUpdateInfrastructure)
+	s.completeStep(opCtx, status, serverID, stepUpdateInfrastructure)
 
 	// Stamp the server config with the current infrastructure and controller versions.
 	if err := s.stampServerConfig(opCtx, serverID); err != nil {
@@ -268,7 +268,7 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 		}
 		s.updateStatus(opCtx, serverID, status)
 
-		s.updateStep(opCtx, serverID, stepDestroyStack, "Destroying Pulumi stack...")
+		s.updateStep(opCtx, status, serverID, stepDestroyStack, "Destroying Pulumi stack...")
 		err := s.executeWithRetry(opCtx, func() error {
 			return s.workspaceManager.DestroyStack(opCtx, serverID)
 		})
@@ -276,7 +276,7 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 			return s.handleError(status, opCtx, serverID, stepDestroyStack, err)
 		}
 
-		s.completeStep(status, serverID, stepDestroyStack)
+		s.completeStep(opCtx, status, serverID, stepDestroyStack)
 
 		status.State = db.ProvisioningStateCompleted
 		s.updateStatus(opCtx, serverID, status)
@@ -440,11 +440,21 @@ func (s *ProvisioningService) updateStatus(ctx context.Context, serverID string,
 	}
 }
 
-func (s *ProvisioningService) updateStep(ctx context.Context, serverID, stepName, message string) {
+func (s *ProvisioningService) updateStep(ctx context.Context, status *db.ProvisioningStatus, serverID, stepName, message string) {
+	for i, step := range status.Steps {
+		if step.Name == stepName {
+			status.Steps[i].Status = db.ProvisioningStateInProgress
+			status.Steps[i].Message = message
+			status.Steps[i].Timestamp = time.Now()
+			break
+		}
+	}
+	status.CurrentStep = stepName
+	s.updateStatus(ctx, serverID, status)
 	log.Printf("[%s] Step: %s - %s", serverID, stepName, message)
 }
 
-func (s *ProvisioningService) completeStep(status *db.ProvisioningStatus, serverID, stepName string) {
+func (s *ProvisioningService) completeStep(ctx context.Context, status *db.ProvisioningStatus, serverID, stepName string) {
 	now := time.Now()
 	for i, step := range status.Steps {
 		if step.Name == stepName {
@@ -455,6 +465,7 @@ func (s *ProvisioningService) completeStep(status *db.ProvisioningStatus, server
 		}
 	}
 	status.CurrentStep = stepName
+	s.updateStatus(ctx, serverID, status)
 	log.Printf("[%s] Completed step: %s", serverID, stepName)
 }
 
