@@ -195,6 +195,40 @@ func TestStatusHandler_Initialized(t *testing.T) {
 	assert.Equal(t, 3, resp.ServerCount)
 }
 
+func TestStatusHandler_ValidationError(t *testing.T) {
+	origVS := ValidationService
+	origSS := SetupService
+	defer func() {
+		ValidationService = origVS
+		SetupService = origSS
+	}()
+
+	ValidationService = &mockValidationService{
+		validateFunc: func(ctx context.Context) (*services.ValidationResult, error) {
+			return nil, errors.New("validation unavailable")
+		},
+	}
+
+	SetupService = &mockSetupService{
+		isInitializedFunc: func(ctx context.Context) bool { return false },
+		serverCountFunc:   func(ctx context.Context) (int, error) { return 0, nil },
+	}
+
+	req := httptest.NewRequest("GET", "/api/setup/status", nil)
+	w := httptest.NewRecorder()
+
+	StatusHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp StatusResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.False(t, resp.Initialized)
+	assert.Equal(t, 0, resp.ServerCount)
+	assert.Nil(t, resp.Checks, "checks should be nil when validation fails")
+}
+
 func TestStatusHandler_ServerCountError(t *testing.T) {
 	origVS := ValidationService
 	origSS := SetupService
