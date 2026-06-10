@@ -24,6 +24,7 @@ var Version = "dev" // default, overridden by ldflags
 type servicesBundle struct {
 	provisioning *services.ProvisioningService
 	validation   *services.ValidationService
+	setup        *services.SetupService
 }
 
 func main() {
@@ -46,7 +47,7 @@ func main() {
 		log.Fatalf("Failed to initialize services: %v", err)
 	}
 
-	r := handlers.New(svcs.provisioning, svcs.validation)
+	r := handlers.New(svcs.provisioning, svcs.validation, svcs.setup)
 
 	// Wrap router with CORS middleware (only enabled in dev mode)
 	handler := handlers.CORSMiddleware(r)
@@ -100,5 +101,6 @@ func initServices() (*servicesBundle, error) {
 	return &servicesBundle{
 		provisioning: provisioningService,
 		validation:   validationService,
+		setup:        setupSvc,
 	}, nil
 }

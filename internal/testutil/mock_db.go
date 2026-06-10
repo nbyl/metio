@@ -142,3 +142,11 @@ func (m *MockDB) DeleteConfigSnapshot(ctx context.Context, serverID string) erro
 	args := m.Called(ctx, serverID)
 	return args.Error(0)
 }
+
+func (m *MockDB) ListAllServerIDs(ctx context.Context) ([]string, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}

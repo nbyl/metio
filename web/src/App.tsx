@@ -1,8 +1,10 @@
-import { Routes, Route, useParams } from 'react-router-dom';
+import { Routes, Route, useParams, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/layout/Layout';
 import { Header } from './components/layout/Header';
+import { SetupWizard } from './components/setup/SetupWizard';
+import { useSetupStatus } from './hooks/useSetupStatus';
 import { ServerDashboard, ServerSetupWizard, ProvisioningProgress } from './components/server';
 
 /**
@@ -10,6 +12,22 @@ import { ServerDashboard, ServerSetupWizard, ProvisioningProgress } from './comp
  */
 function Dashboard() {
   const { user } = useAuth();
+  const { data: status, isLoading } = useSetupStatus();
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <Header email={user?.email} showUser />
+        <div className="flex items-center justify-center py-12 text-slate-400">
+          Loading...
+        </div>
+      </Layout>
+    );
+  }
+
+  if (status && !status.initialized && status.serverCount === 0) {
+    return <Navigate to="/setup" replace />;
+  }
 
   return (
     <Layout>
@@ -60,6 +78,17 @@ function App() {
         element={
           <ProtectedRoute>
             <ProvisioningPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/setup"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Header />
+              <SetupWizard />
+            </Layout>
           </ProtectedRoute>
         }
       />
