@@ -66,7 +66,7 @@ generate-env:
 develop: generate-env
 	@echo "Starting development servers..."
 	@trap 'kill 0' EXIT; \
-	. build/local.env; \
+	set -a; . build/local.env; set +a; \
 	cd web && npm run dev & \
 	air & \
 	wait
