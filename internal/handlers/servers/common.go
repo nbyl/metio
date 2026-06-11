@@ -55,6 +55,7 @@ type ServerConfigJSON struct {
 	DiskSizeGB                  int                    `json:"diskSizeGB"`
 	InfraVersion                int                    `json:"infraVersion,omitempty"`
 	DeployedByControllerVersion string                 `json:"deployedByControllerVersion,omitempty"`
+	MachineAgentImage           string                 `json:"machineAgentImage,omitempty"`
 	ShutdownSchedule            *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
 	CreatedAt                   string                 `json:"createdAt"`
 	UpdatedAt                   string                 `json:"updatedAt"`
@@ -207,6 +208,7 @@ func serverConfigToJSON(cfg *db.ServerConfig) ServerConfigJSON {
 		DiskSizeGB:                  cfg.DiskSizeGB,
 		InfraVersion:                cfg.InfraVersion,
 		DeployedByControllerVersion: cfg.DeployedByControllerVersion,
+		MachineAgentImage:           cfg.MachineAgentImage,
 		ShutdownSchedule:            shutdownScheduleToInput(cfg.ShutdownSchedule),
 		CreatedAt:                   cfg.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:                   cfg.UpdatedAt.Format(time.RFC3339),
