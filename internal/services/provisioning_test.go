@@ -602,11 +602,13 @@ func TestDestroyServer_Success(t *testing.T) {
 
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
 
 	err := svc.DestroyServer(context.Background(), "srv1", false)
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
+	mockDB.AssertCalled(t, "DeleteServerConfig", mock.Anything, "srv1")
 }
 
 func TestDestroyServer_Error(t *testing.T) {
@@ -628,12 +630,14 @@ func TestDestroyServer_WithBackup_NotStarted(t *testing.T) {
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "never-started"}, nil)
 	mockDB.On("GetStatus", mock.Anything, "never-started").Return(db.Status{}, status.Error(codes.NotFound, "not found"))
+	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
 
 	err := svc.DestroyServer(context.Background(), "srv1", true)
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
 	mockWM.AssertCalled(t, "DestroyStack", mock.Anything, "srv1")
+	mockDB.AssertCalled(t, "DeleteServerConfig", mock.Anything, "srv1")
 }
 
 func TestQueueOperation_AlreadyInProgress(t *testing.T) {
