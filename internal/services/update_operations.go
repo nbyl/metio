@@ -9,6 +9,8 @@ import (
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"gitlab.com/nbyl/metio/internal/db"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // stopInstanceFn and startInstanceFn are function variables for testability.
@@ -70,13 +72,17 @@ func NewBackupCoordinator(dbConn db.DB) *BackupCoordinator {
 }
 
 func (b *BackupCoordinator) TriggerWorldSave(ctx context.Context, instanceName string) error {
-	status, err := b.dbConn.GetStatus(ctx, instanceName)
+	statusEntry, err := b.dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			log.Printf("No status document for instance %s — was never started, skipping backup", instanceName)
+			return nil
+		}
 		return fmt.Errorf("failed to get server status for backup: %w", err)
 	}
-	status.PendingCommand = "save"
-	status.PendingCommandResult = ""
-	if err := b.dbConn.UpdateStatus(ctx, instanceName, status); err != nil {
+	statusEntry.PendingCommand = "save"
+	statusEntry.PendingCommandResult = ""
+	if err := b.dbConn.UpdateStatus(ctx, instanceName, statusEntry); err != nil {
 		return fmt.Errorf("failed to write backup command: %w", err)
 	}
 	log.Printf("Triggered world save for instance %s", instanceName)
@@ -94,16 +100,20 @@ func (b *BackupCoordinator) WaitForCommandAck(ctx context.Context, instanceName 
 		default:
 		}
 
-		status, err := b.dbConn.GetStatus(ctx, instanceName)
+		statusEntry, err := b.dbConn.GetStatus(ctx, instanceName)
 		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				log.Printf("Status document vanished for instance %s — was never started, skipping backup ack", instanceName)
+				return "", nil
+			}
 			return "", fmt.Errorf("failed to poll status for ack: %w", err)
 		}
 
-		if status.PendingCommandResult != "" {
-			if status.PendingCommandResult == "completed" {
+		if statusEntry.PendingCommandResult != "" {
+			if statusEntry.PendingCommandResult == "completed" {
 				return "completed", nil
 			}
-			return status.PendingCommandResult, fmt.Errorf("command result: %s", status.PendingCommandResult)
+			return statusEntry.PendingCommandResult, fmt.Errorf("command result: %s", statusEntry.PendingCommandResult)
 		}
 
 		time.Sleep(pollInterval)
