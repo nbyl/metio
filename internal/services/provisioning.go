@@ -306,6 +306,10 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 		status.State = db.ProvisioningStateCompleted
 		s.updateStatus(opCtx, serverID, status)
 
+		if err := s.db.DeleteServerConfig(opCtx, serverID); err != nil {
+			log.Printf("Failed to delete server config for %s: %v", serverID, err)
+		}
+
 		return nil
 	})
 }
