@@ -25,7 +25,10 @@ func InitMetrics() error {
 	meter := otel.Meter("metio")
 
 	// Initialize environment attribute from config
-	cfg := config.Load()
+	cfg, loadErr := config.Load()
+	if loadErr != nil {
+		log.Printf("Warning: config load failed: %v", loadErr)
+	}
 	environmentAttr = attribute.String("deployment.environment", cfg.Environment)
 
 	var err error

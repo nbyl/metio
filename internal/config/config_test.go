@@ -8,19 +8,38 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestLoad_MissingMachineAgentImage(t *testing.T) {
+	os.Unsetenv("ENVIRONMENT")
+	os.Unsetenv("REGION")
+	os.Unsetenv("GCP_PROJECT")
+	os.Unsetenv("MACHINE_AGENT_IMAGE")
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	cfg, err := Load()
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "MACHINE_AGENT_IMAGE must be set")
+	assert.Equal(t, DefaultEnvironment, cfg.Environment)
+	assert.Equal(t, DefaultRegion, cfg.Region)
+}
+
 func TestLoad_Defaults(t *testing.T) {
-	// Clear any env vars that might be set
 	os.Unsetenv("ENVIRONMENT")
 	os.Unsetenv("REGION")
 	os.Unsetenv("GCP_PROJECT")
 	viper.Reset()
 	viper.AutomaticEnv()
 
-	cfg := Load()
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
 
+	cfg, err := Load()
+
+	assert.NoError(t, err)
 	assert.Equal(t, DefaultEnvironment, cfg.Environment)
 	assert.Equal(t, DefaultRegion, cfg.Region)
 	assert.Equal(t, "", cfg.ProjectID)
+	assert.Equal(t, "test-image:latest", cfg.MachineAgentImage)
 }
 
 func TestLoad_WithEnvVars(t *testing.T) {
@@ -30,12 +49,15 @@ func TestLoad_WithEnvVars(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("REGION", "europe-west1")
 	t.Setenv("GCP_PROJECT", "my-project")
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
 
-	cfg := Load()
+	cfg, err := Load()
 
+	assert.NoError(t, err)
 	assert.Equal(t, "production", cfg.Environment)
 	assert.Equal(t, "europe-west1", cfg.Region)
 	assert.Equal(t, "my-project", cfg.ProjectID)
+	assert.Equal(t, "test-image:latest", cfg.MachineAgentImage)
 }
 
 func TestLoad_PartialEnvVars(t *testing.T) {
@@ -45,12 +67,15 @@ func TestLoad_PartialEnvVars(t *testing.T) {
 	os.Unsetenv("ENVIRONMENT")
 	os.Unsetenv("REGION")
 	t.Setenv("GCP_PROJECT", "proj-123")
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
 
-	cfg := Load()
+	cfg, err := Load()
 
+	assert.NoError(t, err)
 	assert.Equal(t, DefaultEnvironment, cfg.Environment)
 	assert.Equal(t, DefaultRegion, cfg.Region)
 	assert.Equal(t, "proj-123", cfg.ProjectID)
+	assert.Equal(t, "test-image:latest", cfg.MachineAgentImage)
 }
 
 func TestDatabaseID(t *testing.T) {
@@ -88,6 +113,8 @@ func TestLoadWithMetadata_FailsOutsideGCE(t *testing.T) {
 	// Outside GCE, metadata.ProjectID() should fail
 	viper.Reset()
 	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
 
 	_, err := LoadWithMetadata()
 	assert.Error(t, err)

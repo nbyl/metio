@@ -24,7 +24,10 @@ func InitTracer() error {
 }
 
 func InitTracerWithDetails(serviceName, serviceVersion string) error {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Warning: config load failed: %v", err)
+	}
 
 	projectID := cfg.ProjectID
 	if projectID == "" {
