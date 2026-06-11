@@ -25,15 +25,16 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 
 	shutdownSchedule := shutdownScheduleFromInput(req.ShutdownSchedule)
 	serverConfig := &db.ServerConfig{
-		Name:             req.Name,
-		Region:           req.Region,
-		Zone:             req.Zone,
-		MachineType:      req.MachineType,
-		MinecraftVersion: req.MinecraftVersion,
-		DiskSizeGB:       req.DiskSizeGB,
-		ShutdownSchedule: shutdownSchedule,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		Name:              req.Name,
+		Region:            req.Region,
+		Zone:              req.Zone,
+		MachineType:       req.MachineType,
+		MinecraftVersion:  req.MinecraftVersion,
+		DiskSizeGB:        req.DiskSizeGB,
+		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
+		ShutdownSchedule:  shutdownSchedule,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
 	}
 
 	if err := db.ValidateServerConfig(serverConfig); err != nil {
@@ -234,6 +235,7 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	if req.ShutdownSchedule != nil {
 		existingConfig.ShutdownSchedule = shutdownScheduleFromInput(req.ShutdownSchedule)
 	}
+	existingConfig.MachineAgentImage = viper.GetString("MACHINE_AGENT_IMAGE")
 	existingConfig.UpdatedAt = time.Now()
 
 	if err := db.ValidateServerConfig(existingConfig); err != nil {

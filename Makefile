@@ -52,10 +52,21 @@ lint-web: install-web
 # Run all tests (backend + frontend)
 test: test-backend test-web
 
+# Generate combined local env file from devcontainer env and machine-agent image tag
+generate-env:
+	@mkdir -p build
+	@cp .devcontainer/devcontainer.env build/local.env
+	@if [ -f build/machine-agent-image.txt ]; then \
+		echo "" >> build/local.env; \
+		echo "MACHINE_AGENT_IMAGE=$$(cat build/machine-agent-image.txt)" >> build/local.env; \
+	fi
+	@echo "Generated build/local.env"
+
 # Start backend (air) and frontend (Vite) with hot reload
-develop:
+develop: generate-env
 	@echo "Starting development servers..."
 	@trap 'kill 0' EXIT; \
+	. build/local.env; \
 	cd web && npm run dev & \
 	air & \
 	wait
