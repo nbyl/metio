@@ -77,7 +77,7 @@ function BackupStep({
             className={cn(
               'flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors',
               value
-                ? 'border-blue-500 bg-blue-900/20'
+                ? 'border-green-500 bg-green-900/20'
                 : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'
             )}
           >
@@ -86,7 +86,7 @@ function BackupStep({
               name="backup"
               checked={value}
               onChange={() => onChange(true)}
-              className="mt-0.5 accent-blue-500"
+              className="mt-0.5 accent-green-500"
             />
             <div>
               <p className="text-sm font-medium text-white">Yes, create backup before destroying</p>
@@ -97,7 +97,7 @@ function BackupStep({
             className={cn(
               'flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors',
               !value
-                ? 'border-blue-500 bg-blue-900/20'
+                ? 'border-green-500 bg-green-900/20'
                 : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'
             )}
           >
@@ -106,7 +106,7 @@ function BackupStep({
               name="backup"
               checked={!value}
               onChange={() => onChange(false)}
-              className="mt-0.5 accent-blue-500"
+              className="mt-0.5 accent-green-500"
             />
             <div>
               <p className="text-sm font-medium text-white">No, destroy immediately</p>
