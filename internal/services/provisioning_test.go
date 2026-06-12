@@ -14,8 +14,6 @@ import (
 	"gitlab.com/nbyl/metio/internal/pulumi"
 	"gitlab.com/nbyl/metio/internal/pulumi/programs"
 	"gitlab.com/nbyl/metio/internal/testutil"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Re-export for backward compatibility within this test file
@@ -604,7 +602,7 @@ func TestDestroyServer_Success(t *testing.T) {
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
 
-	err := svc.DestroyServer(context.Background(), "srv1", false)
+	err := svc.DestroyServer(context.Background(), "srv1")
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
@@ -617,27 +615,10 @@ func TestDestroyServer_Error(t *testing.T) {
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(errors.New("destroy failed"))
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
-	err := svc.DestroyServer(context.Background(), "srv1", false)
+	err := svc.DestroyServer(context.Background(), "srv1")
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
-}
-
-func TestDestroyServer_WithBackup_NotStarted(t *testing.T) {
-	svc, mockWM, mockDB := newTestService()
-
-	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
-	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
-	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "never-started"}, nil)
-	mockDB.On("GetStatus", mock.Anything, "never-started").Return(db.Status{}, status.Error(codes.NotFound, "not found"))
-	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
-
-	err := svc.DestroyServer(context.Background(), "srv1", true)
-	assert.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
-	mockWM.AssertCalled(t, "DestroyStack", mock.Anything, "srv1")
-	mockDB.AssertCalled(t, "DeleteServerConfig", mock.Anything, "srv1")
 }
 
 func TestQueueOperation_AlreadyInProgress(t *testing.T) {
