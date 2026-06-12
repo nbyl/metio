@@ -552,7 +552,7 @@ function ServerCard({ server }: ServerCardProps) {
             <Button
               variant="primary"
               onClick={() => startMutation.mutate()}
-              disabled={isMutating}
+              disabled={isMutating || isProvisioning}
               loading={startMutation.isPending}
             >
               Start Server
@@ -569,7 +569,7 @@ function ServerCard({ server }: ServerCardProps) {
             <Button
               variant="danger"
               onClick={() => stopMutation.mutate()}
-              disabled={isMutating}
+              disabled={isMutating || isProvisioning}
               loading={stopMutation.isPending}
             >
               Stop Server
@@ -578,6 +578,7 @@ function ServerCard({ server }: ServerCardProps) {
           {isRunning && currentStatus?.instanceIP && (
             <Button
               variant="outline"
+              disabled={isProvisioning}
               onClick={() => handleCopyIP(currentStatus.instanceIP)}
             >
               {copied ? (
@@ -595,6 +596,7 @@ function ServerCard({ server }: ServerCardProps) {
           )}
           <Button
             variant="outline"
+            disabled={isProvisioning}
             onClick={() => setShowUpdate(true)}
           >
             <Settings className="h-4 w-4" />
@@ -602,6 +604,7 @@ function ServerCard({ server }: ServerCardProps) {
           </Button>
           <Button
             variant="danger"
+            disabled={isProvisioning}
             onClick={() => setShowDestroy(true)}
           >
             <Trash2 className="h-4 w-4" />
