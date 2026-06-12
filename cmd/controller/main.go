@@ -59,7 +59,10 @@ func main() {
 
 func initServices() (*servicesBundle, error) {
 	ctx := context.Background()
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
 
 	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {

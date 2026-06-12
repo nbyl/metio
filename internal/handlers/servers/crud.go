@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/spf13/viper"
 	"gitlab.com/nbyl/metio/internal/db"
 	"gitlab.com/nbyl/metio/internal/pulumi/programs"
 )
@@ -50,6 +49,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 
 	serverID := uuid.New().String()
 	serverConfig.ID = serverID
+	serverConfig.MachineAgentImage = cfg.MachineAgentImage
 
 	if err := dbConn.CreateServerConfig(ctx, serverID, serverConfig); err != nil {
 		log.Printf("Error creating server config: %v", err)
@@ -71,7 +71,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		MinecraftVersion:  req.MinecraftVersion,
 		DiskSizeGB:        req.DiskSizeGB,
 		Environment:       cfg.Environment,
-		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
+		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
 	}
 
@@ -234,6 +234,7 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	if req.ShutdownSchedule != nil {
 		existingConfig.ShutdownSchedule = shutdownScheduleFromInput(req.ShutdownSchedule)
 	}
+	existingConfig.MachineAgentImage = cfg.MachineAgentImage
 	existingConfig.UpdatedAt = time.Now()
 
 	if err := db.ValidateServerConfig(existingConfig); err != nil {
@@ -271,7 +272,7 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 		MinecraftVersion:  existingConfig.MinecraftVersion,
 		DiskSizeGB:        existingConfig.DiskSizeGB,
 		Environment:       cfg.Environment,
-		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
+		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
 	}
 
@@ -354,9 +355,7 @@ func DeleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createBackup := r.URL.Query().Get("backup") == "true"
-
-	if err := ProvisioningService.DestroyServer(ctx, serverID, createBackup); err != nil {
+	if err := ProvisioningService.DestroyServer(ctx, serverID); err != nil {
 		log.Printf("Error starting server destruction: %v", err)
 		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
 			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)
