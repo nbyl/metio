@@ -525,7 +525,7 @@ function ServerCard({ server }: ServerCardProps) {
 
         {isProvisioning && provisioning && (
           <div
-            className="mt-4 cursor-pointer"
+            className="mt-4 p-3 -m-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors"
             onClick={() =>
               navigate(`/servers/${server.id}/provisioning`, {
                 state: { serverName: server.config.name },
@@ -533,16 +533,19 @@ function ServerCard({ server }: ServerCardProps) {
             }
           >
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-blue-300 font-medium">
+              <span className="text-green-400 font-medium hover:underline">
                 {provisioning.operation === 'CREATE' && 'Creating...'}
                 {provisioning.operation === 'UPDATE' && 'Updating...'}
                 {provisioning.operation === 'DESTROY' && 'Destroying...'}
               </span>
-              <span className="text-slate-400">{provisioning.progress}%</span>
+              <span className="flex items-center gap-1 text-slate-400">
+                {provisioning.progress}%
+                <ChevronRight className="h-3.5 w-3.5" />
+              </span>
             </div>
             <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
               <div
-                className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                className="h-full rounded-full bg-green-500 transition-all duration-500"
                 style={{ width: `${provisioning.progress}%` }}
               />
             </div>
