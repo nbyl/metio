@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Copy,
@@ -398,6 +399,7 @@ interface ServerCardProps {
 
 function ServerCard({ server }: ServerCardProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: status } = useServerStatus(server.id);
   const { data: provisioning } = useServerProvisioning(server.id);
   const startMutation = useStartServer(server.id);
@@ -456,6 +458,7 @@ function ServerCard({ server }: ServerCardProps) {
       { id: server.id, data },
       {
         onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['serverProvisioning', server.id] });
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
           });
@@ -469,6 +472,7 @@ function ServerCard({ server }: ServerCardProps) {
       { id: server.id, createBackup },
       {
         onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['serverProvisioning', server.id] });
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
           });
