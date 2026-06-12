@@ -28,6 +28,7 @@ type ServerConfig struct {
 	DiskSizeGB                  int               `firestore:"diskSizeGB"`
 	InfraVersion                int               `firestore:"infraVersion,omitempty"`
 	DeployedByControllerVersion string            `firestore:"deployedByControllerVersion,omitempty"`
+	MachineAgentImage           string            `firestore:"machineAgentImage,omitempty"`
 	ShutdownSchedule            *ShutdownSchedule `firestore:"shutdownSchedule,omitempty"`
 	CreatedAt                   time.Time         `firestore:"createdAt"`
 	UpdatedAt                   time.Time         `firestore:"updatedAt"`

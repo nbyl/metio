@@ -15,7 +15,7 @@ import (
 type ProvisioningServiceInterface interface {
 	CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
 	UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error
-	DestroyServer(ctx context.Context, serverID string, createBackup bool) error
+	DestroyServer(ctx context.Context, serverID string) error
 	GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error)
 	RevertServerConfig(ctx context.Context, serverID string) error
 }
@@ -55,6 +55,7 @@ type ServerConfigJSON struct {
 	DiskSizeGB                  int                    `json:"diskSizeGB"`
 	InfraVersion                int                    `json:"infraVersion,omitempty"`
 	DeployedByControllerVersion string                 `json:"deployedByControllerVersion,omitempty"`
+	MachineAgentImage           string                 `json:"machineAgentImage,omitempty"`
 	ShutdownSchedule            *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
 	CreatedAt                   string                 `json:"createdAt"`
 	UpdatedAt                   string                 `json:"updatedAt"`
@@ -207,6 +208,7 @@ func serverConfigToJSON(cfg *db.ServerConfig) ServerConfigJSON {
 		DiskSizeGB:                  cfg.DiskSizeGB,
 		InfraVersion:                cfg.InfraVersion,
 		DeployedByControllerVersion: cfg.DeployedByControllerVersion,
+		MachineAgentImage:           cfg.MachineAgentImage,
 		ShutdownSchedule:            shutdownScheduleToInput(cfg.ShutdownSchedule),
 		CreatedAt:                   cfg.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:                   cfg.UpdatedAt.Format(time.RFC3339),

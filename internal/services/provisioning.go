@@ -261,37 +261,15 @@ func (s *ProvisioningService) RevertServerConfig(ctx context.Context, serverID s
 	return nil
 }
 
-func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string, createBackup bool) error {
+func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
 	return s.queueOperation(ctx, serverID, db.ProvisioningOperationDestroy, func(opCtx context.Context, status *db.ProvisioningStatus) error {
-		var steps []db.ProvisioningStep
-		if createBackup {
-			steps = append(steps, db.ProvisioningStep{
-				Name: stepSaveWorld, Status: db.ProvisioningStatePending, Message: "Creating final world backup...", Timestamp: time.Now(),
-			})
+		steps := []db.ProvisioningStep{
+			{
+				Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now(),
+			},
 		}
-		steps = append(steps, db.ProvisioningStep{
-			Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now(),
-		})
 		status.Steps = steps
 		s.updateStatus(opCtx, serverID, status)
-
-		if createBackup {
-			config, err := s.db.GetServerConfig(opCtx, serverID)
-			if err != nil {
-				return s.handleError(status, opCtx, serverID, stepSaveWorld, fmt.Errorf("failed to get server config for backup: %w", err))
-			}
-
-			s.updateStep(opCtx, status, serverID, stepSaveWorld, "Creating final world backup...")
-			if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
-				return s.handleError(status, opCtx, serverID, stepSaveWorld, err)
-			}
-			result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
-			if err != nil {
-				return s.handleError(status, opCtx, serverID, stepSaveWorld,
-					fmt.Errorf("world save failed: result=%s, %w", result, err))
-			}
-			s.completeStep(opCtx, status, serverID, stepSaveWorld)
-		}
 
 		s.updateStep(opCtx, status, serverID, stepDestroyStack, "Destroying Pulumi stack...")
 		err := s.executeWithRetry(opCtx, func() error {

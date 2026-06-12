@@ -23,8 +23,8 @@ func (m *MockProvisioningService) UpdateServer(ctx context.Context, serverID str
 	return args.Error(0)
 }
 
-func (m *MockProvisioningService) DestroyServer(ctx context.Context, serverID string, createBackup bool) error {
-	args := m.Called(ctx, serverID, createBackup)
+func (m *MockProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
+	args := m.Called(ctx, serverID)
 	return args.Error(0)
 }
 

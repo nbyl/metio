@@ -170,6 +170,10 @@ resource "google_cloud_run_v2_service" "controller" {
         name  = "PULUMI_STATE_BUCKET"
         value = google_storage_bucket.pulumi-state.name
       }
+      env {
+        name  = "MACHINE_AGENT_IMAGE"
+        value = var.machine_agent_image
+      }
 
     }
   }
