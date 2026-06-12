@@ -69,7 +69,10 @@ function App() {
         path="/servers/new"
         element={
           <ProtectedRoute>
-            <ServerSetupWizard />
+            <Layout>
+              <Header />
+              <ServerSetupWizard />
+            </Layout>
           </ProtectedRoute>
         }
       />
