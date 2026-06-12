@@ -31,7 +31,11 @@ export function useServerProvisioning(serverId: string) {
     },
     refetchIntervalInBackground: false,
     staleTime: 0,
-    retry: 2,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message === 'No provisioning in progress') return false;
+      return failureCount < 2;
+    },
     retryDelay: 2000,
+    gcTime: 0,
   });
 }
