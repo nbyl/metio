@@ -20,7 +20,10 @@ import (
 var provisioningService servers.ProvisioningServiceInterface
 
 var getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, config.Config{}, err
+	}
 	dbConn, err := cfg.NewDBConnection(ctx)
 	return dbConn, cfg, err
 }

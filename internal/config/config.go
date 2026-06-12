@@ -6,6 +6,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/spf13/viper"
@@ -14,9 +15,10 @@ import (
 
 // Config holds the configuration needed for database connections and service identification.
 type Config struct {
-	Environment string
-	Region      string
-	ProjectID   string
+	Environment       string
+	Region            string
+	ProjectID         string
+	MachineAgentImage string
 }
 
 // Default values for configuration
@@ -27,7 +29,7 @@ const (
 
 // Load reads configuration from environment variables via viper.
 // Requires viper.AutomaticEnv() to be called first.
-func Load() Config {
+func Load() (Config, error) {
 	environment := viper.GetString("ENVIRONMENT")
 	if environment == "" {
 		environment = DefaultEnvironment
@@ -38,17 +40,25 @@ func Load() Config {
 		region = DefaultRegion
 	}
 
-	return Config{
-		Environment: environment,
-		Region:      region,
-		ProjectID:   viper.GetString("GCP_PROJECT"),
+	cfg := Config{
+		Environment:       environment,
+		Region:            region,
+		ProjectID:         viper.GetString("GCP_PROJECT"),
+		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
 	}
+
+	if cfg.MachineAgentImage == "" {
+		log.Print("MACHINE_AGENT_IMAGE is not set")
+		return cfg, fmt.Errorf("MACHINE_AGENT_IMAGE must be set")
+	}
+
+	return cfg, nil
 }
 
 // LoadWithMetadata reads configuration but fetches ProjectID from GCE metadata.
 // Use this for services running on GCE instances (e.g., machine-agent).
 func LoadWithMetadata() (Config, error) {
-	cfg := Load()
+	cfg, _ := Load()
 
 	projectID, err := metadata.ProjectID()
 	if err != nil {
