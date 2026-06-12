@@ -458,7 +458,7 @@ function ServerCard({ server }: ServerCardProps) {
       { id: server.id, data },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['serverProvisioning', server.id] });
+          queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
           });
@@ -472,7 +472,7 @@ function ServerCard({ server }: ServerCardProps) {
       { id: server.id, createBackup },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['serverProvisioning', server.id] });
+          queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
           });
