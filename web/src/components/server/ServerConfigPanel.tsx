@@ -40,46 +40,64 @@ export function ServerConfigPanel({
   if (compact) {
     return (
       <div className={cn('space-y-3', className)}>
-        <div className="flex items-center gap-2">
-          <Settings2 className="h-4 w-4 text-slate-400" />
-          <span className="text-sm font-medium text-slate-300">
+        <button
+          type="button"
+          className="collapsible-trigger"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <Settings2 className="h-4 w-4 text-slate-400" />
             Configuration
           </span>
-          {outdated && (
-            <Badge variant="transitioning">Update Available</Badge>
+          <span className="flex items-center gap-2">
+            {outdated && (
+              <Badge variant="transitioning">Update Available</Badge>
+            )}
+            {isOpen ? (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-slate-400" />
+            )}
+          </span>
+        </button>
+
+        <div className="collapsible-content" data-state={isOpen ? 'open' : 'closed'}>
+          {isOpen && (
+            <div className="space-y-3 pt-3">
+              <Separator />
+              <div className="grid grid-cols-1 gap-3 text-sm">
+                <div className="stat">
+                  <span className="stat-label">
+                    <Globe className="h-3.5 w-3.5" />
+                    Region
+                  </span>
+                  <span className="stat-value">
+                    {config.region}/{config.zone}
+                  </span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">
+                    <Cpu className="h-3.5 w-3.5" />
+                    Machine Type
+                  </span>
+                  <span className="stat-value">{config.machineType}</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">
+                    Minecraft Version
+                  </span>
+                  <span className="stat-value">{config.minecraftVersion}</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">
+                    <HardDrive className="h-3.5 w-3.5" />
+                    Disk Size
+                  </span>
+                  <span className="stat-value">{config.diskSizeGB} GB</span>
+                </div>
+              </div>
+            </div>
           )}
-        </div>
-        <Separator />
-        <div className="grid grid-cols-1 gap-3 text-sm">
-          <div className="stat">
-            <span className="stat-label">
-              <Globe className="h-3.5 w-3.5" />
-              Region
-            </span>
-            <span className="stat-value">
-              {config.region}/{config.zone}
-            </span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">
-              <Cpu className="h-3.5 w-3.5" />
-              Machine Type
-            </span>
-            <span className="stat-value">{config.machineType}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">
-              Minecraft Version
-            </span>
-            <span className="stat-value">{config.minecraftVersion}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">
-              <HardDrive className="h-3.5 w-3.5" />
-              Disk Size
-            </span>
-            <span className="stat-value">{config.diskSizeGB} GB</span>
-          </div>
         </div>
       </div>
     );
