@@ -142,7 +142,8 @@ function BasicInfoStep({ form, errors, regions, onChange }: BasicInfoStepProps) 
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="my-minecraft-server"
           className={cn(
-            'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500',
+            'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white          placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500',
+        
             errors.name ? 'border-red-500' : 'border-slate-600'
           )}
         />
@@ -160,7 +161,7 @@ function BasicInfoStep({ form, errors, regions, onChange }: BasicInfoStepProps) 
             value={form.region}
             onChange={(e) => onChange({ region: e.target.value, zone: '' })}
             className={cn(
-              'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500',
+              'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white                focus:outline-none focus:ring-2 focus:ring-green-500',
               errors.region ? 'border-red-500' : 'border-slate-600'
             )}
           >
@@ -185,7 +186,7 @@ function BasicInfoStep({ form, errors, regions, onChange }: BasicInfoStepProps) 
             onChange={(e) => onChange({ zone: e.target.value })}
             disabled={!form.region}
             className={cn(
-              'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50',
+              'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50',
               errors.zone ? 'border-red-500' : 'border-slate-600'
             )}
           >
@@ -231,7 +232,7 @@ function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: 
                 className={cn(
                   'text-left p-4 rounded-lg border transition-all',
                   selected
-                    ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500'
+                    ? 'border-green-500 bg-green-500/10 ring-1 ring-green-500'
                     : 'border-slate-600 bg-slate-700 hover:border-slate-500'
                 )}
               >
@@ -259,7 +260,7 @@ function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: 
           value={form.minecraftVersion}
           onChange={(e) => onChange({ minecraftVersion: e.target.value })}
           className={cn(
-            'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500',
+            'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white                focus:outline-none focus:ring-2 focus:ring-green-500',
             errors.minecraftVersion ? 'border-red-500' : 'border-slate-600'
           )}
         >
@@ -285,7 +286,7 @@ function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: 
           max={100}
           value={form.diskSizeGB}
           onChange={(e) => onChange({ diskSizeGB: Number(e.target.value) })}
-          className="w-full accent-blue-500"
+          className="w-full accent-green-500"
         />
         <div className="flex justify-between text-xs text-slate-500 mt-1">
           <span>10 GB</span>
@@ -329,7 +330,7 @@ function OptionsStep({ form, onChange }: OptionsStepProps) {
             <select
               value={form.shutdownTime}
               onChange={(e) => onChange({ shutdownTime: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               {SHUTDOWN_TIMES.map((t) => (
                 <option key={t} value={t}>
@@ -346,7 +347,7 @@ function OptionsStep({ form, onChange }: OptionsStepProps) {
             <select
               value={form.shutdownTimezone}
               onChange={(e) => onChange({ shutdownTimezone: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-lg border border-slate-600 bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               {TIMEZONES.map((tz) => (
                 <option key={tz} value={tz}>
@@ -545,9 +546,9 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
                 className={cn(
                   'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
                   step === s.id
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-green-600 text-white'
                     : step > s.id
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-green-900 text-green-300'
                       : 'bg-slate-700 text-slate-400'
                 )}
               >
