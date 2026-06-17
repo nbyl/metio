@@ -7,6 +7,8 @@ import { cn } from '../../lib/utils';
 export interface UpdateModalProps {
   open: boolean;
   config: ServerConfig;
+  currentInfraVersion: number;
+  outdated: boolean;
   onClose: () => void;
   onUpdate: (data: UpdateServerRequest) => void;
   isPending: boolean;
@@ -15,6 +17,8 @@ export interface UpdateModalProps {
 export function UpdateModal({
   open,
   config,
+  currentInfraVersion,
+  outdated,
   onClose,
   onUpdate,
   isPending,
@@ -65,6 +69,23 @@ export function UpdateModal({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {outdated && (
+          <div className="px-6 pb-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 space-y-1">
+              <p className="text-sm text-yellow-400 font-medium">
+                Infrastructure Update Available
+              </p>
+              <p className="text-xs text-yellow-300/70">
+                Server version: v{config.infraVersion ?? '?'} → Controller version: v{currentInfraVersion}
+              </p>
+              <p className="text-xs text-slate-400">
+                The server will continue running during the update. No configuration changes are
+                required — submitting will trigger the upgrade.
+              </p>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
           <div className="space-y-2">
@@ -131,7 +152,7 @@ export function UpdateModal({
             <Button
               type="submit"
               variant="primary"
-              disabled={!hasChanges || isPending}
+              disabled={(!hasChanges && !outdated) || isPending}
               loading={isPending}
             >
               Update Server
