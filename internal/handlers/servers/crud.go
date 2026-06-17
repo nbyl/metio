@@ -99,7 +99,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 func ListServers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	dbConn, _, err := GetDBConnection(ctx)
+	dbConn, ctrlCfg, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -114,13 +114,15 @@ func ListServers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses := make([]ServerResponse, 0, len(configs))
-	for _, cfg := range configs {
-		outdated := cfg.InfraVersion < programs.CurrentInfraVersion
+	for _, sc := range configs {
+		outdated := sc.InfraVersion < programs.CurrentInfraVersion
+		outdatedMachineAgent := ctrlCfg.MachineAgentImage != sc.MachineAgentImage
 		responses = append(responses, ServerResponse{
-			ID:                  cfg.ID,
-			Config:              serverConfigToJSON(cfg),
-			CurrentInfraVersion: programs.CurrentInfraVersion,
-			Outdated:            outdated,
+			ID:                   sc.ID,
+			Config:               serverConfigToJSON(sc),
+			CurrentInfraVersion:  programs.CurrentInfraVersion,
+			Outdated:             outdated,
+			OutdatedMachineAgent: outdatedMachineAgent,
 		})
 	}
 
@@ -138,7 +140,7 @@ func GetServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbConn, _, err := GetDBConnection(ctx)
+	dbConn, ctrlCfg, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
@@ -157,11 +159,14 @@ func GetServer(w http.ResponseWriter, r *http.Request) {
 		outdated = true
 	}
 
+	outdatedMachineAgent := ctrlCfg.MachineAgentImage != serverConfig.MachineAgentImage
+
 	response := ServerResponse{
-		ID:                  serverID,
-		Config:              serverConfigToJSON(serverConfig),
-		CurrentInfraVersion: programs.CurrentInfraVersion,
-		Outdated:            outdated,
+		ID:                   serverID,
+		Config:               serverConfigToJSON(serverConfig),
+		CurrentInfraVersion:  programs.CurrentInfraVersion,
+		Outdated:             outdated,
+		OutdatedMachineAgent: outdatedMachineAgent,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
