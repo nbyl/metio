@@ -488,6 +488,9 @@ function ServerCard({ server }: ServerCardProps) {
           <span className="flex items-center gap-2">
             <Server className="h-4 w-4" />
             Server: {server.config.name}
+            {server.outdated && (
+              <span className="ml-2 text-xs text-yellow-400 font-normal">Update Available</span>
+            )}
           </span>
           <span className="flex items-center gap-2">
             {currentStatus?.serverState ? (
@@ -602,7 +605,7 @@ function ServerCard({ server }: ServerCardProps) {
             </Button>
           )}
           <Button
-            variant="outline"
+            variant={server.outdated ? "primary" : "outline"}
             disabled={isProvisioning}
             onClick={() => setShowUpdate(true)}
           >
@@ -630,6 +633,8 @@ function ServerCard({ server }: ServerCardProps) {
       <UpdateModal
         open={showUpdate}
         config={server.config}
+        currentInfraVersion={server.currentInfraVersion}
+        outdated={server.outdated}
         onClose={() => setShowUpdate(false)}
         onUpdate={(data) => {
           handleUpdate(data);
