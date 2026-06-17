@@ -48,6 +48,7 @@ export interface ServerResponse {
   status?: StatusResponse;
   currentInfraVersion: number;
   outdated: boolean;
+  outdatedMachineAgent?: boolean;
 }
 
 /**
