@@ -394,6 +394,7 @@ interface ServerCardProps {
     status?: StatusResponse;
     currentInfraVersion: number;
     outdated: boolean;
+    outdatedMachineAgent?: boolean;
   };
 }
 
@@ -490,6 +491,9 @@ function ServerCard({ server }: ServerCardProps) {
             Server: {server.config.name}
             {server.outdated && (
               <span className="ml-2 text-xs text-yellow-400 font-normal">Update Available</span>
+            )}
+            {server.outdatedMachineAgent && (
+              <span className="text-xs text-orange-400 font-normal">Agent: outdated</span>
             )}
           </span>
           <span className="flex items-center gap-2">
