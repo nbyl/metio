@@ -163,6 +163,8 @@ cd web && npm run test
 
 ## Deployment
 
+For a complete guide covering GCP project setup through first server creation, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ```bash
 # Full deployment (build all images + deploy infrastructure)
 make deploy
