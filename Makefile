@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote help
 
 USERNAME := $(shell whoami)
 
@@ -114,8 +114,30 @@ build-controller-image:
 	echo "$${CONTROLLER_IMAGE_TAG}" > build/controller-image.txt ;\
 	echo "Controller image tag saved to build/controller-image.txt"
 
-# Build both Docker images
-build-images: build-machine-agent-image build-controller-image
+# Local controller image build (gcloud-free)
+controller-image:
+	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD) .
+
+# Local machine-agent image build (gcloud-free)
+machine-agent-image:
+	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD) .
+
+# Push images to ghcr.io
+push-images:
+	docker push ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD)
+	docker push ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD)
+
+# Promote image tags (usage: make promote FROM=a1b2c3d4 TO=main)
+promote:
+	@if [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
+		echo "Usage: make promote FROM=<sha> TO=<tag>"; \
+		exit 1; \
+	fi
+	docker buildx imagetools create -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
+	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
+
+# Build both Docker images (local, without gcloud)
+build-images: controller-image machine-agent-image
 	@echo "All Docker images built successfully"
 
 # Deploy infrastructure: apply OpenTofu with pre-built Docker images
@@ -142,13 +164,13 @@ deploy-infrastructure:
 		MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
 	else \
 		echo "Machine agent image tag not found, using default" ;\
-		MACHINE_AGENT_IMAGE_TAG="us-central1-docker.pkg.dev/cloudrun/container/hello" ;\
+		MACHINE_AGENT_IMAGE_TAG="ghcr.io/nbyl/metio/machine-agent:latest" ;\
 	fi ;\
 	if [ -f "build/controller-image.txt" ]; then \
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	else \
 		echo "Controller image tag not found, using default" ;\
-		CONTROLLER_IMAGE_TAG="us-central1-docker.pkg.dev/cloudrun/container/hello" ;\
+		CONTROLLER_IMAGE_TAG="ghcr.io/nbyl/metio/controller:latest" ;\
 	fi ;\
 	echo "Deploying infrastructure only with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
@@ -167,7 +189,7 @@ deploy-machine-agent: build-machine-agent-image
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	else \
 		echo "Controller image tag not found, using default" ;\
-		CONTROLLER_IMAGE_TAG="us-central1-docker.pkg.dev/cloudrun/container/hello" ;\
+		CONTROLLER_IMAGE_TAG="ghcr.io/nbyl/metio/controller:latest" ;\
 	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
@@ -175,7 +197,7 @@ deploy-machine-agent: build-machine-agent-image
 	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Deploy controller only: build controller image and update Cloud Run service
-deploy-controller: build-controller-image
+deploy-controller: controller-image
 	@set -e ;\
 	if [ ! -f "build/controller-image.txt" ]; then \
 		echo "Error: Controller image tag file not found. Run 'make build-controller-image' first." ;\
@@ -211,14 +233,18 @@ help:
 	@echo "Available targets:"
 	@echo "  build                   - Build all binaries"
 	@echo "  <binary>                - Build specific binary (e.g., make controller)"
-	@echo "  build-machine-agent-image - Build machine-agent Docker image (with timestamp)"
-	@echo "  build-controller-image   - Build controller Docker image (with timestamp)"
+	@echo "  controller-image        - Build controller Docker image (local, no gcloud)"
+	@echo "  machine-agent-image     - Build machine-agent Docker image (local, no gcloud)"
+	@echo "  push-images             - Push images to ghcr.io"
+	@echo "  promote                 - Retag image (make promote FROM=<sha> TO=<tag>)"
+	@echo "  build-machine-agent-image - Build machine-agent via gcloud builds (legacy)"
+	@echo "  build-controller-image  - Build controller via gcloud builds (legacy)"
 	@echo "  build-images            - Build both Docker images"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test                    - Run all tests (backend + frontend)"
 	@echo "  test-backend            - Run Go tests with coverage report"
-	@echo "  test-web           - Run frontend Vitest suite"
+	@echo "  test-web                - Run frontend Vitest suite"
 	@echo ""
 	@echo "Development:"
 	@echo "  develop                 - Start backend (air) and frontend (Vite) with hot reload"
@@ -236,17 +262,16 @@ help:
 	@echo "  help                    - Show this help"
 	@echo ""
 	@echo "Features:"
-	@echo "  - Images are built with timestamps (YYYYMMDD-HHMMSS) for unique tags"
+	@echo "  - Images are tagged with git SHA for CI builds and promoted on main merge"
 	@echo "  - VM recreation is automatically triggered when machine-agent image changes"
-	@echo "  - Use cleanup-old-images to prevent registry bloat"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test                     # Run all tests"
 	@echo "  make test-backend             # Run Go tests only"
-	@echo "  make test-web            # Run frontend tests only"
+	@echo "  make test-web                 # Run frontend tests only"
 	@echo "  make develop                  # Start dev servers with hot reload"
 	@echo "  make deploy-full              # Deploy everything with new images"
 	@echo "  make deploy-infrastructure    # Update infrastructure without rebuilding"
 	@echo "  make deploy-machine-agent     # Update only machine-agent (triggers VM recreation)"
 	@echo "  make deploy-controller        # Update only web interface"
-	@echo "  make cleanup-old-images       # Clean old images from registry"
+	@echo "  make promote FROM=a1b2c3d4 TO=main  # Promote image to main tag"

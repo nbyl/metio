@@ -3,7 +3,7 @@ package setup
 import (
 	"context"
 
-	"gitlab.com/nbyl/metio/internal/services"
+	"github.com/nbyl/metio/internal/services"
 )
 
 type ValidationServiceInterface interface {

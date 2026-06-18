@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/pulumi/programs"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/pulumi/programs"
 )
 
 func CreateServer(w http.ResponseWriter, r *http.Request) {

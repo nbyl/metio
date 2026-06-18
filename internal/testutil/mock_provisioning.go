@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/stretchr/testify/mock"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/pulumi/programs"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/pulumi/programs"
 )
 
 // MockProvisioningService implements handlers.ProvisioningServiceInterface for testing.
