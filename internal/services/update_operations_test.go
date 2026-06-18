@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/testutil"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/testutil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

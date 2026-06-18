@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/nbyl/metio/internal/services"
+	"github.com/nbyl/metio/internal/services"
 )
 
 type mockValidationService struct {

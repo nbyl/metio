@@ -69,7 +69,7 @@ DEV_MODE=true MACHINE_AGENT_IMAGE=placeholder air
 
 A development container is configured in `.devcontainer/` for VS Code with:
 - All required tools pre-installed (Go, Node, air, gcloud, tofu, opencode)
-- VS Code extensions: Go, OpenTofu, GitLab Workflow, OpenCode
+- VS Code extensions: Go, OpenTofu, GitHub Pull Requests, OpenCode
 - Docker bind-mount for container builds
 - OpenCode config mount for AI tooling
 
@@ -117,7 +117,7 @@ A development container is configured in `.devcontainer/` for VS Code with:
 | Auth | Google OAuth2 + cookie sessions | No password management, session-based |
 | Orchestration | Pulumi Automation API | Embedded infra-as-code per server |
 | Shared infra | OpenTofu | Declarative shared resource management |
-| CI/CD | GitLab CI + Cloud Build | GitLab hosting, GCP-native image builds |
+| CI/CD | GitHub Actions | GitHub hosting, ghcr.io image registry |
 
 ## Code Organization
 
@@ -419,18 +419,16 @@ refactor: extract status polling into custom hook
 
 ### Pull Request Process
 
-1. **Create a merge request** via GitLab:
+1. **Create a pull request** via GitHub:
    ```bash
-   glab mr create \
-     --source-branch <branch-name> \
-     --target-branch main \
+   gh pr create \
+     --base main \
      --title "<commit-type>: <description>" \
-     --description "Closes <TICKET-ID>\n\n<summary of changes>" \
-     --remove-source-branch
+     --body "Closes <TICKET-ID>\n\n<summary of changes>"
    ```
-2. **Set Linear to "In Review"** after creating the MR
-3. **Enable auto-merge** (`glab mr merge --auto-merge`) or wait for manual merge
-4. **The `remove-source-branch` flag** ensures the branch is deleted on merge
+2. **Set Linear to "In Review"** after creating the PR
+3. **Enable auto-merge** (`gh pr merge --auto --squash`) or wait for manual merge
+4. **Enable delete branch** in the PR to ensure the branch is deleted on merge
 
 ### Before Submitting
 
@@ -450,19 +448,17 @@ refactor: extract status polling into custom hook
 
 ### CI/CD Pipeline
 
-On every push to a branch with an MR targeting `main`, GitLab CI runs:
+On every push and pull request to `main`, GitHub Actions runs (`.github/workflows/ci.yml`):
 
-| Stage | Jobs | Trigger |
-|-------|------|---------|
-| Validate | `web-test`, `backend-test` | Always |
-| Approval | Manual gate | Always |
-| Build | `build-controller`, `build-machine-agent` | After approval |
-| Promote | Copy images to Artifact Registry | After build |
-| Plan/Deploy | OpenTofu plan + apply | Manual |
+| Job | Jobs | Trigger |
+|-----|------|---------|
+| Test | `go test`, `web test`, `lint` | Always |
+| Docker | Build + push to ghcr.io | On `main` merge only |
 
-Local builds use Cloud Build (not Docker locally) to produce images:
+Images are tagged with git SHA. Non-`main` tags are cleaned by ghcr.io retention policy (3 days).
+
+To promote an image for deployment:
 
 ```bash
-make build-controller-image    # Submits to Cloud Build
-make build-machine-agent-image # Same for machine-agent
+make promote FROM=<sha> TO=main
 ```
