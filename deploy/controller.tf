@@ -111,10 +111,6 @@ resource "google_cloud_run_v2_service" "controller" {
         value = var.region
       }
       env {
-        name  = "INSTANCE_NAME"
-        value = google_compute_instance.minecraft-server.name
-      }
-      env {
         name  = "GCP_ZONE"
         value = var.zone
       }
