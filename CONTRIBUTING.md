@@ -379,15 +379,13 @@ Go testing conventions:
 
 ### Branch Naming
 
-Branches are created from Linear tickets:
+Branches are created from GitHub Issues:
 
 ```
-metio-<ticket-number>-<kebab-case-title>
+<issue-number>-<kebab-case-title>
 ```
 
-Example: `metio-98-create-contribution-and-development-guide`
-
-Create branches using the Linear-generated name to maintain traceability.
+Example: `232-add-apache-2-0-license`
 
 ### Commit Messages
 
@@ -426,7 +424,7 @@ refactor: extract status polling into custom hook
      --title "<commit-type>: <description>" \
      --body "Closes <TICKET-ID>\n\n<summary of changes>"
    ```
-2. **Set Linear to "In Review"** after creating the PR
+2. **Move the issue to "In Review"** on the Kanban board after creating the PR
 3. **Enable auto-merge** (`gh pr merge --auto --squash`) or wait for manual merge
 4. **Enable delete branch** in the PR to ensure the branch is deleted on merge
 
@@ -462,3 +460,41 @@ To promote an image for deployment:
 ```bash
 make promote FROM=<sha> TO=main
 ```
+
+## Types of Contributions
+
+### Bug Reports
+
+Submit bug reports via [GitHub Issues](https://github.com/nbyl/metio/issues). Include:
+
+- Steps to reproduce
+- Expected vs actual behavior
+- Environment details (GCP project, region, Go/Node versions)
+- Logs or error messages if available
+
+### Feature Requests
+
+Open a [GitHub Issue](https://github.com/nbyl/metio/issues/new) with the `enhancement` label. Describe the problem you're solving and any potential implementation ideas.
+
+### Documentation Improvements
+
+Documentation fixes and improvements are always welcome. This includes:
+
+- Fixing typos or broken links
+- Clarifying setup steps
+- Adding examples or use cases
+- Translating documentation
+
+### Code Contributions
+
+For code changes, please discuss the approach first via an issue before submitting a PR — especially for architectural changes.
+
+## Code of Conduct
+
+Please note that this project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold its terms. Reports can be sent to [nico@nicolas-byl.eu](mailto:nico@nicolas-byl.eu).
+
+## Getting Help
+
+- **GitHub Issues**: Use for bug reports and feature requests
+- **GitHub Discussions**: For questions, ideas, and community support (coming soon)
+- **Issue search**: Check existing [issues](https://github.com/nbyl/metio/issues) before opening a new one
