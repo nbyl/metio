@@ -1,5 +1,7 @@
 # Metio - Minecraft Server Control Panel
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 A self-hosted Minecraft server management application running on Google Cloud Platform. Start and stop your Minecraft server on-demand through a web interface.
 
 ## Architecture
