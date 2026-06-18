@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/pulumi"
-	"gitlab.com/nbyl/metio/internal/pulumi/programs"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/pulumi"
+	"github.com/nbyl/metio/internal/pulumi/programs"
 )
 
 const (

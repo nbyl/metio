@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+      - run: make verify-backend test-backend
+      - run: make build-web test-web lint-web
+
+  docker:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - run: make controller-image
+      - run: make machine-agent-image
+      - run: make push-images

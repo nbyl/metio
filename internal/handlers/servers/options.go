@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sort"
 
-	"gitlab.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/db"
 )
 
 type MachineTypeOption struct {

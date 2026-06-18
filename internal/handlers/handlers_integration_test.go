@@ -14,11 +14,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gitlab.com/nbyl/metio/internal/config"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/handlers/servers"
-	"gitlab.com/nbyl/metio/internal/services"
-	"gitlab.com/nbyl/metio/internal/testutil"
+	"github.com/nbyl/metio/internal/config"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/handlers/servers"
+	"github.com/nbyl/metio/internal/services"
+	"github.com/nbyl/metio/internal/testutil"
 )
 
 func setupMockDB(mockDB *testutil.MockDB) func() {

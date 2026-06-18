@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/stretchr/testify/mock"
-	"gitlab.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/db"
 )
 
 // MockDB is a shared testify mock implementation of the db.DB interface.

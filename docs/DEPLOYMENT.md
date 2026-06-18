@@ -31,7 +31,6 @@ gcloud services enable \
   run.googleapis.com \
   logging.googleapis.com \
   iam.googleapis.com \
-  cloudbuild.googleapis.com \
   storage.googleapis.com
 ```
 
@@ -51,15 +50,12 @@ gcloud services enable \
 4. Add the authorized redirect URI: `https://<your-controller-domain>/auth/callback`
 5. Note the **Client ID** and **Client Secret** — you will need them later
 
-### Artifact Registry Repository
+### GitHub Container Registry
 
-Create a Docker repository for the controller and machine-agent images:
+Images are published to `ghcr.io/nbyl/metio`. Ensure you are authenticated:
 
 ```bash
-gcloud artifacts repositories create metio \
-    --repository-format=docker \
-    --location=europe-west3 \
-    --immutable-tags
+echo $GITHUB_TOKEN | docker login ghcr.io -u <your-username> --password-stdin
 ```
 
 ## Controller Deployment
@@ -122,11 +118,21 @@ echo -n "your-firebase-api-key" | gcloud secrets versions add development-fireba
 ### Step 4: Build and Deploy the Controller Image
 
 ```bash
-# Build the controller image and push to Artifact Registry
-make build-controller-image
+# Build the controller image
+make controller-image
+
+# Push to ghcr.io
+make push-images
 ```
 
-This submits a Cloud Build job using `cmd/controller/cloudbuild.yaml` and saves the image tag to `build/controller-image.txt`.
+Alternatively, build and push a specific tag:
+
+```bash
+docker buildx build --platform linux/amd64 \
+  -f cmd/controller/Dockerfile \
+  -t ghcr.io/nbyl/metio/controller:<tag> .
+docker push ghcr.io/nbyl/metio/controller:<tag>
+```
 
 Deploy the image to Cloud Run:
 
@@ -262,22 +268,20 @@ Builds both images and applies all OpenTofu infrastructure.
 | OAuth redirects to localhost | `BASE_URL` secret is wrong | Update `development-base_url` secret |
 | "Not authenticated" at login | Email not in `admin_users` | Add your email to `deploy/metio.auto.tfvars` and re-run `tofu apply` |
 | Server stays in "Provisioning" | Pulumi operation failed | Check Cloud Logging for the controller, or check the server's Pulumi stack directly |
-| Cloud Run startup fails | Missing secrets or wrong image | Verify all 4 secrets have current versions, check image exists in Artifact Registry |
+| Cloud Run startup fails | Missing secrets or wrong image | Verify all 4 secrets have current versions, check image exists in ghcr.io |
 | Firestore permission denied | Rules not deployed | Run `tofu apply` to ensure Firestore rules are active |
 | Pulumi state locked | Concurrent operation | Wait for the operation to complete or use `pulumi cancel` manually |
 | "Instance not found" | VM was manually deleted | Destroy and recreate the server from the dashboard |
 | Backup bucket deletion fails | Objects exist in the bucket | Destroy individual servers first (this cleans up their resources) |
 
-### GitLab CI/CD (Optional)
+### GitHub Actions CI/CD (Optional)
 
-Metio includes GitLab CI/CD configuration (`.gitlab-ci.yml`) for automated builds and deployments:
+Metio includes GitHub Actions CI/CD (`.github/workflows/ci.yml`) for automated builds:
 
-1. Set up [Workload Identity Federation](https://docs.gitlab.com/tutorials/set_up_gitlab_google_integration/) between GitLab and GCP
-2. The pipeline runs on every push to the `main` branch
-3. Pipeline stages: validate → test → approve → build → promote → plan → deploy → cleanup
-4. The approval stage adds a manual gate before production deployment
-
-For the OIDC setup, see the guide in `.gitlab/setup/README.md`.
+1. The workflow runs tests (Go + frontend) on every push and PR to `main`
+2. On `main` merges, it builds and pushes Docker images to `ghcr.io/nbyl/metio`
+3. Images are tagged with the git SHA
+4. Use `make promote FROM=<sha> TO=main` to retag images for deployment
 
 ### Architecture Reference
 

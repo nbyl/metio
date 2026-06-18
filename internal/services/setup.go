@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"gitlab.com/nbyl/metio/internal/config"
-	"gitlab.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/config"
+	"github.com/nbyl/metio/internal/db"
 	"google.golang.org/api/googleapi"
 )
 
