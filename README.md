@@ -1,8 +1,56 @@
 # Metio - Minecraft Server Control Panel
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/nbyl/metio/actions/workflows/ci.yml/badge.svg)](https://github.com/nbyl/metio/actions)
 
-A self-hosted Minecraft server management application running on Google Cloud Platform. Start and stop your Minecraft server on-demand through a web interface.
+A self-hosted Minecraft server management platform running on Google Cloud Platform. Start, stop, and manage Minecraft servers on-demand through a web interface — pay only for what you use.
+
+Metio provisions Compute Engine VMs on the fly, so your server runs only when players are online. No more paying for 24/7 idle servers.
+
+## Features
+
+- **On-demand servers** — Start and stop your Minecraft server from a web UI. VMs auto-provision and tear down.
+- **Cost control** — Servers only run when needed. Scheduled shutdowns prevent runaway costs.
+- **One-click setup** — OAuth login, initial setup wizard, and server creation in under 5 minutes.
+- **Whitelist management** — Add/remove players via the UI. Synced to the server automatically.
+- **Player dashboard** — See who's online, server version, uptime, and performance at a glance.
+- **Server profiles** — Configure CPU, memory, region, and Minecraft version per server.
+- **Backup support** — Attach persistent storage for world backups.
+- **Multi-server** — Run multiple independent Minecraft servers from a single deployment.
+
+## Quick Start
+
+### Prerequisites
+
+- A Google Cloud Platform project (with billing enabled)
+- A domain or subdomain pointing to your deployment
+- A Google OAuth 2.0 client ID and secret
+
+### Deploy
+
+```bash
+# Clone the repository
+git clone https://github.com/nbyl/metio
+cd metio
+
+# Deploy the full stack (requires GCP project setup)
+make deploy
+```
+
+Follow the [Deployment Guide](docs/DEPLOYMENT.md) for a complete walkthrough from fresh GCP project to first Minecraft server.
+
+### First Server
+
+Once deployed, visit your Metio instance, complete the setup wizard, and create your first server. Metio will provision a Compute Engine VM, install Minecraft, and make it available — usually within 2-3 minutes.
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Deployment Guide](docs/DEPLOYMENT.md) | Full GCP project setup through production deployment |
+| [Contributing](CONTRIBUTING.md) | Development setup, coding standards, and PR process |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community guidelines and reporting |
+| [Security Policy](SECURITY.md) | Reporting vulnerabilities and supported versions |
 
 ## Architecture
 
@@ -22,9 +70,9 @@ A self-hosted Minecraft server management application running on Google Cloud Pl
 ```
 
 - **Browser**: React SPA served by Cloud Run
-- **Controller**: Go backend handling API requests and OAuth
-- **Firestore**: Stores server state, player counts, uptime
-- **Machine Agent**: Runs on VM, reports Minecraft status to Firestore
+- **Controller**: Go backend handling API requests, OAuth, and Pulumi orchestration
+- **Firestore**: Stores server state, player counts, configuration
+- **Machine Agent**: Runs on each VM, reports Minecraft status to Firestore
 - **Pub/Sub**: Notifies controller of VM lifecycle events
 
 ## Tech Stack
@@ -37,12 +85,16 @@ A self-hosted Minecraft server management application running on Google Cloud Pl
 ### Backend
 - Go 1.25, Gorilla Mux, Viper
 - Google Cloud client libraries
+- Pulumi Automation API for infrastructure orchestration
 
 ### Infrastructure
 - GCP: Cloud Run, Compute Engine, Firestore, Pub/Sub
 - CI/CD: GitHub Actions, OpenTofu
+- Container registry: ghcr.io
 
-## Prerequisites
+## Development Setup
+
+### Prerequisites
 
 - Go 1.25+
 - Node.js 20+ (see `.nvmrc`)
@@ -50,13 +102,11 @@ A self-hosted Minecraft server management application running on Google Cloud Pl
 - Docker (for image builds)
 - OpenTofu (for infrastructure deployment)
 
-## Development Setup
-
 ### Initial Setup
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/nbyl/metio
    cd metio
    ```
 
@@ -108,7 +158,7 @@ DEV_MODE=true air
 
 This serves the pre-built frontend from `static/dist/`. Run `cd web && npm run build` first.
 
-## Environment Variables
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -142,9 +192,6 @@ make push-images
 
 # Promote image tag (retag for deployment)
 make promote FROM=a1b2c3d4 TO=main
-
-# Legacy: build via gcloud builds
-make build-images
 ```
 
 ## Testing
@@ -160,9 +207,6 @@ cd web && npm run test:run
 # Run frontend tests with coverage
 cd web && npm run test:coverage
 # Coverage report: web/coverage/
-
-# Run frontend tests in watch mode
-cd web && npm run test
 ```
 
 ## Deployment
@@ -183,77 +227,17 @@ make deploy-machine-agent
 make deploy-infrastructure
 ```
 
-## Infrastructure Setup
+## Contributing
 
-### Initial GCP Setup
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
-1. Create a GCS bucket for OpenTofu state:
-   ```bash
-   gsutil mb -l <region> gs://<your-project>-tofu-state
-   ```
+- Development setup and workflow
+- Coding standards and commit conventions
+- Pull request process
+- Testing guidelines
 
-2. Create Artifact Registry repository:
-   ```bash
-   gcloud artifacts repositories create metio \
-       --repository-format=docker \
-       --location=<region> \
-       --immutable-tags
-   ```
+This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold its terms.
 
-3. Initialize and apply infrastructure:
-   ```bash
-   cd deploy
-   tofu init
-   tofu apply
-   ```
+## License
 
-### CI/CD
-
-CI is handled by GitHub Actions (`.github/workflows/ci.yml`):
-
-- Runs tests (Go + frontend) on every push and pull request to `main`
-- On `main` merges: builds and pushes Docker images to `ghcr.io/nbyl/metio`
-- Images are tagged with the git SHA
-
-### Image Cleanup Policy
-
-GitHub Container Registry automatically deletes non-main branch images older than 3 days. Configure retention in repository **Settings → Packages → Package retention**:
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| CORS errors in development | Ensure Vite dev server is running (`npm run dev`) and proxying to backend |
-| "Not authenticated" errors | Check `ALLOWED_USERS` includes your email address |
-| Firebase/OAuth not working | Verify `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are correct |
-| Frontend changes not showing | Run `cd web && npm run build` or use the Vite dev server |
-| VM not starting | Check GCP quotas and Compute Engine API is enabled |
-
-## Project Structure
-
-```
-metio/
-├── cmd/
-│   ├── controller/      # Web server (Cloud Run)
-│   └── machine-agent/   # VM status reporter
-├── web/            # React SPA (Vite)
-│   ├── src/
-│   │   ├── components/  # React components
-│   │   ├── hooks/       # Custom hooks (React Query)
-│   │   └── types/       # TypeScript types
-│   └── package.json
-├── internal/
-│   ├── handlers/        # HTTP handlers
-│   ├── db/              # Firestore client
-│   ├── services/        # Business logic
-│   ├── config/          # Configuration
-│   ├── tracing/         # OpenTelemetry
-│   └── testutil/        # Test helpers
-├── deploy/               # OpenTofu infrastructure
-├── static/dist/         # Built frontend (embedded in binary)
-└── Makefile
-```
-
-## Links
-
-- [Minecraft Server on GCP Guide](https://cloud.google.com/blog/products/management-tools/brick-by-brick-learn-gcp-by-setting-up-a-minecraft-server)
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full license text.
