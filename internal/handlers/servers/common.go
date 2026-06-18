@@ -8,8 +8,8 @@ import (
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/pulumi/programs"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/pulumi/programs"
 )
 
 type ProvisioningServiceInterface interface {

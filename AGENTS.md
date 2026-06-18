@@ -72,4 +72,4 @@
 - **Branch Naming:** Use the generated branch name from linear.
 - **Testing:** Before committing, deploy the full system at least once using `make deploy`. Check the controller website and ssh into the machine using `gcloud compute ssh --zone "<zone>" <instance-name> --project "<project-id>"`.
 - **Commit Messages:** Follow the Conventional Commits specification. (e.g., `feat: add user profile page`)
-- **Pull Requests:** Once the ticket is ready, push the code to the gitlab repository and create a merge request for it. When done, set the linear issue to "in review".
+- **Pull Requests:** Once the ticket is ready, push the code to the GitHub repository and create a pull request. When done, set the linear issue to "in review".

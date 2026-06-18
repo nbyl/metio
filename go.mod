@@ -1,4 +1,4 @@
-module gitlab.com/nbyl/metio
+module github.com/nbyl/metio
 
 go 1.25.8
 

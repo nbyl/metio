@@ -38,7 +38,7 @@ A self-hosted Minecraft server management application running on Google Cloud Pl
 
 ### Infrastructure
 - GCP: Cloud Run, Compute Engine, Firestore, Pub/Sub
-- CI/CD: GitLab CI, OpenTofu, Cloud Build
+- CI/CD: GitHub Actions, OpenTofu
 
 ## Prerequisites
 
@@ -133,14 +133,16 @@ make
 make controller
 make machine-agent
 
-# Build Docker images
+# Build Docker images (local, pushes to ghcr.io)
+make controller-image
+make machine-agent-image
+make push-images
+
+# Promote image tag (retag for deployment)
+make promote FROM=a1b2c3d4 TO=main
+
+# Legacy: build via gcloud builds
 make build-images
-
-# Build only controller image
-make build-controller-image
-
-# Build only machine-agent image
-make build-machine-agent-image
 ```
 
 ## Testing
@@ -203,28 +205,17 @@ make deploy-infrastructure
    tofu apply
    ```
 
-### GitLab CI/CD Setup
+### CI/CD
 
-Follow the [GitLab Google Cloud integration tutorial](https://docs.gitlab.com/tutorials/set_up_gitlab_google_integration/) to configure CI/CD with Workload Identity Federation.
+CI is handled by GitHub Actions (`.github/workflows/ci.yml`):
+
+- Runs tests (Go + frontend) on every push and pull request to `main`
+- On `main` merges: builds and pushes Docker images to `ghcr.io/nbyl/metio`
+- Images are tagged with the git SHA
 
 ### Image Cleanup Policy
 
-GitLab automatically deletes non-main branch images older than 3 days to prevent registry bloat.
-
-**Configuration:**
-1. Go to **Settings → Repository → Registry** in GitLab
-2. Under **Cleanup policies**, click **Add cleanup policy**
-3. Configure:
-   - **Name:** `Delete old feature branch images`
-   - **Timeline:** `3 days`
-   - **Keep images from:** `main` branch
-   - **Regex pattern:** `.*` (match all)
-4. Click **Save changes**
-
-The policy runs daily and automatically removes images that:
-- Are older than 3 days
-- Are not from the `main` branch
-- Match the specified pattern
+GitHub Container Registry automatically deletes non-main branch images older than 3 days. Configure retention in repository **Settings → Packages → Package retention**:
 
 ## Troubleshooting
 

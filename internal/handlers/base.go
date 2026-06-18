@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"gitlab.com/nbyl/metio/internal/config"
-	"gitlab.com/nbyl/metio/internal/db"
-	"gitlab.com/nbyl/metio/internal/handlers/servers"
-	"gitlab.com/nbyl/metio/internal/handlers/setup"
-	"gitlab.com/nbyl/metio/internal/services"
-	"gitlab.com/nbyl/metio/static"
+	"github.com/nbyl/metio/internal/config"
+	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/handlers/servers"
+	"github.com/nbyl/metio/internal/handlers/setup"
+	"github.com/nbyl/metio/internal/services"
+	"github.com/nbyl/metio/static"
 )
 
 var provisioningService servers.ProvisioningServiceInterface
