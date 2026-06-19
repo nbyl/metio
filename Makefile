@@ -137,7 +137,7 @@ promote:
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
 
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
-DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio/metio
+DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
 	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:latest
