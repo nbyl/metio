@@ -33,9 +33,26 @@ jobs:
       - run: make machine-agent-image
       - run: make push-images
 
-  promote-images:
+  release:
     if: github.ref == 'refs/heads/main'
     needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.semrel.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: go-semantic-release/action@v1
+        id: semrel
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  promote-images:
+    if: github.ref == 'refs/heads/main'
+    needs: release
     environment: main
     runs-on: ubuntu-latest
     permissions:
@@ -56,5 +73,12 @@ jobs:
           echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker pull ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7}
           docker pull ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7}
-      - name: Tag and push to GCP Artifact Registry
-        run: make promote-distribution SHA=${GITHUB_SHA::7}
+      - name: Promote to GCP Artifact Registry
+        run: make promote-distribution SHA=${GITHUB_SHA::7} VERSION=${{ needs.release.outputs.version }}
+      - name: Tag ghcr.io images with version
+        if: needs.release.outputs.version != ''
+        run: |
+          docker tag ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
+          docker push ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
+          docker push ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
