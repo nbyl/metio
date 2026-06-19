@@ -140,13 +140,15 @@ promote:
 DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
 	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
-	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:latest
 	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(SHA)
-	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:latest
 	docker push $(DISTRO_REGISTRY)/controller:$(SHA)
-	docker push $(DISTRO_REGISTRY)/controller:latest
 	docker push $(DISTRO_REGISTRY)/machine-agent:$(SHA)
-	docker push $(DISTRO_REGISTRY)/machine-agent:latest
+	if [ -n "$(VERSION)" ]; then \
+		docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker push $(DISTRO_REGISTRY)/controller:$(VERSION); \
+		docker push $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+	fi
 
 # Build both Docker images (local, without gcloud)
 build-images: controller-image machine-agent-image
