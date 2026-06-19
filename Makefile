@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote promote-distribution help
 
 USERNAME := $(shell whoami)
 
@@ -135,6 +135,18 @@ promote:
 	fi
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
+
+# Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
+DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio/metio
+promote-distribution:
+	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
+	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:latest
+	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:latest
+	docker push $(DISTRO_REGISTRY)/controller:$(SHA)
+	docker push $(DISTRO_REGISTRY)/controller:latest
+	docker push $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker push $(DISTRO_REGISTRY)/machine-agent:latest
 
 # Build both Docker images (local, without gcloud)
 build-images: controller-image machine-agent-image
