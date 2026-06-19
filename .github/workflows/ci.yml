@@ -32,3 +32,29 @@ jobs:
       - run: make controller-image
       - run: make machine-agent-image
       - run: make push-images
+
+  promote-images:
+    if: github.ref == 'refs/heads/main'
+    needs: docker
+    environment: main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Configure Docker for GCP Artifact Registry
+        run: gcloud auth configure-docker europe-docker.pkg.dev
+      - name: Pull from ghcr.io
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker pull ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7}
+          docker pull ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7}
+      - name: Tag and push to GCP Artifact Registry
+        run: make promote-distribution SHA=${GITHUB_SHA::7}
