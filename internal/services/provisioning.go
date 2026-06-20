@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
@@ -45,79 +44,89 @@ type ProvisioningService struct {
 	db                db.DB
 	backupCoord       *BackupCoordinator
 	controllerVersion string
-	operations        map[string]context.CancelFunc
-	mu                sync.RWMutex
-	operationTimeout  time.Duration
+	executor          OperationExecutor
 	retryAttempts     int
 	retryDelay        time.Duration
 }
 
-func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB, controllerVersion string) *ProvisioningService {
+func (s *ProvisioningService) OperationTimeout() time.Duration {
+	return s.executor.OperationTimeout()
+}
+
+func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB, controllerVersion string, executor OperationExecutor) *ProvisioningService {
 	return &ProvisioningService{
 		workspaceManager:  workspaceManager,
 		db:                dbConn,
 		backupCoord:       NewBackupCoordinator(dbConn),
 		controllerVersion: controllerVersion,
-		operations:        make(map[string]context.CancelFunc),
-		operationTimeout:  30 * time.Minute,
+		executor:          executor,
 		retryAttempts:     3,
 		retryDelay:        5 * time.Second,
 	}
 }
 
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	return s.queueOperation(ctx, serverID, db.ProvisioningOperationCreate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
-		status.Steps = []db.ProvisioningStep{
-			{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
-			{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure with Pulumi...", Timestamp: time.Now()},
-		}
-		s.updateStatus(opCtx, serverID, status)
-
-		stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
-		if err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
-		}
-
-		if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
-		}
-
-		s.completeStep(opCtx, status, serverID, stepUpsertStack)
-
-		s.updateStep(opCtx, status, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
-		result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
-			return s.workspaceManager.UpStack(opCtx, stack)
-		})
-		if err != nil {
-			return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
-		}
-
-		s.completeStep(opCtx, status, serverID, stepDeployInfrastructure)
-
-		// Stamp the server config with the current infrastructure and controller versions.
-		if err := s.stampServerConfig(opCtx, serverID); err != nil {
-			return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
-		}
-
-		outputs := make(map[string]string)
-		for key, value := range result.Outputs {
-			if str, ok := value.Value.(string); ok {
-				outputs[key] = str
-			}
-		}
-
-		status.Outputs = outputs
-		status.State = db.ProvisioningStateCompleted
-		s.updateStatus(opCtx, serverID, status)
-
-		return nil
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationCreate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		return s.runCreate(opCtx, status, serverID, config)
 	})
 }
 
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
-	return s.queueOperation(ctx, serverID, db.ProvisioningOperationUpdate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationUpdate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		return s.runUpdate(opCtx, status, serverID, config, updateType)
 	})
+}
+
+func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationDestroy, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		return s.runDestroy(opCtx, status, serverID)
+	})
+}
+
+func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	status.Steps = []db.ProvisioningStep{
+		{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
+		{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure with Pulumi...", Timestamp: time.Now()},
+	}
+	s.updateStatus(opCtx, serverID, status)
+
+	stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+	}
+
+	if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
+		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+	}
+
+	s.completeStep(opCtx, status, serverID, stepUpsertStack)
+
+	s.updateStep(opCtx, status, serverID, stepDeployInfrastructure, "Deploying infrastructure with Pulumi...")
+	result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
+		return s.workspaceManager.UpStack(opCtx, stack)
+	})
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
+	}
+
+	s.completeStep(opCtx, status, serverID, stepDeployInfrastructure)
+
+	if err := s.stampServerConfig(opCtx, serverID); err != nil {
+		return s.handleError(status, opCtx, serverID, stepDeployInfrastructure, err)
+	}
+
+	outputs := make(map[string]string)
+	for key, value := range result.Outputs {
+		if str, ok := value.Value.(string); ok {
+			outputs[key] = str
+		}
+	}
+
+	status.Outputs = outputs
+	status.State = db.ProvisioningStateCompleted
+	s.updateStatus(opCtx, serverID, status)
+
+	return nil
 }
 
 func (s *ProvisioningService) runUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig, updateType int) error {
@@ -150,7 +159,6 @@ func (s *ProvisioningService) runResizeUpdate(opCtx context.Context, status *db.
 	s.completeStep(opCtx, status, serverID, stepStopInstance)
 
 	if err := s.runPulumiUpdate(opCtx, status, serverID, config); err != nil {
-		// If pulumi fails after stopping, attempt to start the VM back.
 		if startErr := StartInstance(opCtx, config.GCPProject, config.Zone, config.Name); startErr != nil {
 			log.Printf("Failed to restart instance %s after update failure: %v", serverID, startErr)
 		}
@@ -226,7 +234,6 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 
 	s.completeStep(opCtx, status, serverID, stepUpdateInfrastructure)
 
-	// Stamp the server config with the current infrastructure and controller versions.
 	if err := s.stampServerConfig(opCtx, serverID); err != nil {
 		return s.handleError(status, opCtx, serverID, stepUpdateInfrastructure, err)
 	}
@@ -245,8 +252,60 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 	return nil
 }
 
-// RevertServerConfig replaces the server config with a previously saved snapshot.
-// This is called by handlers when an update operation fails.
+func (s *ProvisioningService) runDestroy(opCtx context.Context, status *db.ProvisioningStatus, serverID string) error {
+	steps := []db.ProvisioningStep{
+		{
+			Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now(),
+		},
+	}
+	status.Steps = steps
+	s.updateStatus(opCtx, serverID, status)
+
+	s.updateStep(opCtx, status, serverID, stepDestroyStack, "Destroying Pulumi stack...")
+	err := s.executeWithRetry(opCtx, func() error {
+		return s.workspaceManager.DestroyStack(opCtx, serverID)
+	})
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepDestroyStack, err)
+	}
+
+	s.completeStep(opCtx, status, serverID, stepDestroyStack)
+
+	status.State = db.ProvisioningStateCompleted
+	s.updateStatus(opCtx, serverID, status)
+
+	if err := s.db.DeleteServerConfig(opCtx, serverID); err != nil {
+		log.Printf("Failed to delete server config for %s: %v", serverID, err)
+	}
+
+	return nil
+}
+
+// ExecuteOperation runs a provisioning operation inline (bypassing the executor).
+// Used by the Cloud Tasks task handler to process tasks in the request context.
+func (s *ProvisioningService) ExecuteOperation(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
+	status, err := s.db.GetProvisioningStatus(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get provisioning status: %w", err)
+	}
+	if status == nil {
+		return fmt.Errorf("no provisioning status found for server %s", serverID)
+	}
+
+	log.Printf("[%s] Executing operation %s (updateType=%d)", serverID, status.Operation.String(), updateType)
+
+	switch status.Operation {
+	case db.ProvisioningOperationCreate:
+		return s.runCreate(ctx, status, serverID, config)
+	case db.ProvisioningOperationUpdate:
+		return s.runUpdate(ctx, status, serverID, config, updateType)
+	case db.ProvisioningOperationDestroy:
+		return s.runDestroy(ctx, status, serverID)
+	default:
+		return fmt.Errorf("unknown operation type: %v", status.Operation)
+	}
+}
+
 func (s *ProvisioningService) RevertServerConfig(ctx context.Context, serverID string) error {
 	snapshot, err := s.db.GetConfigSnapshot(ctx, serverID)
 	if err != nil {
@@ -261,103 +320,8 @@ func (s *ProvisioningService) RevertServerConfig(ctx context.Context, serverID s
 	return nil
 }
 
-func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
-	return s.queueOperation(ctx, serverID, db.ProvisioningOperationDestroy, func(opCtx context.Context, status *db.ProvisioningStatus) error {
-		steps := []db.ProvisioningStep{
-			{
-				Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now(),
-			},
-		}
-		status.Steps = steps
-		s.updateStatus(opCtx, serverID, status)
-
-		s.updateStep(opCtx, status, serverID, stepDestroyStack, "Destroying Pulumi stack...")
-		err := s.executeWithRetry(opCtx, func() error {
-			return s.workspaceManager.DestroyStack(opCtx, serverID)
-		})
-		if err != nil {
-			return s.handleError(status, opCtx, serverID, stepDestroyStack, err)
-		}
-
-		s.completeStep(opCtx, status, serverID, stepDestroyStack)
-
-		status.State = db.ProvisioningStateCompleted
-		s.updateStatus(opCtx, serverID, status)
-
-		if err := s.db.DeleteServerConfig(opCtx, serverID); err != nil {
-			log.Printf("Failed to delete server config for %s: %v", serverID, err)
-		}
-
-		return nil
-	})
-}
-
-func (s *ProvisioningService) queueOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, fn func(context.Context, *db.ProvisioningStatus) error) error {
-	s.mu.Lock()
-
-	select {
-	case <-ctx.Done():
-		s.mu.Unlock()
-		return ctx.Err()
-	default:
-	}
-
-	if _, exists := s.operations[serverID]; exists {
-		s.mu.Unlock()
-		return fmt.Errorf(errMsgOperationInProgress, serverID)
-	}
-
-	// Use context.Background() so the operation survives HTTP request cancellation.
-	// The operation has its own timeout independent of the caller's context.
-	opCtx, cancel := context.WithTimeout(context.Background(), s.operationTimeout)
-	s.operations[serverID] = cancel
-	s.mu.Unlock()
-
-	go func() {
-		defer func() {
-			s.mu.Lock()
-			delete(s.operations, serverID)
-			cancel()
-			s.mu.Unlock()
-		}()
-
-		now := time.Now()
-		status := &db.ProvisioningStatus{
-			ID:          fmt.Sprintf("%s-%d", serverID, now.Unix()),
-			Operation:   opType,
-			State:       db.ProvisioningStateInProgress,
-			StartedAt:   now,
-			CurrentStep: "initializing",
-			Steps:       []db.ProvisioningStep{},
-		}
-
-		if err := fn(opCtx, status); err != nil {
-			if opCtx.Err() == context.Canceled {
-				status.State = db.ProvisioningStateFailed
-			} else {
-				status.State = db.ProvisioningStateFailed
-				status.Error = err.Error()
-			}
-			s.updateStatus(opCtx, serverID, status)
-		}
-	}()
-
-	return nil
-}
-
 func (s *ProvisioningService) CancelOperation(ctx context.Context, serverID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cancel, exists := s.operations[serverID]
-	if !exists {
-		return fmt.Errorf(errMsgNoOperationInProgress, serverID)
-	}
-
-	cancel()
-	delete(s.operations, serverID)
-
-	return nil
+	return s.executor.CancelOperation(ctx, serverID)
 }
 
 func (s *ProvisioningService) GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error) {
@@ -426,8 +390,6 @@ func (s *ProvisioningService) executeUpWithRetry(ctx context.Context, fn func() 
 	return auto.UpResult{}, fmt.Errorf(errMsgRetryExhausted, s.retryAttempts, lastErr)
 }
 
-// stampServerConfig updates the given server's config with the current infrastructure version
-// and the controller version that deployed it.
 func (s *ProvisioningService) stampServerConfig(ctx context.Context, serverID string) error {
 	config, err := s.db.GetServerConfig(ctx, serverID)
 	if err != nil {
