@@ -39,6 +39,19 @@ func (e *cloudTasksExecutor) StartOperation(ctx context.Context, serverID string
 		return fmt.Errorf(errMsgOperationInProgress, serverID)
 	}
 
+	now := time.Now()
+	status := &db.ProvisioningStatus{
+		ID:        fmt.Sprintf("%s-%d", serverID, now.Unix()),
+		Operation: opType,
+		State:     db.ProvisioningStateInProgress,
+		StartedAt: now,
+		CurrentStep: "enqueuing",
+		Steps:    []db.ProvisioningStep{},
+	}
+	if err := e.db.UpdateProvisioningStatus(ctx, serverID, status); err != nil {
+		return fmt.Errorf("failed to save provisioning status: %w", err)
+	}
+
 	task := &cloudtaskspb.CreateTaskRequest{
 		Parent: e.queuePath,
 		Task: &cloudtaskspb.Task{

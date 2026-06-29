@@ -1,10 +1,12 @@
 package programs
 
 import (
-	"os"
-	"path/filepath"
+	_ "embed"
 	"strings"
 )
+
+//go:embed server_cloud_config.yml
+var cloudConfigTemplate string
 
 type TemplateConfig struct {
 	Region            string
@@ -18,28 +20,6 @@ type TemplateConfig struct {
 }
 
 func RenderCloudConfig(config *TemplateConfig) (string, error) {
-	// Try to read from the shared templates directory
-	paths := []string{
-		filepath.Join("deploy", "templates", "server_cloud_config.tftpl"),
-		filepath.Join("..", "templates", "server_cloud_config.tftpl"),
-		filepath.Join("templates", "server_cloud_config.tftpl"),
-		"server_cloud_config.tftpl",
-	}
-
-	var templateContent string
-	for _, p := range paths {
-		content, err := os.ReadFile(p)
-		if err == nil {
-			templateContent = string(content)
-			break
-		}
-	}
-
-	if templateContent == "" {
-		// Fallback: return empty string - should not happen in production
-		return "", nil
-	}
-
 	replacements := map[string]string{
 		"${region}":            config.Region,
 		"${gcpProject}":        config.GCPProject,
@@ -51,7 +31,7 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 		"${rconPassword}":      config.RCONPassword,
 	}
 
-	result := templateContent
+	result := cloudConfigTemplate
 	for k, v := range replacements {
 		result = strings.ReplaceAll(result, k, v)
 	}

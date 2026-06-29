@@ -215,7 +215,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			Metadata: pulumi.StringMap{
 				"user-data": pulumi.String(userData),
 			},
-		}, pulumi.ReplaceOnChanges([]string{"labels.cloud_config_hash"}), pulumi.DependsOn([]pulumi.Resource{firewall}))
+		}, pulumi.ReplaceOnChanges([]string{"labels.cloud_config_hash"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{firewall}))
 		if err != nil {
 			return fmt.Errorf("failed to create instance: %w", err)
 		}

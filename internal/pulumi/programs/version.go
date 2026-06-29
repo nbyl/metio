@@ -4,4 +4,4 @@ package programs
 // embedded in this controller binary. Bump this integer whenever the
 // program code changes in a way that should trigger a re-deploy on
 // existing servers. Pulumi's diff engine handles the actual migration.
-const CurrentInfraVersion = 1
+const CurrentInfraVersion = 2

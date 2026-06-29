@@ -84,6 +84,10 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 }
 
 func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	if err := s.workspaceManager.CancelStack(opCtx, serverID); err != nil {
+		log.Printf("[%s] Failed to cancel stale stack (non-fatal): %v", serverID, err)
+	}
+
 	status.Steps = []db.ProvisioningStep{
 		{Name: stepUpsertStack, Status: db.ProvisioningStatePending, Message: "Preparing Pulumi stack...", Timestamp: time.Now()},
 		{Name: stepDeployInfrastructure, Status: db.ProvisioningStatePending, Message: "Deploying infrastructure with Pulumi...", Timestamp: time.Now()},
@@ -213,6 +217,10 @@ func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *d
 }
 
 func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
+	if err := s.workspaceManager.CancelStack(opCtx, serverID); err != nil {
+		log.Printf("[%s] Failed to cancel stale stack (non-fatal): %v", serverID, err)
+	}
+
 	stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
 	if err != nil {
 		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
@@ -223,6 +231,12 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 	}
 
 	s.completeStep(opCtx, status, serverID, stepUpsertStack)
+
+	s.updateStep(opCtx, status, serverID, stepRefreshStack, "Refreshing stack state...")
+	if err := s.workspaceManager.RefreshStack(opCtx, serverID); err != nil {
+		log.Printf("[%s] Failed to refresh stack (non-fatal): %v", serverID, err)
+	}
+	s.completeStep(opCtx, status, serverID, stepRefreshStack)
 
 	s.updateStep(opCtx, status, serverID, stepUpdateInfrastructure, "Updating infrastructure...")
 	result, err := s.executeUpWithRetry(opCtx, func() (auto.UpResult, error) {
@@ -253,6 +267,10 @@ func (s *ProvisioningService) runPulumiUpdate(opCtx context.Context, status *db.
 }
 
 func (s *ProvisioningService) runDestroy(opCtx context.Context, status *db.ProvisioningStatus, serverID string) error {
+	if err := s.workspaceManager.CancelStack(opCtx, serverID); err != nil {
+		log.Printf("[%s] Failed to cancel stale stack (non-fatal): %v", serverID, err)
+	}
+
 	steps := []db.ProvisioningStep{
 		{
 			Name: stepDestroyStack, Status: db.ProvisioningStatePending, Message: "Destroying Pulumi stack...", Timestamp: time.Now(),
