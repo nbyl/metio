@@ -3,6 +3,7 @@ package pulumi
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
@@ -67,6 +68,29 @@ func (wm *WorkspaceManager) SelectStack(ctx context.Context, name string) (*auto
 	return &stack, nil
 }
 
+func (wm *WorkspaceManager) CancelStack(ctx context.Context, name string) error {
+	if name == "" {
+		return fmt.Errorf("stack name is required")
+	}
+
+	stack, err := auto.SelectStackInlineSource(ctx, name, "metio", func(_ *pulumi.Context) error {
+		return nil
+	})
+	if err != nil {
+		if IsSelectStack404Error(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to select stack for cancel: %w", err)
+	}
+
+	err = stack.Cancel(ctx)
+	if err != nil {
+		log.Printf("[%s] Cancel returned (non-fatal): %v", name, err)
+	}
+
+	return nil
+}
+
 func (wm *WorkspaceManager) DestroyStack(ctx context.Context, name string) error {
 	if name == "" {
 		return fmt.Errorf("stack name is required")
@@ -95,8 +119,12 @@ func (wm *WorkspaceManager) RefreshStack(ctx context.Context, name string) error
 		return fmt.Errorf("stack name is required")
 	}
 
-	stack, err := auto.SelectStackInlineSource(ctx, name, "metio", nil)
+	dummy := func(_ *pulumi.Context) error { return nil }
+	stack, err := auto.SelectStackInlineSource(ctx, name, "metio", dummy)
 	if err != nil {
+		if auto.IsSelectStack404Error(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to select stack: %w", err)
 	}
 

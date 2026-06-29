@@ -31,6 +31,16 @@ func (m *MockWorkspaceManager) DestroyStack(ctx context.Context, name string) er
 	return args.Error(0)
 }
 
+func (m *MockWorkspaceManager) CancelStack(ctx context.Context, name string) error {
+	args := m.Called(ctx, name)
+	return args.Error(0)
+}
+
+func (m *MockWorkspaceManager) RefreshStack(ctx context.Context, name string) error {
+	args := m.Called(ctx, name)
+	return args.Error(0)
+}
+
 func (m *MockWorkspaceManager) SetConfig(ctx context.Context, stack *auto.Stack, key, value string, secret bool) error {
 	args := m.Called(ctx, stack, key, value, secret)
 	return args.Error(0)

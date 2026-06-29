@@ -350,6 +350,7 @@ func TestCreateServer_Success(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
 
 	stack := &auto.Stack{}
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
 	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
 	mockWM.On("ProjectID").Return("")
@@ -371,6 +372,7 @@ func TestCreateServer_Success(t *testing.T) {
 func TestCreateServer_UpsertError(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
 
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(nil, errors.New("upsert failed"))
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -382,6 +384,9 @@ func TestCreateServer_UpsertError(t *testing.T) {
 
 func TestUpdateServer_Resize(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("RefreshStack", mock.Anything, "srv1").Return(nil)
 
 	oldStop := stopInstanceFn
 	oldStart := startInstanceFn
@@ -418,6 +423,9 @@ func TestUpdateServer_Resize(t *testing.T) {
 
 func TestUpdateServer_Recreate(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("RefreshStack", mock.Anything, "srv1").Return(nil)
 
 	stack := &auto.Stack{}
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
@@ -544,6 +552,8 @@ func TestStampServerConfig_UpdateError(t *testing.T) {
 func TestCreateServer_SetConfigError(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
 
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+
 	stack := &auto.Stack{}
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
 	mockWM.On("ProjectID").Return("")
@@ -558,6 +568,8 @@ func TestCreateServer_SetConfigError(t *testing.T) {
 
 func TestCreateServer_UpError(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 
 	stack := &auto.Stack{}
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
@@ -574,6 +586,9 @@ func TestCreateServer_UpError(t *testing.T) {
 
 func TestUpdateServer_Success(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("RefreshStack", mock.Anything, "srv1").Return(nil)
 
 	stack := &auto.Stack{}
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
@@ -595,6 +610,7 @@ func TestUpdateServer_Success(t *testing.T) {
 func TestDestroyServer_Success(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
 
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
@@ -609,6 +625,7 @@ func TestDestroyServer_Success(t *testing.T) {
 func TestDestroyServer_Error(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
 
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(errors.New("destroy failed"))
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -748,6 +765,8 @@ func TestUpdateStatus_DBError(t *testing.T) {
 
 func TestCreateServer_WithOutputs(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 
 	stack := &auto.Stack{}
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)

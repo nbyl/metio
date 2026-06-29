@@ -1,3 +1,20 @@
+resource "google_cloud_tasks_queue" "provisioning" {
+  name     = "${var.environment}-metio-provisioning"
+  location = var.region
+
+  rate_limits {
+    max_concurrent_dispatches = 10
+    max_dispatches_per_second = 10
+  }
+
+  retry_config {
+    max_attempts       = 3
+    min_backoff        = "120s"
+    max_backoff        = "600s"
+    max_doublings      = 4
+  }
+}
+
 resource "google_project_iam_custom_role" "controller-role" {
   role_id = "${replace(var.environment, "-", "_")}_controller"
   title   = "Controller for ${var.environment}"
@@ -5,19 +22,64 @@ resource "google_project_iam_custom_role" "controller-role" {
     "artifactregistry.repositories.deleteArtifacts",
     "artifactregistry.repositories.downloadArtifacts",
     "artifactregistry.repositories.uploadArtifacts",
+    "cloudtasks.tasks.create",
+    "cloudtasks.tasks.get",
+    "compute.addresses.create",
+    "compute.addresses.delete",
+    "compute.addresses.get",
+    "compute.addresses.setLabels",
+    "compute.addresses.use",
+    "compute.disks.create",
+    "compute.disks.delete",
+    "compute.disks.get",
+    "compute.disks.resize",
+    "compute.disks.setLabels",
+    "compute.disks.use",
+    "compute.firewalls.create",
+    "compute.firewalls.delete",
+    "compute.firewalls.get",
+    "compute.instances.addResourcePolicies",
+    "compute.instances.attachDisk",
+    "compute.instances.create",
+    "compute.instances.delete",
     "compute.instances.get",
+    "compute.instances.removeResourcePolicies",
+    "compute.instances.setLabels",
+    "compute.instances.setMachineType",
+    "compute.instances.setMetadata",
+    "compute.instances.setScheduling",
+    "compute.instances.setServiceAccount",
+    "compute.instances.setTags",
     "compute.instances.start",
     "compute.instances.stop",
+    "compute.instances.update",
+    "compute.instances.use",
+    "compute.networks.get",
+    "compute.networks.updatePolicy",
+    "compute.resourcePolicies.create",
+    "compute.resourcePolicies.delete",
+    "compute.resourcePolicies.get",
+    "compute.resourcePolicies.use",
+    "compute.subnetworks.use",
+    "compute.subnetworks.useExternalIp",
     "compute.zoneOperations.get",
+    "compute.zones.get",
     "datastore.entities.allocateIds",
     "datastore.entities.create",
     "datastore.entities.delete",
     "datastore.entities.get",
     "datastore.entities.list",
     "datastore.entities.update",
+    "iam.serviceAccounts.actAs",
+    "iam.serviceAccounts.create",
+    "iam.serviceAccounts.delete",
+    "iam.serviceAccounts.get",
     "iam.serviceAccounts.signBlob",
     "logging.logEntries.create",
     "monitoring.timeSeries.create",
+    "resourcemanager.projects.getIamPolicy",
+    "resourcemanager.projects.setIamPolicy",
+    "serviceusage.services.enable",
     "serviceusage.services.get",
     "serviceusage.services.use",
     "telemetry.traces.write",
@@ -41,6 +103,12 @@ resource "google_project_iam_binding" "controller-role-binding" {
 resource "google_service_account_iam_member" "controller_token_creator" {
   service_account_id = google_service_account.controller_service_account.name
   role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.controller_service_account.email}"
+}
+
+resource "google_service_account_iam_member" "controller_actas_self" {
+  service_account_id = google_service_account.controller_service_account.name
+  role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.controller_service_account.email}"
 }
 
@@ -99,9 +167,20 @@ resource "google_cloud_run_v2_service" "controller" {
 
   template {
     service_account = google_service_account.controller_service_account.email
+    timeout         = "1800s"
+
+    scaling {
+      max_instance_count = 1
+    }
 
     containers {
       image = var.controller_image
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "1Gi"
+        }
+      }
       env {
         name  = "ENVIRONMENT"
         value = var.environment
@@ -169,6 +248,22 @@ resource "google_cloud_run_v2_service" "controller" {
       env {
         name  = "MACHINE_AGENT_IMAGE"
         value = var.machine_agent_image
+      }
+      env {
+        name  = "OPERATION_MODE"
+        value = "cloudtasks"
+      }
+      env {
+        name  = "CLOUD_TASKS_QUEUE"
+        value = google_cloud_tasks_queue.provisioning.name
+      }
+      env {
+        name  = "CLOUD_TASKS_REGION"
+        value = var.region
+      }
+      env {
+        name  = "CONTROLLER_SERVICE_ACCOUNT"
+        value = google_service_account.controller_service_account.email
       }
 
     }
