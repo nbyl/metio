@@ -13,17 +13,14 @@ provider "google" {
   zone    = var.zone
 }
 
-resource "random_id" "default" {
-  byte_length = 8
-}
+module "gcp_cloud_run" {
+  source = "./modules/gcp-cloud-run"
 
-data "google_project" "current" {
-  project_id = var.project_id
-}
-
-resource "google_firestore_database" "metio_firestore" {
-  project     = var.project_id
-  name        = "${var.environment}-${var.region}-metio-db"
-  location_id = var.region
-  type        = "FIRESTORE_NATIVE"
+  project_id          = var.project_id
+  region              = var.region
+  zone                = var.zone
+  environment         = var.environment
+  admin_users         = var.admin_users
+  controller_image    = var.controller_image
+  machine_agent_image = var.machine_agent_image
 }

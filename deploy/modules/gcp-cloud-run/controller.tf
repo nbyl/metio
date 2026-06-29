@@ -8,10 +8,10 @@ resource "google_cloud_tasks_queue" "provisioning" {
   }
 
   retry_config {
-    max_attempts       = 3
-    min_backoff        = "120s"
-    max_backoff        = "600s"
-    max_doublings      = 4
+    max_attempts  = 3
+    min_backoff   = "120s"
+    max_backoff   = "600s"
+    max_doublings = 4
   }
 }
 
