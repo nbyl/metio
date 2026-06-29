@@ -87,7 +87,7 @@ tofu init
 tofu apply
 ```
 
-This creates a module called `gcp-cloud-run` (from `deploy/modules/gcp-cloud-run/`) which manages all shared infrastructure.
+This creates a module called `gcp-cloud-run` (from `deploy/modules/gcp-cloud-run/`) which manages all shared infrastructure. If you do not specify `controller_image` or `machine_agent_image`, the module uses the defaults from the latest release.
 
 ### Using as a Module in Your Own Repository
 
@@ -102,8 +102,8 @@ module "metio" {
   zone                = var.zone
   environment         = var.environment
   admin_users         = var.admin_users
-  controller_image    = var.controller_image
-  machine_agent_image = var.machine_agent_image
+  controller_image    = var.controller_image    # optional — defaults to latest release
+  machine_agent_image = var.machine_agent_image # optional — defaults to latest release
 }
 ```
 
@@ -111,7 +111,7 @@ The `//deploy/modules/gcp-cloud-run` path tells OpenTofu to reference the module
 
 This creates:
 - **Firestore database** (native mode) for storing server state
-- **Cloud Run service** (controller) with a placeholder image
+- **Cloud Run service** (controller) with the default release image
 - **Pub/Sub topic + subscription** for compute instance lifecycle events
 - **Log sink** routing compute audit logs to Pub/Sub
 - **Custom IAM role** with permissions for the controller service account
