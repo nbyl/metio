@@ -220,7 +220,7 @@ deploy-controller: controller-image
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -target=google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -target=module.gcp-cloud-run.google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:

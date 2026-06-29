@@ -203,12 +203,18 @@ metio/
 │   ├── vite.config.ts        # Vite config with API proxy
 │   └── vitest.config.ts      # Vitest config (80% coverage)
 ├── deploy/                   # OpenTofu shared infrastructure
-│   ├── main.tf               # Provider, Firestore DB
-│   ├── controller.tf         # Cloud Run, IAM, secrets
-│   ├── events.tf             # Pub/Sub, log sink
-│   ├── firestore.tf          # Rules, indexes
-│   ├── pulumi_state.tf       # Pulumi state bucket
-│   └── variables.tf
+│   ├── main.tf               # Root config: provider + backend + module call
+│   ├── variables.tf           # Variables passed to modules
+│   ├── metio.auto.tfvars.sample
+│   └── modules/
+│       └── gcp-cloud-run/    # GCP Cloud Run infrastructure module
+│           ├── main.tf       # Provider config, Firestore DB
+│           ├── controller.tf # Cloud Run, IAM, secrets
+│           ├── events.tf     # Pub/Sub, log sink
+│           ├── firestore.tf  # Rules, indexes
+│           ├── pulumi_state.tf
+│           ├── variables.tf
+│           └── outputs.tf
 ├── docs/                     # Documentation
 │   ├── DEPLOYMENT.md         # Production deployment guide
 │   └── insomnia/             # API collection (Insomnia)
