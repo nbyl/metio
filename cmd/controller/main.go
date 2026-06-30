@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"cloud.google.com/go/cloudtasks/apiv2"
 	"cloud.google.com/go/storage"
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/spf13/viper"
@@ -25,6 +27,7 @@ type servicesBundle struct {
 	provisioning *services.ProvisioningService
 	validation   *services.ValidationService
 	setup        *services.SetupService
+	config       config.Config
 }
 
 func main() {
@@ -47,7 +50,7 @@ func main() {
 		log.Fatalf("Failed to initialize services: %v", err)
 	}
 
-	r := handlers.New(svcs.provisioning, svcs.validation, svcs.setup)
+	r := handlers.New(svcs.provisioning, svcs.validation, svcs.setup, svcs.provisioning, &svcs.config)
 
 	// Wrap router with CORS middleware (only enabled in dev mode)
 	handler := handlers.CORSMiddleware(r)
@@ -85,7 +88,29 @@ func initServices() (*servicesBundle, error) {
 		return nil, fmt.Errorf("failed to create workspace manager: %w", err)
 	}
 
-	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version)
+	var executor services.OperationExecutor
+	if cfg.OperationMode == "cloudtasks" {
+		ctClient, err := cloudtasks.NewClient(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cloud tasks client: %w", err)
+		}
+		executor = services.NewCloudTasksExecutor(
+			ctClient,
+			cfg.ProjectID,
+			cfg.CloudTasksRegion,
+			cfg.CloudTasksQueue,
+			cfg.BaseURL,
+			cfg.ControllerServiceAccount,
+			dbConn,
+			30*time.Minute,
+		)
+		log.Printf("Using Cloud Tasks executor (queue: %s/%s)", cfg.CloudTasksRegion, cfg.CloudTasksQueue)
+	} else {
+		executor = services.NewGoroutineExecutor(30 * time.Minute)
+		log.Print("Using goroutine executor")
+	}
+
+	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version, executor)
 
 	suSvc, err := serviceusage.NewService(ctx)
 	if err != nil {
@@ -105,5 +130,6 @@ func initServices() (*servicesBundle, error) {
 		provisioning: provisioningService,
 		validation:   validationService,
 		setup:        setupSvc,
+		config:       cfg,
 	}, nil
 }

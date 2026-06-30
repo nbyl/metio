@@ -1,0 +1,19 @@
+name: Question
+description: Ask a question about using Metio
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: Ask away! We'll do our best to help.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What would you like to know?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to do? Any relevant config or setup?

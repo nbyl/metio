@@ -13,6 +13,7 @@ import (
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/handlers/servers"
 	"github.com/nbyl/metio/internal/handlers/setup"
+	"github.com/nbyl/metio/internal/handlers/tasks"
 	"github.com/nbyl/metio/internal/services"
 	"github.com/nbyl/metio/static"
 )
@@ -34,7 +35,7 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInterface, ss setup.SetupServiceInterface) *mux.Router {
+func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInterface, ss setup.SetupServiceInterface, provisioningSvc *services.ProvisioningService, cfg *config.Config) *mux.Router {
 	provisioningService = ps
 	setup.ValidationService = vs
 	setup.SetupService = ss
@@ -53,6 +54,11 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	r.HandleFunc("/auth/callback", callbackHandler).Methods("GET")
 	r.HandleFunc("/events", eventsHandler).Methods("POST")
 	r.HandleFunc("/api/auth/me", meHandler).Methods("GET")
+
+	if provisioningSvc != nil && cfg != nil && cfg.OperationMode == "cloudtasks" {
+		tasks.ProvisioningService = provisioningSvc
+		tasks.RegisterTaskRoutes(r)
+	}
 
 	apiRouter := r.PathPrefix("/api").Subrouter()
 	apiRouter.Use(apiAuthMiddleware)

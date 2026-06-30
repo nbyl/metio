@@ -65,10 +65,10 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u <your-username> --password-stdin
 Copy the sample variables file and edit it with your project details:
 
 ```bash
-cp deploy/metio.auto.tfvars.sample deploy/metio.auto.tfvars
+cp metio.auto.tfvars.sample metio.auto.tfvars
 ```
 
-Edit `deploy/metio.auto.tfvars`:
+Edit `metio.auto.tfvars`:
 
 ```hcl
 project_id  = "your-project-id"
@@ -87,9 +87,31 @@ tofu init
 tofu apply
 ```
 
+This creates a module called `gcp-cloud-run` (from `deploy/modules/gcp-cloud-run/`) which manages all shared infrastructure. If you do not specify `controller_image` or `machine_agent_image`, the module uses the defaults from the latest release.
+
+### Using as a Module in Your Own Repository
+
+You can include the Metio infrastructure module in your own OpenTofu configuration:
+
+```hcl
+module "metio" {
+  source = "github.com/nbyl/metio//deploy/modules/gcp-cloud-run"
+
+  project_id          = var.project_id
+  region              = var.region
+  zone                = var.zone
+  environment         = var.environment
+  admin_users         = var.admin_users
+  controller_image    = var.controller_image    # optional — defaults to latest release
+  machine_agent_image = var.machine_agent_image # optional — defaults to latest release
+}
+```
+
+The `//deploy/modules/gcp-cloud-run` path tells OpenTofu to reference the module subdirectory inside the repository.
+
 This creates:
 - **Firestore database** (native mode) for storing server state
-- **Cloud Run service** (controller) with a placeholder image
+- **Cloud Run service** (controller) with the default release image
 - **Pub/Sub topic + subscription** for compute instance lifecycle events
 - **Log sink** routing compute audit logs to Pub/Sub
 - **Custom IAM role** with permissions for the controller service account
@@ -140,7 +162,7 @@ Deploy the image to Cloud Run:
 make deploy-controller
 ```
 
-This runs `tofu apply -target=google_cloud_run_v2_service.controller` with the new image tag.
+This runs `tofu apply -target=module.gcp-cloud-run.google_cloud_run_v2_service.controller` with the new image tag.
 
 ### Step 5: Configure Domain and SSL (Optional)
 
@@ -258,7 +280,7 @@ Builds both images and applies all OpenTofu infrastructure.
 - **Controller logs**: View in Cloud Logging with the query `resource.type = "cloud_run_revision" AND resource.labels.service_name = "development-controller"`
 - **Server VM logs**: View the machine-agent startup logs with `resource.type = "gce_instance" AND resource.labels.instance_id = "<instance-id>"`
 - **Pulumi operations**: Provisioning progress is streamed to Firestore and displayed in the frontend
-- **Infrastructure state**: View `deploy/terraform.tfstate` or use `tofu -chdir=deploy show`
+- **Infrastructure state**: View `terraform.tfstate` or use `tofu show`
 
 ### Troubleshooting
 
@@ -266,7 +288,7 @@ Builds both images and applies all OpenTofu infrastructure.
 |-------|-------------|----------|
 | "Project has no billing account" | Billing not enabled | Enable billing in GCP Console |
 | OAuth redirects to localhost | `BASE_URL` secret is wrong | Update `development-base_url` secret |
-| "Not authenticated" at login | Email not in `admin_users` | Add your email to `deploy/metio.auto.tfvars` and re-run `tofu apply` |
+| "Not authenticated" at login | Email not in `admin_users` | Add your email to `metio.auto.tfvars` and re-run `tofu apply` |
 | Server stays in "Provisioning" | Pulumi operation failed | Check Cloud Logging for the controller, or check the server's Pulumi stack directly |
 | Cloud Run startup fails | Missing secrets or wrong image | Verify all 4 secrets have current versions, check image exists in ghcr.io |
 | Firestore permission denied | Rules not deployed | Run `tofu apply` to ensure Firestore rules are active |
