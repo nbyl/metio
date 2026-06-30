@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote promote-distribution help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote promote-distribution build-semrel-plugin help
 
 USERNAME := $(shell whoami)
 
@@ -83,6 +83,13 @@ develop: generate-env
 		echo "Error: cmd/$@/main.go not found"; \
 		exit 1; \
 	fi
+
+# Build semantic-release files-updater plugin for OpenTofu variables.tf
+build-semrel-plugin:
+	go build \
+		-ldflags="-X 'github.com/nbyl/metio/tools/semrel-files-updater/pkg/tfvars.FUVERSION=0.1.0'" \
+		-o .semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
+		./tools/semrel-files-updater/
 
 # Clean build artifacts
 clean:
@@ -171,25 +178,22 @@ deploy-full: build-images
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
-# Deploy infrastructure only: use existing images or defaults
+# Deploy infrastructure only: use existing images or module defaults
 deploy-infrastructure:
 	@set -e ;\
+	ARGS="" ;\
 	if [ -f "build/machine-agent-image.txt" ]; then \
 		MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
-	else \
-		echo "Machine agent image tag not found, using default" ;\
-		MACHINE_AGENT_IMAGE_TAG="ghcr.io/nbyl/metio/machine-agent:latest" ;\
+		ARGS="$${ARGS} -var=\"machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}\"" ;\
+		echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	fi ;\
 	if [ -f "build/controller-image.txt" ]; then \
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
-	else \
-		echo "Controller image tag not found, using default" ;\
-		CONTROLLER_IMAGE_TAG="ghcr.io/nbyl/metio/controller:latest" ;\
+		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
+		echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	fi ;\
 	echo "Deploying infrastructure only with OpenTofu..." ;\
-	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
-	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply $${ARGS} -auto-approve
 
 # Deploy machine-agent only: build machine-agent image and deploy infrastructure
 deploy-machine-agent: build-machine-agent-image
@@ -199,16 +203,14 @@ deploy-machine-agent: build-machine-agent-image
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
+	ARGS="-var=\"machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}\"" ;\
 	if [ -f "build/controller-image.txt" ]; then \
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
-	else \
-		echo "Controller image tag not found, using default" ;\
-		CONTROLLER_IMAGE_TAG="ghcr.io/nbyl/metio/controller:latest" ;\
+		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
 	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
-	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply $${ARGS} -auto-approve
 
 # Deploy controller only: build controller image and update Cloud Run service
 deploy-controller: controller-image
@@ -220,7 +222,7 @@ deploy-controller: controller-image
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -target=google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -target=module.gcp-cloud-run.google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:
@@ -271,6 +273,7 @@ help:
 	@echo "  deploy-controller       - Build controller image and update Cloud Run service only"
 	@echo ""
 	@echo "Other targets:"
+	@echo "  build-semrel-plugin     - Build files-updater plugin for OpenTofu variables.tf"
 	@echo "  clean                   - Remove build artifacts"
 	@echo "  cleanup-old-images      - Clean old local images from registry"
 	@echo "  help                    - Show this help"
