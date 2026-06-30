@@ -36,6 +36,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main'
     needs: docker
+    environment: main
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -44,10 +45,11 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
   promote-images:
     if: github.ref == 'refs/heads/main' && needs.release.outputs.release_created == 'true'
