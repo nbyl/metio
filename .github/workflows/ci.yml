@@ -39,34 +39,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     outputs:
-      version: ${{ steps.semrel.outputs.version }}
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: googleapis/release-please-action@v4
+        id: release
         with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-      - name: Build files-updater plugin
-        working-directory: ./tools/semrel-files-updater
-        run: |
-          mkdir -p ../../.semrel/linux_amd64/files-updater-tfvars/0.1.0
-          go build \
-            -ldflags="-X 'github.com/nbyl/metio/tools/semrel-files-updater/pkg/tfvars.FUVERSION=0.1.0'" \
-            -o ../../.semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
-            .
-      - uses: go-semantic-release/action@v1
-        id: semrel
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          custom-arguments: >
-            --files-updater tfvars
-            --update deploy/variables.tf
-            --update deploy/modules/gcp-cloud-run/variables.tf
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   promote-images:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.release.outputs.release_created == 'true'
     needs: release
     environment: main
     runs-on: ubuntu-latest
@@ -91,7 +75,6 @@ jobs:
       - name: Promote to GCP Artifact Registry
         run: make promote-distribution SHA=${GITHUB_SHA::7} VERSION=${{ needs.release.outputs.version }}
       - name: Tag ghcr.io images with version
-        if: needs.release.outputs.version != ''
         run: |
           docker tag ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
           docker tag ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
