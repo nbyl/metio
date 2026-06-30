@@ -86,10 +86,11 @@ develop: generate-env
 
 # Build semantic-release files-updater plugin for OpenTofu variables.tf
 build-semrel-plugin:
-	go build \
+	@mkdir -p .semrel/linux_amd64/files-updater-tfvars/0.1.0
+	cd tools/semrel-files-updater && go build \
 		-ldflags="-X 'github.com/nbyl/metio/tools/semrel-files-updater/pkg/tfvars.FUVERSION=0.1.0'" \
-		-o .semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
-		./tools/semrel-files-updater/
+		-o ../../.semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
+		.
 
 # Clean build artifacts
 clean:
