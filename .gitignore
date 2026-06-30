@@ -214,5 +214,3 @@ static/dist/
 /controller
 /machine-agent
 
-# Go semantic-release plugin cache
-.semrel/

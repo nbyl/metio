@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote promote-distribution build-semrel-plugin help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote promote-distribution help
 
 USERNAME := $(shell whoami)
 
@@ -84,19 +84,10 @@ develop: generate-env
 		exit 1; \
 	fi
 
-# Build semantic-release files-updater plugin for OpenTofu variables.tf
-build-semrel-plugin:
-	@mkdir -p .semrel/linux_amd64/files-updater-tfvars/0.1.0
-	cd tools/semrel-files-updater && go build \
-		-ldflags="-X 'github.com/nbyl/metio/tools/semrel-files-updater/pkg/tfvars.FUVERSION=0.1.0'" \
-		-o ../../.semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
-		.
-
 # Clean build artifacts
 clean:
 	rm -rf build/
 	rm -rf static/dist/
-
 
 # Build machine-agent Docker image and save tag to file
 build-machine-agent-image:
@@ -274,7 +265,6 @@ help:
 	@echo "  deploy-controller       - Build controller image and update Cloud Run service only"
 	@echo ""
 	@echo "Other targets:"
-	@echo "  build-semrel-plugin     - Build files-updater plugin for OpenTofu variables.tf"
 	@echo "  clean                   - Remove build artifacts"
 	@echo "  cleanup-old-images      - Clean old local images from registry"
 	@echo "  help                    - Show this help"
