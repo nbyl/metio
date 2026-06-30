@@ -28,8 +28,8 @@ export PULUMI_HOME="/tmp/.pulumi"
 ```
 
 For other environments, replace `development` with the target environment name
-(e.g. `production`). The bucket is configured in `deploy/pulumi_state.tf` and
-exposed as `PULUMI_STATE_BUCKET` in `deploy/controller.tf:170`.
+(e.g. `production`). The bucket is configured in `deploy/modules/gcp-cloud-run/pulumi_state.tf` and
+exposed as `PULUMI_STATE_BUCKET` in the controller Cloud Run template.
 
 ## Usage
 
