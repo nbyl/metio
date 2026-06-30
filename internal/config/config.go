@@ -15,10 +15,15 @@ import (
 
 // Config holds the configuration needed for database connections and service identification.
 type Config struct {
-	Environment       string
-	Region            string
-	ProjectID         string
-	MachineAgentImage string
+	Environment              string
+	Region                   string
+	ProjectID                string
+	MachineAgentImage        string
+	OperationMode            string
+	BaseURL                  string
+	CloudTasksQueue          string
+	CloudTasksRegion         string
+	ControllerServiceAccount string
 }
 
 // Default values for configuration
@@ -41,10 +46,15 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Environment:       environment,
-		Region:            region,
-		ProjectID:         viper.GetString("GCP_PROJECT"),
-		MachineAgentImage: viper.GetString("MACHINE_AGENT_IMAGE"),
+		Environment:              environment,
+		Region:                   region,
+		ProjectID:                viper.GetString("GCP_PROJECT"),
+		MachineAgentImage:        viper.GetString("MACHINE_AGENT_IMAGE"),
+		OperationMode:            viper.GetString("OPERATION_MODE"),
+		BaseURL:                  viper.GetString("BASE_URL"),
+		CloudTasksQueue:          viper.GetString("CLOUD_TASKS_QUEUE"),
+		CloudTasksRegion:         viper.GetString("CLOUD_TASKS_REGION"),
+		ControllerServiceAccount: viper.GetString("CONTROLLER_SERVICE_ACCOUNT"),
 	}
 
 	if cfg.MachineAgentImage == "" {

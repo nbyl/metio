@@ -32,3 +32,53 @@ jobs:
       - run: make controller-image
       - run: make machine-agent-image
       - run: make push-images
+
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: docker
+    environment: main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+  promote-images:
+    if: github.ref == 'refs/heads/main' && needs.release.outputs.release_created == 'true'
+    needs: release
+    environment: main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Configure Docker for GCP Artifact Registry
+        run: gcloud auth configure-docker europe-docker.pkg.dev
+      - name: Pull from ghcr.io
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker pull ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7}
+          docker pull ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7}
+      - name: Promote to GCP Artifact Registry
+        run: make promote-distribution SHA=${GITHUB_SHA::7} VERSION=${{ needs.release.outputs.version }}
+      - name: Tag ghcr.io images with version
+        run: |
+          docker tag ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
+          docker push ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
+          docker push ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
