@@ -49,13 +49,13 @@ jobs:
         with:
           go-version: '1.23'
       - name: Build files-updater plugin
+        working-directory: ./tools/semrel-files-updater
         run: |
-          mkdir -p .semrel/linux_amd64/files-updater-tfvars/0.1.0
+          mkdir -p ../../.semrel/linux_amd64/files-updater-tfvars/0.1.0
           go build \
             -ldflags="-X 'github.com/nbyl/metio/tools/semrel-files-updater/pkg/tfvars.FUVERSION=0.1.0'" \
-            -o .semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
-            ./tools/semrel-files-updater/
-          chmod +x .semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater
+            -o ../../.semrel/linux_amd64/files-updater-tfvars/0.1.0/semrel-files-updater \
+            .
       - uses: go-semantic-release/action@v1
         id: semrel
         with:
