@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/nbyl/metio/compare/v1.3.0...v1.4.0) (2026-07-02)
+
+
+### Features
+
+* support importing existing static IP addresses when provisioning servers ([7dd8dde](https://github.com/nbyl/metio/commit/7dd8dde832f09de29e554a2455a50634fc8c11d4))
+* support importing existing static IP addresses when provisioning servers ([4e7b477](https://github.com/nbyl/metio/commit/4e7b47749f22b2b5577d40302bdf78a25156e0e2)), closes [#293](https://github.com/nbyl/metio/issues/293)
+
+
+### Bug Fixes
+
+* refresh stack after import and enable code generation for pulumi import ([e87e018](https://github.com/nbyl/metio/commit/e87e0189cba139b97584eae2e3c328da78fa90df))
+
 ## [1.3.0](https://github.com/nbyl/metio/compare/v1.2.0...v1.3.0) (2026-06-30)
 
 
