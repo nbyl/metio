@@ -58,6 +58,7 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
+		ExistingAddress:   serverConfig.ExistingAddress,
 	}
 
 	log.Printf("[tasks] Executing provisioning for server %s", serverID)
