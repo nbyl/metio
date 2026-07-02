@@ -385,6 +385,7 @@ func TestCreateServer_WithExistingAddress(t *testing.T) {
 	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
 	mockWM.On("ProjectID").Return("")
 	mockWM.On("ImportResources", mock.Anything, stack, mock.Anything).Return(nil)
+	mockWM.On("RefreshStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
 		Outputs: auto.OutputMap{},
 	}, nil)
@@ -397,6 +398,7 @@ func TestCreateServer_WithExistingAddress(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	mockWM.AssertCalled(t, "ImportResources", mock.Anything, stack, mock.Anything)
+	mockWM.AssertCalled(t, "RefreshStack", mock.Anything, "srv1")
 }
 
 func TestCreateServer_WithExistingAddress_ImportError(t *testing.T) {

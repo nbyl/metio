@@ -202,7 +202,7 @@ func (wm *WorkspaceManager) ImportResources(ctx context.Context, stack *auto.Sta
 
 	_, err := stack.ImportResources(ctx,
 		optimport.Resources(resources),
-		optimport.GenerateCode(false),
+		optimport.GenerateCode(true),
 		optimport.ProgressStreams(os.Stdout),
 	)
 	if err != nil {

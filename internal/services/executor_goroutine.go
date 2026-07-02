@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -60,6 +61,7 @@ func (e *goroutineExecutor) StartOperation(ctx context.Context, serverID string,
 		}
 
 		if err := fn(opCtx, status); err != nil {
+			log.Printf("[%s] Operation failed: %v", serverID, err)
 			if opCtx.Err() == context.Canceled {
 				status.State = db.ProvisioningStateFailed
 			} else {

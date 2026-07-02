@@ -116,6 +116,10 @@ func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.Provis
 		if err := s.workspaceManager.ImportResources(opCtx, stack, resources); err != nil {
 			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 		}
+
+		if err := s.workspaceManager.RefreshStack(opCtx, serverID); err != nil {
+			log.Printf("[%s] Failed to refresh stack after import (non-fatal): %v", serverID, err)
+		}
 	}
 
 	s.completeStep(opCtx, status, serverID, stepUpsertStack)
