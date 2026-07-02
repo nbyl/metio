@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/nbyl/metio/compare/v1.4.0...v1.4.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* pass ExistingAddress through Cloud Tasks handler ([2d43d51](https://github.com/nbyl/metio/commit/2d43d51c7f75f23b2b7e6ed1e97241d7eff5e656))
+* pass ExistingAddress through Cloud Tasks handler ([68e7d47](https://github.com/nbyl/metio/commit/68e7d477e190c946c778f3959b943799472723c6))
+
 ## [1.4.0](https://github.com/nbyl/metio/compare/v1.3.0...v1.4.0) (2026-07-02)
 
 
