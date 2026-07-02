@@ -34,6 +34,7 @@ type CreateServerRequest struct {
 	MinecraftVersion string                 `json:"minecraftVersion"`
 	DiskSizeGB       int                    `json:"diskSizeGB,omitempty"`
 	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
+	ExistingAddress  string                 `json:"existingAddress,omitempty"`
 }
 
 type UpdateServerRequest struct {

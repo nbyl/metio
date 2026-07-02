@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -186,6 +187,26 @@ func (wm *WorkspaceManager) SetConfig(ctx context.Context, stack *auto.Stack, ke
 	err := stack.SetConfig(ctx, key, configValue)
 	if err != nil {
 		return fmt.Errorf("failed to set config: %w", err)
+	}
+
+	return nil
+}
+
+func (wm *WorkspaceManager) ImportResources(ctx context.Context, stack *auto.Stack, resources []*optimport.ImportResource) error {
+	if stack == nil {
+		return fmt.Errorf("stack is required")
+	}
+	if len(resources) == 0 {
+		return fmt.Errorf("at least one resource is required")
+	}
+
+	_, err := stack.ImportResources(ctx,
+		optimport.Resources(resources),
+		optimport.GenerateCode(false),
+		optimport.ProgressStreams(os.Stdout),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to import resources: %w", err)
 	}
 
 	return nil

@@ -369,6 +369,62 @@ func TestCreateServer_Success(t *testing.T) {
 	mockDB.AssertCalled(t, "UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus"))
 }
 
+func TestCreateServer_WithExistingAddress(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	config := &programs.ServerConfig{
+		Name:            "test",
+		ExistingAddress: "my-existing-addr",
+		Region:          "europe-west3",
+		GCPProject:      "my-project",
+	}
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("ImportResources", mock.Anything, stack, mock.Anything).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
+		Outputs: auto.OutputMap{},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", config)
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+	mockWM.AssertCalled(t, "ImportResources", mock.Anything, stack, mock.Anything)
+}
+
+func TestCreateServer_WithExistingAddress_ImportError(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	config := &programs.ServerConfig{
+		Name:            "test",
+		ExistingAddress: "my-existing-addr",
+		Region:          "europe-west3",
+		GCPProject:      "my-project",
+	}
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("ImportResources", mock.Anything, stack, mock.Anything).Return(errors.New("import failed"))
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+
+	err := svc.CreateServer(context.Background(), "srv1", config)
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+	mockWM.AssertCalled(t, "ImportResources", mock.Anything, stack, mock.Anything)
+	mockWM.AssertNotCalled(t, "UpStack", mock.Anything, stack)
+}
+
 func TestCreateServer_UpsertError(t *testing.T) {
 	svc, mockWM, mockDB := newTestService()
 
