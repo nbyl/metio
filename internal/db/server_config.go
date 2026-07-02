@@ -29,6 +29,7 @@ type ServerConfig struct {
 	InfraVersion                int               `firestore:"infraVersion,omitempty"`
 	DeployedByControllerVersion string            `firestore:"deployedByControllerVersion,omitempty"`
 	MachineAgentImage           string            `firestore:"machineAgentImage,omitempty"`
+	ExistingAddress             string            `firestore:"existingAddress,omitempty"`
 	ShutdownSchedule            *ShutdownSchedule `firestore:"shutdownSchedule,omitempty"`
 	CreatedAt                   time.Time         `firestore:"createdAt"`
 	UpdatedAt                   time.Time         `firestore:"updatedAt"`

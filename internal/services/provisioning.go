@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
@@ -101,6 +102,24 @@ func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.Provis
 
 	if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
 		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+	}
+
+	if config.ExistingAddress != "" {
+		importID := fmt.Sprintf("projects/%s/regions/%s/addresses/%s", config.GCPProject, config.Region, config.ExistingAddress)
+		resources := []*optimport.ImportResource{
+			{
+				Type: "gcp:compute/address:Address",
+				Name: fmt.Sprintf("%s-address", config.Name),
+				ID:   importID,
+			},
+		}
+		if err := s.workspaceManager.ImportResources(opCtx, stack, resources); err != nil {
+			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
+		}
+
+		if err := s.workspaceManager.RefreshStack(opCtx, serverID); err != nil {
+			log.Printf("[%s] Failed to refresh stack after import (non-fatal): %v", serverID, err)
+		}
 	}
 
 	s.completeStep(opCtx, status, serverID, stepUpsertStack)

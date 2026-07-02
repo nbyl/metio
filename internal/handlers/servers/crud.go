@@ -31,6 +31,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		MinecraftVersion: req.MinecraftVersion,
 		DiskSizeGB:       req.DiskSizeGB,
 		ShutdownSchedule: shutdownSchedule,
+		ExistingAddress:  req.ExistingAddress,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
@@ -73,6 +74,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
+		ExistingAddress:   req.ExistingAddress,
 	}
 
 	if err := ProvisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
@@ -279,6 +281,7 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 		Environment:       cfg.Environment,
 		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
+		ExistingAddress:   existingConfig.ExistingAddress,
 	}
 
 	if err := ProvisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {

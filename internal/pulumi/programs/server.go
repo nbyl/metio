@@ -25,6 +25,7 @@ type ServerConfig struct {
 	MachineAgentImage string
 	GCPProject        string
 	RCONPassword      string
+	ExistingAddress   string
 }
 
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
@@ -133,10 +134,15 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			return fmt.Errorf("failed to create disk: %w", err)
 		}
 
-		address, err := compute.NewAddress(ctx, fmt.Sprintf("%s-address", config.Name), &compute.AddressArgs{
-			Name:   pulumi.String(fmt.Sprintf("%s-addr", config.Name)),
-			Region: pulumi.String(config.Region),
-		})
+		addressGCPName := fmt.Sprintf("%s-addr", config.Name)
+	if config.ExistingAddress != "" {
+		addressGCPName = config.ExistingAddress
+	}
+
+	address, err := compute.NewAddress(ctx, fmt.Sprintf("%s-address", config.Name), &compute.AddressArgs{
+		Name:   pulumi.String(addressGCPName),
+		Region: pulumi.String(config.Region),
+	})
 		if err != nil {
 			return fmt.Errorf("failed to create address: %w", err)
 		}

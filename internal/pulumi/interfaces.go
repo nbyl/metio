@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 	pulumiSdk "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -16,5 +17,6 @@ type WorkspaceManagerInterface interface {
 	CancelStack(ctx context.Context, name string) error
 	RefreshStack(ctx context.Context, name string) error
 	SetConfig(ctx context.Context, stack *auto.Stack, key, value string, secret bool) error
+	ImportResources(ctx context.Context, stack *auto.Stack, resources []*optimport.ImportResource) error
 	ProjectID() string
 }
