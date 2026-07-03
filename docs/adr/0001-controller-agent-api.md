@@ -1,6 +1,6 @@
 # ADR-0001: Machine-agent writes state through a Controller API instead of directly to the datastore
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-03
 - **Deciders:** Metio maintainers
 

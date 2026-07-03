@@ -15,4 +15,4 @@ This directory records significant architecture decisions for Metio using a ligh
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [0001](0001-controller-agent-api.md) | Machine-agent writes state through a Controller API | Proposed |
+| [0001](0001-controller-agent-api.md) | Machine-agent writes state through a Controller API | Accepted |
