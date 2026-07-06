@@ -17,6 +17,8 @@ type TemplateConfig struct {
 	MachineAgentImage string
 	MinecraftVersion  string
 	RCONPassword      string
+	ControllerURL     string
+	AgentToken        string
 }
 
 func RenderCloudConfig(config *TemplateConfig) (string, error) {
@@ -29,6 +31,8 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 		"${machineAgentImage}": config.MachineAgentImage,
 		"${minecraftVersion}":  config.MinecraftVersion,
 		"${rconPassword}":      config.RCONPassword,
+		"${controllerUrl}":     config.ControllerURL,
+		"${agentToken}":        config.AgentToken,
 	}
 
 	result := cloudConfigTemplate

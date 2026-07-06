@@ -26,6 +26,8 @@ type ServerConfig struct {
 	GCPProject        string
 	RCONPassword      string
 	ExistingAddress   string
+	ControllerURL     string
+	AgentToken        string
 }
 
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
@@ -63,6 +65,8 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			MachineAgentImage: config.MachineAgentImage,
 			MinecraftVersion:  config.MinecraftVersion,
 			RCONPassword:      config.RCONPassword,
+			ControllerURL:     config.ControllerURL,
+			AgentToken:        config.AgentToken,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
