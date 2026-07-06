@@ -113,13 +113,23 @@ build-controller-image:
 	echo "$${CONTROLLER_IMAGE_TAG}" > build/controller-image.txt ;\
 	echo "Controller image tag saved to build/controller-image.txt"
 
-# Local controller image build (gcloud-free)
+# Local controller image build + push to Artifact Registry
 controller-image:
-	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD) .
+	@mkdir -p build
+	@SHA=$$(git rev-parse --short HEAD); \
+	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/controller:$${SHA}"; \
+	echo "Building controller image: $${IMAGE}"; \
+	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t $${IMAGE} --push . ; \
+	echo "$${IMAGE}" > build/controller-image.txt
 
-# Local machine-agent image build (gcloud-free)
+# Local machine-agent image build + push to Artifact Registry
 machine-agent-image:
-	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD) .
+	@mkdir -p build
+	@SHA=$$(git rev-parse --short HEAD); \
+	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:$${SHA}"; \
+	echo "Building machine-agent image: $${IMAGE}"; \
+	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --push . ; \
+	echo "$${IMAGE}" > build/machine-agent-image.txt
 
 # Push images to ghcr.io
 push-images:
