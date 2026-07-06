@@ -53,7 +53,7 @@ func TestBackupCoordinator_TriggerWorldSave_UpdateStatusError(t *testing.T) {
 	bc := NewBackupCoordinator(mockDB)
 
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("dbtypes.Status")).Return(assert.AnError)
 
 	err := bc.TriggerWorldSave(context.Background(), "test-instance")
 	assert.Error(t, err)
