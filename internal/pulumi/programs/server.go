@@ -139,14 +139,14 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		addressGCPName := fmt.Sprintf("%s-addr", config.Name)
-	if config.ExistingAddress != "" {
-		addressGCPName = config.ExistingAddress
-	}
+		if config.ExistingAddress != "" {
+			addressGCPName = config.ExistingAddress
+		}
 
-	address, err := compute.NewAddress(ctx, fmt.Sprintf("%s-address", config.Name), &compute.AddressArgs{
-		Name:   pulumi.String(addressGCPName),
-		Region: pulumi.String(config.Region),
-	})
+		address, err := compute.NewAddress(ctx, fmt.Sprintf("%s-address", config.Name), &compute.AddressArgs{
+			Name:   pulumi.String(addressGCPName),
+			Region: pulumi.String(config.Region),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to create address: %w", err)
 		}

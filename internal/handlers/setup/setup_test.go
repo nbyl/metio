@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/nbyl/metio/internal/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/nbyl/metio/internal/services"
 )
 
 type mockValidationService struct {

@@ -200,7 +200,7 @@ func TestHandleGetStatus(t *testing.T) {
 	token, _ := MintToken("test-instance")
 
 	expectedStatus := db.Status{
-		Players:   db.Players{Current: 1, Max: 20},
+		Players:     db.Players{Current: 1, Max: 20},
 		ServerState: db.ServerStateRunning,
 	}
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(expectedStatus, nil)

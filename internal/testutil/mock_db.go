@@ -3,8 +3,8 @@ package testutil
 import (
 	"context"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/stretchr/testify/mock"
 )
 
 // MockDB is a shared testify mock implementation of the db.DB interface.
