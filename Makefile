@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend controller-image machine-agent-image push-images promote promote-distribution help
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image controller-image machine-agent-image push-images promote promote-distribution help
 
 USERNAME := $(shell whoami)
 
@@ -112,6 +112,18 @@ build-controller-image:
 	echo "Built image: $${CONTROLLER_IMAGE_TAG}" ;\
 	echo "$${CONTROLLER_IMAGE_TAG}" > build/controller-image.txt ;\
 	echo "Controller image tag saved to build/controller-image.txt"
+
+# CI controller image build — tag for ghcr.io, load into local daemon (no push)
+ci-controller-image:
+	@SHA=$$(git rev-parse --short HEAD); \
+	echo "Building controller image for CI: ghcr.io/nbyl/metio/controller:$${SHA}"; \
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/controller:$${SHA} -f cmd/controller/Dockerfile --load .
+
+# CI machine-agent image build — tag for ghcr.io, load into local daemon (no push)
+ci-machine-agent-image:
+	@SHA=$$(git rev-parse --short HEAD); \
+	echo "Building machine-agent image for CI: ghcr.io/nbyl/metio/machine-agent:$${SHA}"; \
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} -f cmd/machine-agent/Dockerfile --load .
 
 # Local controller image build + push to Artifact Registry
 controller-image:
@@ -251,8 +263,10 @@ help:
 	@echo "Available targets:"
 	@echo "  build                   - Build all binaries"
 	@echo "  <binary>                - Build specific binary (e.g., make controller)"
-	@echo "  controller-image        - Build controller Docker image (local, no gcloud)"
-	@echo "  machine-agent-image     - Build machine-agent Docker image (local, no gcloud)"
+	@echo "  controller-image        - Build controller Docker image and push to Artifact Registry"
+	@echo "  machine-agent-image     - Build machine-agent image and push to Artifact Registry"
+	@echo "  ci-controller-image     - Build controller image for CI (ghcr.io tag, no push)"
+	@echo "  ci-machine-agent-image  - Build machine-agent image for CI (ghcr.io tag, no push)"
 	@echo "  push-images             - Push images to ghcr.io"
 	@echo "  promote                 - Retag image (make promote FROM=<sha> TO=<tag>)"
 	@echo "  build-machine-agent-image - Build machine-agent via gcloud builds (legacy)"
