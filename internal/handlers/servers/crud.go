@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/handlers/agent"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 )
 
@@ -63,6 +64,13 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := agent.MintToken(req.Name)
+	if err != nil {
+		log.Printf("Error minting agent token: %v", err)
+		writeJSONError(w, "failed to create agent token", http.StatusInternalServerError)
+		return
+	}
+
 	programConfig := &programs.ServerConfig{
 		Name:              req.Name,
 		ServerID:          serverID,
@@ -75,6 +83,8 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
 		ExistingAddress:   req.ExistingAddress,
+		ControllerURL:     cfg.BaseURL,
+		AgentToken:        token,
 	}
 
 	if err := ProvisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
@@ -270,6 +280,13 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := agent.MintToken(existingConfig.Name)
+	if err != nil {
+		log.Printf("Error minting agent token: %v", err)
+		writeJSONError(w, "failed to create agent token", http.StatusInternalServerError)
+		return
+	}
+
 	programConfig := &programs.ServerConfig{
 		Name:              existingConfig.Name,
 		ServerID:          serverID,
@@ -282,6 +299,8 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
 		ExistingAddress:   existingConfig.ExistingAddress,
+		ControllerURL:     cfg.BaseURL,
+		AgentToken:        token,
 	}
 
 	if err := ProvisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {

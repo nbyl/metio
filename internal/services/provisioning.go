@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 )
 
 const (

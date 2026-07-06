@@ -79,12 +79,12 @@ type PlayersJSON struct {
 }
 
 type ServerResponse struct {
-	ID                    string           `json:"id"`
-	Config                ServerConfigJSON `json:"config"`
-	Status                *StatusResponse  `json:"status,omitempty"`
-	CurrentInfraVersion   int              `json:"currentInfraVersion"`
-	Outdated              bool             `json:"outdated"`
-	OutdatedMachineAgent  bool             `json:"outdatedMachineAgent"`
+	ID                   string           `json:"id"`
+	Config               ServerConfigJSON `json:"config"`
+	Status               *StatusResponse  `json:"status,omitempty"`
+	CurrentInfraVersion  int              `json:"currentInfraVersion"`
+	Outdated             bool             `json:"outdated"`
+	OutdatedMachineAgent bool             `json:"outdatedMachineAgent"`
 }
 
 type ErrorResponse struct {

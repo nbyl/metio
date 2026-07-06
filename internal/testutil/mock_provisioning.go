@@ -3,9 +3,9 @@ package testutil
 import (
 	"context"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi/programs"
+	"github.com/stretchr/testify/mock"
 )
 
 // MockProvisioningService implements handlers.ProvisioningServiceInterface for testing.

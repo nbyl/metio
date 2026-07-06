@@ -265,6 +265,15 @@ resource "google_cloud_run_v2_service" "controller" {
         name  = "CONTROLLER_SERVICE_ACCOUNT"
         value = google_service_account.controller_service_account.email
       }
+      env {
+        name = "AGENT_JWT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.agent_jwt_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
 
     }
   }
@@ -300,6 +309,32 @@ resource "google_secret_manager_secret_iam_member" "secret-access-base_url" {
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.base_url]
+}
+
+resource "random_password" "agent_jwt_secret" {
+  length  = 32
+  special = false
+}
+
+resource "google_secret_manager_secret" "agent_jwt_secret" {
+  secret_id = "${var.environment}-agent_jwt_secret"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "agent_jwt_secret_value" {
+  secret                 = google_secret_manager_secret.agent_jwt_secret.id
+  secret_data_wo_version = 0
+  secret_data            = random_password.agent_jwt_secret.result
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-agent_jwt_secret" {
+  secret_id  = google_secret_manager_secret.agent_jwt_secret.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.agent_jwt_secret]
 }
 
 resource "google_secret_manager_secret" "firebase_api_key" {

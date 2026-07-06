@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/handlers/agent"
 	"github.com/nbyl/metio/internal/handlers/servers"
 	"github.com/nbyl/metio/internal/handlers/setup"
 	"github.com/nbyl/metio/internal/handlers/tasks"
@@ -66,6 +67,12 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	servers.RegisterRoutes(apiRouter)
 
 	setup.RegisterRoutes(apiRouter)
+
+	agent.GetDBConnection = getDBConnection
+	agent.StopInstance = services.StopInstance
+	agentRouter := r.PathPrefix("/agent").Subrouter()
+	agentRouter.Use(agent.AgentAuthMiddleware)
+	agent.RegisterRoutes(agentRouter)
 
 	r.PathPrefix("/").Handler(spaHandler())
 	return r

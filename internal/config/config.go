@@ -9,8 +9,8 @@ import (
 	"log"
 
 	"cloud.google.com/go/compute/metadata"
-	"github.com/spf13/viper"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/spf13/viper"
 )
 
 // Config holds the configuration needed for database connections and service identification.

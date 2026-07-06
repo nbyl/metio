@@ -11,12 +11,12 @@ import (
 	"cloud.google.com/go/cloudtasks/apiv2"
 	"cloud.google.com/go/storage"
 	gorillahandlers "github.com/gorilla/handlers"
-	"github.com/spf13/viper"
 	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/handlers"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/services"
 	"github.com/nbyl/metio/internal/tracing"
+	"github.com/spf13/viper"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/serviceusage/v1"
 )

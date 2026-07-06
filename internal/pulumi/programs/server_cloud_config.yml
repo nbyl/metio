@@ -99,6 +99,8 @@ write_files:
         -e REGION=${region} \
         -e INSTANCE_NAME=${instanceName} \
         -e GCP_PROJECT=${gcpProject} \
+        -e CONTROLLER_URL=${controllerUrl} \
+        -e AGENT_TOKEN=${agentToken} \
         ${machineAgentImage}
       ExecStop=/usr/bin/docker stop %n
 

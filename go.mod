@@ -10,6 +10,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/firestore v1.21.0
 	cloud.google.com/go/storage v1.56.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1

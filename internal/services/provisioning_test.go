@@ -7,13 +7,13 @@ import (
 	"time"
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
-	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 	"github.com/nbyl/metio/internal/testutil"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 // Re-export for backward compatibility within this test file

@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/handlers/agent"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 	"github.com/nbyl/metio/internal/services"
 )
@@ -47,6 +48,13 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := agent.MintToken(serverConfig.Name)
+	if err != nil {
+		log.Printf("[tasks] Failed to mint agent token for %s: %v", serverID, err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	programConfig := &programs.ServerConfig{
 		Name:              serverConfig.Name,
 		ServerID:          serverID,
@@ -59,6 +67,8 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 		MachineAgentImage: cfg.MachineAgentImage,
 		GCPProject:        cfg.ProjectID,
 		ExistingAddress:   serverConfig.ExistingAddress,
+		ControllerURL:     cfg.BaseURL,
+		AgentToken:        token,
 	}
 
 	log.Printf("[tasks] Executing provisioning for server %s", serverID)

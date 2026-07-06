@@ -12,13 +12,13 @@ import (
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/gorilla/mux"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/handlers/servers"
 	"github.com/nbyl/metio/internal/services"
 	"github.com/nbyl/metio/internal/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func setupMockDB(mockDB *testutil.MockDB) func() {
