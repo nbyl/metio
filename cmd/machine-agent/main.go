@@ -12,20 +12,16 @@ import (
 	"strings"
 	"time"
 
-	compute "cloud.google.com/go/compute/apiv1"
-	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"cloud.google.com/go/compute/metadata"
-	"github.com/nbyl/metio/internal/config"
-	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/agentclient"
+	"github.com/nbyl/metio/internal/dbtypes"
 	"github.com/nbyl/metio/internal/tracing"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-var Version = "dev" // default, overridden by ldflags
+var Version = "dev"
 
 var execCommand = exec.Command
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
@@ -36,34 +32,29 @@ var syncWhitelistFunc = syncWhitelist
 var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
 var checkScheduledShutdownFunc = checkScheduledShutdown
 var getInstanceIPFunc = getInstanceIP
-var stopInstanceFunc = stopInstance
 var sendMinecraftMessageFunc = sendMinecraftMessage
 var saveMinecraftWorldFunc = saveMinecraftWorld
-var handlePendingCommandFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error {
-	return nil // default no-op; production main() replaces with handlePendingCommand
+var getProjectIDFunc = getProjectID
+var getZoneFunc = getZone
+var handlePendingCommandFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
+	return nil
 }
 
-// WarningState represents the state of shutdown warnings sent
 type WarningState int
 
 const (
-	WarningStateNone    WarningState = iota // No warnings sent
-	WarningStateFiveMin                     // 5-minute warning sent
-	WarningStateOneMin                      // 1-minute warning sent
+	WarningStateNone    WarningState = iota
+	WarningStateFiveMin
+	WarningStateOneMin
 )
 
-// shutdownWarningState tracks which warnings have been sent for the current scheduled shutdown
 var shutdownWarningState WarningState
-
-// lastScheduledShutdownTime tracks the last scheduled shutdown time to detect changes
 var lastScheduledShutdownTime *time.Time
 
 func main() {
-	// Initialize viper first so config is available for tracing
 	viper.SetDefault("MINECRAFT_CHECK_INTERVAL", "30s")
 	viper.AutomaticEnv()
 
-	// Initialize OpenTelemetry
 	if err := tracing.InitTracerWithDetails("metio-machine-agent", Version); err != nil {
 		log.Printf("Failed to initialize tracer: %v", err)
 	}
@@ -78,9 +69,13 @@ func main() {
 		log.Fatalf("Invalid interval format: %v", err)
 	}
 
-	cfg, err := config.LoadWithMetadata()
-	if err != nil {
-		log.Fatalf("Error loading config: %v", err)
+	controllerURL := os.Getenv("CONTROLLER_URL")
+	if controllerURL == "" {
+		log.Fatal("CONTROLLER_URL must be set")
+	}
+	agentToken := os.Getenv("AGENT_TOKEN")
+	if agentToken == "" {
+		log.Fatal("AGENT_TOKEN must be set")
 	}
 
 	instanceName, err := getInstanceName()
@@ -89,17 +84,13 @@ func main() {
 	}
 
 	ctx := context.Background()
-	dbConn, err := cfg.NewDBConnection(ctx)
-	if err != nil {
-		log.Fatalf("Error creating Firestore client: %v", err)
-	}
+	client := agentclient.New(controllerURL, agentToken, instanceName)
 
 	fmt.Printf("Machine agent started with check interval: %v\n", interval)
 
 	handlePendingCommandFunc = handlePendingCommand
 
-	// Import whitelist on startup if Firestore is empty
-	if err := importWhitelistIfEmptyFunc(ctx, dbConn, instanceName); err != nil {
+	if err := importWhitelistIfEmptyFunc(ctx, client, instanceName); err != nil {
 		log.Printf("Error during initial whitelist import: %v", err)
 	}
 
@@ -108,17 +99,16 @@ func main() {
 
 	go func() {
 		for range ticker.C {
-			if err := runStatusUpdate(ctx, dbConn, instanceName); err != nil {
+			if err := runStatusUpdate(ctx, client, instanceName); err != nil {
 				log.Printf("Error in status update: %v", err)
 			}
 		}
 	}()
 
-	// Keep the program running
 	select {}
 }
 
-func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) error {
+func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
 	tracer := otel.Tracer("machine-agent")
 	ctx, span := tracer.Start(ctx, "runStatusUpdate")
 	defer span.End()
@@ -127,20 +117,16 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		attribute.String("instance.name", instanceName),
 	)
 
-	// Check for scheduled shutdown first (before any other processing)
-	if err := checkScheduledShutdownFunc(ctx, dbConn, instanceName); err != nil {
+	if err := checkScheduledShutdownFunc(ctx, client, instanceName); err != nil {
 		span.SetAttributes(attribute.String("error", "check_scheduled_shutdown_failed"))
 		log.Printf("Error checking scheduled shutdown: %v", err)
-		// Don't fail the entire update, just log the error
 	}
 
-	// Handle any pending commands from the controller (e.g., world save).
-	if err := handlePendingCommandFunc(ctx, dbConn, instanceName); err != nil {
+	if err := handlePendingCommandFunc(ctx, client, instanceName); err != nil {
 		span.SetAttributes(attribute.String("error", "handle_pending_command_failed"))
 		log.Printf("Error handling pending command: %v", err)
 	}
 
-	// Record database operation
 	tracing.RecordDBOperation("status_update")
 
 	current, max, err := getMinecraftPlayerCountFunc()
@@ -182,23 +168,21 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		attribute.String("version", version),
 	)
 
-	// Sync whitelist from Firestore to Minecraft
-	whitelistEnabled, err := syncWhitelistFunc(ctx, dbConn, instanceName)
+	whitelistEnabled, err := syncWhitelistFunc(ctx, client, instanceName)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "sync_whitelist_failed"))
 		log.Printf("Error syncing whitelist: %v", err)
-		// Don't fail the entire update, just log the error
+		whitelistEnabled = false
 	}
 	span.SetAttributes(attribute.Bool("whitelist.enabled", whitelistEnabled))
 
-	// Get current status to preserve scheduled shutdown
-	currentStatus, _ := dbConn.GetStatus(ctx, instanceName)
+	currentStatus, _ := client.GetStatus(ctx)
 
-	err = dbConn.UpdateStatus(ctx, instanceName, db.Status{
-		Players:           db.Players{Current: current, Max: max},
+	err = client.UpdateStatus(ctx, dbtypes.Status{
+		Players:           dbtypes.Players{Current: current, Max: max},
 		Timestamp:         time.Now(),
 		Uptime:            uptime,
-		ServerState:       db.ServerStateRunning,
+		ServerState:       dbtypes.ServerStateRunning,
 		InstanceIP:        instanceIP,
 		Version:           version,
 		WhitelistEnabled:  whitelistEnabled,
@@ -210,7 +194,6 @@ func runStatusUpdate(ctx context.Context, dbConn db.DB, instanceName string) err
 		return err
 	}
 
-	// Record status update metric
 	tracing.RecordStatusUpdate(instanceName, "running")
 
 	span.SetAttributes(attribute.String("success", "true"))
@@ -224,7 +207,6 @@ func getMinecraftPlayerCount() (int, int, error) {
 		return 0, 0, err
 	}
 
-	// Parse output like "There are 2 of a max of 20 players online: Steve, Alex"
 	re := regexp.MustCompile(`There are (\d+) of a max of (\d+) players online`)
 	matches := re.FindStringSubmatch(string(output))
 	if len(matches) < 3 {
@@ -242,7 +224,6 @@ func getUptime() (string, error) {
 		return "", err
 	}
 
-	// Parse uptime in seconds from /proc/uptime (first number)
 	fields := strings.Fields(string(data))
 	if len(fields) < 1 {
 		return "", fmt.Errorf("could not parse uptime from /proc/uptime: %s", string(data))
@@ -253,7 +234,6 @@ func getUptime() (string, error) {
 		return "", fmt.Errorf("could not parse uptime seconds: %v", err)
 	}
 
-	// Convert to duration and format
 	duration := time.Duration(uptimeSeconds * float64(time.Second))
 	return formatDuration(duration), nil
 }
@@ -277,123 +257,63 @@ func getInstanceIP() (string, error) {
 	return fmt.Sprintf("%s:25565", ip), nil
 }
 
-// getProjectID returns the GCP project ID from instance metadata
 func getProjectID() (string, error) {
 	return metadata.ProjectID()
 }
 
-// getZone returns the GCP zone from instance metadata
 func getZone() (string, error) {
 	return metadata.Zone()
 }
 
-// getInstanceName returns the instance name from metadata
 func getInstanceName() (string, error) {
 	return metadata.InstanceName()
-}
-
-// stopInstance stops the current VM instance via GCP Compute API
-func stopInstance(ctx context.Context) error {
-	project, err := getProjectID()
-	if err != nil {
-		return fmt.Errorf("failed to get project ID: %w", err)
-	}
-
-	zone, err := getZone()
-	if err != nil {
-		return fmt.Errorf("failed to get zone: %w", err)
-	}
-
-	instance, err := getInstanceName()
-	if err != nil {
-		return fmt.Errorf("failed to get instance name: %w", err)
-	}
-
-	client, err := compute.NewInstancesRESTClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create compute client: %w", err)
-	}
-	defer client.Close()
-
-	log.Printf("Stopping instance %s in project %s, zone %s", instance, project, zone)
-
-	req := &computepb.StopInstanceRequest{
-		Project:  project,
-		Zone:     zone,
-		Instance: instance,
-	}
-
-	op, err := client.Stop(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to stop instance: %w", err)
-	}
-
-	// Wait for operation to complete (will be interrupted when VM stops)
-	if err := op.Wait(ctx); err != nil {
-		// This error is expected as the VM will be stopped
-		log.Printf("Stop operation wait ended: %v", err)
-	}
-
-	return nil
 }
 
 func getMinecraftVersion() (version string, rawOutput string, err error) {
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "version")
 	output, err := cmd.Output()
 	if err != nil {
-		// Command failed - return "Unknown" with no raw output
 		return "Unknown", "", nil
 	}
 
 	outputStr := string(output)
 
-	// Try Paper/Spigot format: "(MC: 1.21.4)"
 	paperRe := regexp.MustCompile(`\(MC: ([0-9.]+)\)`)
 	if matches := paperRe.FindStringSubmatch(outputStr); len(matches) >= 2 {
 		return matches[1], "", nil
 	}
 
-	// Try Vanilla RCON format: "name = 1.21.10"
-	// Example: "Server version info:id = 1.21.10name = 1.21.10data = 4556..."
 	vanillaRconRe := regexp.MustCompile(`name\s*=\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
 	if matches := vanillaRconRe.FindStringSubmatch(outputStr); len(matches) >= 2 {
 		return matches[1], "", nil
 	}
 
-	// Fallback: Vanilla log format - look for version pattern like "1.21.4"
-	// Example: "Starting minecraft server version 1.21.4"
 	vanillaRe := regexp.MustCompile(`version ([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
 	if matches := vanillaRe.FindStringSubmatch(outputStr); len(matches) >= 2 {
 		return matches[1], "", nil
 	}
 
-	// Both regexes failed - return "Unknown" with raw output for debugging
 	return "Unknown", outputStr, nil
 }
 
-// MinecraftWhitelistEntry represents an entry in Minecraft's whitelist.json
 type MinecraftWhitelistEntry struct {
 	UUID string `json:"uuid"`
 	Name string `json:"name"`
 }
 
-// importWhitelistIfEmpty imports whitelist.json from Minecraft if Firestore whitelist is empty
-func importWhitelistIfEmpty(ctx context.Context, dbConn db.DB, instanceName string) error {
-	// Check if Firestore whitelist has any entries
-	entries, err := dbConn.GetWhitelistEntries(ctx, instanceName)
+func importWhitelistIfEmpty(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
+	entries, err := client.GetWhitelistEntries(ctx)
 	if err != nil {
 		log.Printf("Error checking whitelist entries: %v", err)
-		// Continue with import attempt
 	}
 
 	if len(entries) > 0 {
-		log.Printf("Firestore whitelist already has %d entries, skipping import", len(entries))
+		log.Printf("Controller whitelist already has %d entries, skipping import", len(entries))
 		return nil
 	}
 
-	log.Println("Firestore whitelist is empty, attempting to import from whitelist.json")
+	log.Println("Controller whitelist is empty, attempting to import from whitelist.json")
 
-	// Read whitelist.json from Minecraft container
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "cat", "/data/whitelist.json")
 	output, err := cmd.Output()
 	if err != nil {
@@ -410,24 +330,22 @@ func importWhitelistIfEmpty(ctx context.Context, dbConn db.DB, instanceName stri
 		return nil
 	}
 
-	// Convert and import entries to Firestore
 	for _, mcEntry := range mcEntries {
-		entry := db.WhitelistEntry{
+		entry := dbtypes.WhitelistEntry{
 			Username: mcEntry.Name,
 			UUID:     mcEntry.UUID,
 			AddedAt:  time.Now(),
 			AddedBy:  "imported",
 		}
-		if err := dbConn.AddWhitelistEntry(ctx, instanceName, entry); err != nil {
+		if err := client.AddWhitelistEntry(ctx, entry); err != nil {
 			log.Printf("Error importing whitelist entry %s: %v", mcEntry.Name, err)
 			continue
 		}
 		log.Printf("Imported whitelist entry: %s (%s)", mcEntry.Name, mcEntry.UUID)
 	}
 
-	// Also check if whitelist is enabled via server.properties or by trying whitelist list
 	whitelistEnabled := getWhitelistEnabledStatus()
-	if err := dbConn.SetWhitelistConfig(ctx, instanceName, db.WhitelistConfig{Enabled: whitelistEnabled}); err != nil {
+	if err := client.SetWhitelistConfig(ctx, dbtypes.WhitelistConfig{Enabled: whitelistEnabled}); err != nil {
 		log.Printf("Error setting whitelist config: %v", err)
 	}
 
@@ -435,35 +353,25 @@ func importWhitelistIfEmpty(ctx context.Context, dbConn db.DB, instanceName stri
 	return nil
 }
 
-// syncWhitelist syncs the whitelist from Firestore to Minecraft
-// Returns whether whitelist enforcement is enabled
-func syncWhitelist(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
-	// Get whitelist config from Firestore
-	config, err := dbConn.GetWhitelistConfig(ctx, instanceName)
+func syncWhitelist(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+	config, err := client.GetWhitelistConfig(ctx)
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			config = db.WhitelistConfig{Enabled: false}
-		} else {
-			return false, fmt.Errorf("failed to get whitelist config: %w", err)
-		}
+		config = dbtypes.WhitelistConfig{Enabled: false}
 	}
 
-	// Get whitelist entries from Firestore
-	firestoreEntries, err := dbConn.GetWhitelistEntries(ctx, instanceName)
+	entries, err := client.GetWhitelistEntries(ctx)
 	if err != nil {
 		return config.Enabled, fmt.Errorf("failed to get whitelist entries: %w", err)
 	}
 
-	// Get current whitelist from Minecraft
 	minecraftEntries, err := getMinecraftWhitelist()
 	if err != nil {
 		return config.Enabled, fmt.Errorf("failed to get minecraft whitelist: %w", err)
 	}
 
-	// Build maps for comparison
-	firestoreMap := make(map[string]db.WhitelistEntry)
-	for _, entry := range firestoreEntries {
-		firestoreMap[entry.UUID] = entry
+	entriesMap := make(map[string]dbtypes.WhitelistEntry)
+	for _, entry := range entries {
+		entriesMap[entry.UUID] = entry
 	}
 
 	minecraftMap := make(map[string]bool)
@@ -471,8 +379,7 @@ func syncWhitelist(ctx context.Context, dbConn db.DB, instanceName string) (bool
 		minecraftMap[entry.UUID] = true
 	}
 
-	// Add missing players to Minecraft
-	for uuid, entry := range firestoreMap {
+	for uuid, entry := range entriesMap {
 		if !minecraftMap[uuid] {
 			if err := addPlayerToMinecraftWhitelist(entry.Username); err != nil {
 				log.Printf("Error adding %s to Minecraft whitelist: %v", entry.Username, err)
@@ -482,9 +389,8 @@ func syncWhitelist(ctx context.Context, dbConn db.DB, instanceName string) (bool
 		}
 	}
 
-	// Remove extra players from Minecraft
 	for _, mcEntry := range minecraftEntries {
-		if _, exists := firestoreMap[mcEntry.UUID]; !exists {
+		if _, exists := entriesMap[mcEntry.UUID]; !exists {
 			if err := removePlayerFromMinecraftWhitelist(mcEntry.Name); err != nil {
 				log.Printf("Error removing %s from Minecraft whitelist: %v", mcEntry.Name, err)
 			} else {
@@ -493,7 +399,6 @@ func syncWhitelist(ctx context.Context, dbConn db.DB, instanceName string) (bool
 		}
 	}
 
-	// Sync whitelist enabled status
 	currentEnabled := getWhitelistEnabledStatus()
 	if config.Enabled != currentEnabled {
 		if err := setWhitelistEnabled(config.Enabled); err != nil {
@@ -506,9 +411,7 @@ func syncWhitelist(ctx context.Context, dbConn db.DB, instanceName string) (bool
 	return config.Enabled, nil
 }
 
-// getMinecraftWhitelist gets the current whitelist from Minecraft via RCON
 func getMinecraftWhitelist() ([]MinecraftWhitelistEntry, error) {
-	// Read whitelist.json directly as RCON whitelist list doesn't give UUIDs
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "cat", "/data/whitelist.json")
 	output, err := cmd.Output()
 	if err != nil {
@@ -523,7 +426,6 @@ func getMinecraftWhitelist() ([]MinecraftWhitelistEntry, error) {
 	return entries, nil
 }
 
-// addPlayerToMinecraftWhitelist adds a player to the Minecraft whitelist via RCON
 func addPlayerToMinecraftWhitelist(username string) error {
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "whitelist", "add", username)
 	output, err := cmd.CombinedOutput()
@@ -533,7 +435,6 @@ func addPlayerToMinecraftWhitelist(username string) error {
 	return nil
 }
 
-// removePlayerFromMinecraftWhitelist removes a player from the Minecraft whitelist via RCON
 func removePlayerFromMinecraftWhitelist(username string) error {
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "whitelist", "remove", username)
 	output, err := cmd.CombinedOutput()
@@ -543,11 +444,7 @@ func removePlayerFromMinecraftWhitelist(username string) error {
 	return nil
 }
 
-// getWhitelistEnabledStatus checks if whitelist enforcement is enabled
 func getWhitelistEnabledStatus() bool {
-	// Check via RCON - "whitelist list" will indicate if whitelist is on
-	// If whitelist is off, players can still join without being whitelisted
-	// We'll read server.properties for the authoritative value
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "cat", "/data/server.properties")
 	output, err := cmd.Output()
 	if err != nil {
@@ -555,7 +452,6 @@ func getWhitelistEnabledStatus() bool {
 		return false
 	}
 
-	// Look for "white-list=true" or "enforce-whitelist=true"
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -570,7 +466,6 @@ func getWhitelistEnabledStatus() bool {
 	return false
 }
 
-// setWhitelistEnabled enables or disables whitelist enforcement via RCON
 func setWhitelistEnabled(enabled bool) error {
 	var cmd *exec.Cmd
 	if enabled {
@@ -585,17 +480,13 @@ func setWhitelistEnabled(enabled bool) error {
 	return nil
 }
 
-// checkScheduledShutdown checks if a shutdown is scheduled and handles warnings and execution
-func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName string) error {
-	// Get current status to check scheduled shutdown
-	currentStatus, err := dbConn.GetStatus(ctx, instanceName)
+func checkScheduledShutdown(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
+	currentStatus, err := client.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get status: %w", err)
 	}
 
-	// No shutdown scheduled
 	if currentStatus.ScheduledShutdown == nil {
-		// Reset warning state if shutdown was cancelled
 		if lastScheduledShutdownTime != nil {
 			log.Println("Scheduled shutdown was cancelled, resetting warning state")
 			shutdownWarningState = WarningStateNone
@@ -606,7 +497,6 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 
 	shutdownTime := *currentStatus.ScheduledShutdown
 
-	// Check if this is a new/different scheduled shutdown
 	if lastScheduledShutdownTime == nil || !lastScheduledShutdownTime.Equal(shutdownTime) {
 		log.Printf("New scheduled shutdown detected: %v", shutdownTime)
 		shutdownWarningState = WarningStateNone
@@ -615,13 +505,11 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 
 	remaining := time.Until(shutdownTime)
 
-	// Time to shut down
 	if remaining <= 0 {
 		log.Println("Scheduled shutdown time reached, initiating shutdown...")
-		return initiateScheduledShutdown(ctx, dbConn, instanceName)
+		return initiateScheduledShutdown(ctx, client, instanceName)
 	}
 
-	// Send warnings based on remaining time
 	if remaining <= 1*time.Minute && shutdownWarningState < WarningStateOneMin {
 		if err := sendMinecraftMessageFunc("Server will shut down in 1 minute! Save your progress!"); err != nil {
 			log.Printf("Error sending 1-minute warning: %v", err)
@@ -641,7 +529,6 @@ func checkScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName stri
 	return nil
 }
 
-// sendMinecraftMessage sends a chat message to all players via RCON
 func sendMinecraftMessage(message string) error {
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "say", message)
 	output, err := cmd.CombinedOutput()
@@ -651,7 +538,6 @@ func sendMinecraftMessage(message string) error {
 	return nil
 }
 
-// saveMinecraftWorld saves the Minecraft world via RCON
 func saveMinecraftWorld() error {
 	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "save-all")
 	output, err := cmd.CombinedOutput()
@@ -662,10 +548,8 @@ func saveMinecraftWorld() error {
 	return nil
 }
 
-// handlePendingCommand checks for and executes pending commands from the controller.
-// Currently supports: "save" - triggers a world save via RCON.
-func handlePendingCommand(ctx context.Context, dbConn db.DB, instanceName string) error {
-	status, err := dbConn.GetStatus(ctx, instanceName)
+func handlePendingCommand(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
+	status, err := client.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get status: %w", err)
 	}
@@ -686,44 +570,45 @@ func handlePendingCommand(ctx context.Context, dbConn db.DB, instanceName string
 	}
 	status.PendingCommand = ""
 
-	return dbConn.UpdateStatus(ctx, instanceName, status)
+	return client.UpdateStatus(ctx, status)
 }
 
-// initiateScheduledShutdown handles the shutdown process
-func initiateScheduledShutdown(ctx context.Context, dbConn db.DB, instanceName string) error {
-	// Send final warning
+func initiateScheduledShutdown(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
 	if err := sendMinecraftMessageFunc("Server is shutting down NOW!"); err != nil {
 		log.Printf("Error sending final shutdown message: %v", err)
 	}
 
-	// Save the world
 	if err := saveMinecraftWorldFunc(); err != nil {
 		log.Printf("Error saving world before shutdown: %v", err)
-		// Continue with shutdown even if save fails
 	}
 
-	// Clear the scheduled shutdown from Firestore
-	currentStatus, err := dbConn.GetStatus(ctx, instanceName)
+	currentStatus, err := client.GetStatus(ctx)
 	if err != nil {
 		log.Printf("Error getting status to clear scheduled shutdown: %v", err)
 	} else {
 		currentStatus.ScheduledShutdown = nil
 		currentStatus.Timestamp = time.Now()
-		if err := dbConn.UpdateStatus(ctx, instanceName, currentStatus); err != nil {
+		if err := client.UpdateStatus(ctx, currentStatus); err != nil {
 			log.Printf("Error clearing scheduled shutdown: %v", err)
 		}
 	}
 
-	// Reset local state
 	shutdownWarningState = WarningStateNone
 	lastScheduledShutdownTime = nil
 
-	// Wait a moment for the save to complete
 	time.Sleep(5 * time.Second)
 
-	// Initiate VM shutdown via GCP Compute API
-	log.Println("Initiating VM shutdown via GCP Compute API...")
-	if err := stopInstanceFunc(ctx); err != nil {
+	project, err := getProjectIDFunc()
+	if err != nil {
+		return fmt.Errorf("failed to get project ID: %w", err)
+	}
+	zone, err := getZoneFunc()
+	if err != nil {
+		return fmt.Errorf("failed to get zone: %w", err)
+	}
+
+	log.Println("Initiating VM shutdown via controller API...")
+	if err := client.StopInstance(ctx, project, zone); err != nil {
 		return fmt.Errorf("failed to stop instance: %w", err)
 	}
 

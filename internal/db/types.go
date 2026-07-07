@@ -1,59 +1,17 @@
 package db
 
-import "time"
+import "github.com/nbyl/metio/internal/dbtypes"
 
-type ServerState string
+type ServerState = dbtypes.ServerState
 
 const (
-	ServerStateStopped  ServerState = "STOPPED"
-	ServerStateStarting ServerState = "STARTING"
-	ServerStateRunning  ServerState = "RUNNING"
-	ServerStateStopping ServerState = "STOPPING"
+	ServerStateStopped  = dbtypes.ServerStateStopped
+	ServerStateStarting = dbtypes.ServerStateStarting
+	ServerStateRunning  = dbtypes.ServerStateRunning
+	ServerStateStopping = dbtypes.ServerStateStopping
 )
 
-func (s ServerState) String() string {
-	return string(s)
-}
-
-func (s ServerState) IsRunning() bool {
-	return s == ServerStateRunning
-}
-
-func (s ServerState) IsStopped() bool {
-	return s == ServerStateStopped
-}
-
-func (s ServerState) IsTransitioning() bool {
-	return s == ServerStateStarting || s == ServerStateStopping
-}
-
-type Players struct {
-	Current int `firestore:"current"`
-	Max     int `firestore:"max"`
-}
-
-type Status struct {
-	Players              Players     `firestore:"players"`
-	Timestamp            time.Time   `firestore:"timestamp"`
-	Uptime               string      `firestore:"uptime"`
-	ServerState          ServerState `firestore:"server_state"`
-	InstanceIP           string      `firestore:"instance_ip"`
-	Version              string      `firestore:"version"`
-	WhitelistEnabled     bool        `firestore:"whitelist_enabled"`
-	ScheduledShutdown    *time.Time  `firestore:"scheduled_shutdown,omitempty"`
-	PendingCommand       string      `firestore:"pendingCommand,omitempty"`
-	PendingCommandResult string      `firestore:"pendingCommandResult,omitempty"`
-}
-
-// WhitelistEntry represents a player in the whitelist
-type WhitelistEntry struct {
-	Username string    `firestore:"username"`
-	UUID     string    `firestore:"uuid"`
-	AddedAt  time.Time `firestore:"added_at"`
-	AddedBy  string    `firestore:"added_by"`
-}
-
-// WhitelistConfig represents the whitelist configuration
-type WhitelistConfig struct {
-	Enabled bool `firestore:"enabled"`
-}
+type Players = dbtypes.Players
+type Status = dbtypes.Status
+type WhitelistEntry = dbtypes.WhitelistEntry
+type WhitelistConfig = dbtypes.WhitelistConfig

@@ -183,7 +183,7 @@ func TestFirestoreDB_GetStatus_Success(t *testing.T) {
 	mockDoc.On("Collection", "data").Return(mockSubCollection)
 	mockSubCollection.On("Doc", "status").Return(mockSubDoc)
 	mockSubDoc.On("Get", ctx).Return(mockSnapshot, nil)
-	mockSnapshot.On("DataTo", mock.AnythingOfType("*db.Status")).Return(nil).Run(func(args mock.Arguments) {
+	mockSnapshot.On("DataTo", mock.AnythingOfType("*dbtypes.Status")).Return(nil).Run(func(args mock.Arguments) {
 		status := args.Get(0).(*Status)
 		*status = expectedStatus
 	})
@@ -269,7 +269,7 @@ func TestFirestoreDB_GetStatus_DataToError(t *testing.T) {
 	mockDoc.On("Collection", "data").Return(mockSubCollection)
 	mockSubCollection.On("Doc", "status").Return(mockSubDoc)
 	mockSubDoc.On("Get", ctx).Return(mockSnapshot, nil)
-	mockSnapshot.On("DataTo", mock.AnythingOfType("*db.Status")).Return(assert.AnError)
+	mockSnapshot.On("DataTo", mock.AnythingOfType("*dbtypes.Status")).Return(assert.AnError)
 
 	_, err := db.GetStatus(ctx, instanceName)
 	assert.Error(t, err)
@@ -340,7 +340,7 @@ func TestFirestoreDB_GetStatus_WithServerState(t *testing.T) {
 	mockDoc.On("Collection", "data").Return(mockSubCollection)
 	mockSubCollection.On("Doc", "status").Return(mockSubDoc)
 	mockSubDoc.On("Get", ctx).Return(mockSnapshot, nil)
-	mockSnapshot.On("DataTo", mock.AnythingOfType("*db.Status")).Return(nil).Run(func(args mock.Arguments) {
+	mockSnapshot.On("DataTo", mock.AnythingOfType("*dbtypes.Status")).Return(nil).Run(func(args mock.Arguments) {
 		status := args.Get(0).(*Status)
 		*status = expectedStatus
 	})

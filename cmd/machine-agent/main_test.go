@@ -8,22 +8,58 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nbyl/metio/internal/db"
-	"github.com/nbyl/metio/internal/testutil"
+	"github.com/nbyl/metio/internal/agentclient"
+	"github.com/nbyl/metio/internal/dbtypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"google.golang.org/grpc/codes"
-	grpcstatus "google.golang.org/grpc/status"
 )
 
-type MockDB = testutil.MockDB
+type MockAgentClient struct {
+	mock.Mock
+}
+
+func (m *MockAgentClient) GetStatus(ctx context.Context) (dbtypes.Status, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(dbtypes.Status), args.Error(1)
+}
+
+func (m *MockAgentClient) UpdateStatus(ctx context.Context, status dbtypes.Status) error {
+	args := m.Called(ctx, status)
+	return args.Error(0)
+}
+
+func (m *MockAgentClient) GetWhitelistEntries(ctx context.Context) ([]dbtypes.WhitelistEntry, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]dbtypes.WhitelistEntry), args.Error(1)
+}
+
+func (m *MockAgentClient) GetWhitelistConfig(ctx context.Context) (dbtypes.WhitelistConfig, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(dbtypes.WhitelistConfig), args.Error(1)
+}
+
+func (m *MockAgentClient) SetWhitelistConfig(ctx context.Context, cfg dbtypes.WhitelistConfig) error {
+	args := m.Called(ctx, cfg)
+	return args.Error(0)
+}
+
+func (m *MockAgentClient) AddWhitelistEntry(ctx context.Context, entry dbtypes.WhitelistEntry) error {
+	args := m.Called(ctx, entry)
+	return args.Error(0)
+}
+
+func (m *MockAgentClient) StopInstance(ctx context.Context, project, zone string) error {
+	args := m.Called(ctx, project, zone)
+	return args.Error(0)
+}
 
 func TestRunStatusUpdate(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
 	oldSyncWhitelistFunc := syncWhitelistFunc
+	oldCheckFunc := checkScheduledShutdownFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 5, 20, nil
 	}
@@ -33,39 +69,43 @@ func TestRunStatusUpdate(t *testing.T) {
 	getMinecraftVersionFunc = func() (string, string, error) {
 		return "1.21.4", "", nil
 	}
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
 		return true, nil
+	}
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
+		return nil
 	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
 		getMinecraftVersionFunc = oldVersionFunc
 		syncWhitelistFunc = oldSyncWhitelistFunc
+		checkScheduledShutdownFunc = oldCheckFunc
 	}()
 
-	// Mock GetStatus for checkScheduledShutdown (called after UpdateStatus)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
 
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil).Run(func(args mock.Arguments) {
-		status := args.Get(2).(db.Status)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil).Run(func(args mock.Arguments) {
+		status := args.Get(1).(dbtypes.Status)
 		assert.Equal(t, 5, status.Players.Current)
 		assert.Equal(t, 20, status.Players.Max)
-		assert.Equal(t, db.ServerStateRunning, status.ServerState)
+		assert.Equal(t, dbtypes.ServerStateRunning, status.ServerState)
 		assert.Equal(t, "1.21.4", status.Version)
 		assert.True(t, status.WhitelistEnabled)
 	})
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
-	mockDB.AssertExpectations(t)
+	mockClient.AssertExpectations(t)
 }
 
 func TestRunStatusUpdateError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
 	oldSyncWhitelistFunc := syncWhitelistFunc
+	oldCheckFunc := checkScheduledShutdownFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 10, nil
 	}
@@ -75,24 +115,26 @@ func TestRunStatusUpdateError(t *testing.T) {
 	getMinecraftVersionFunc = func() (string, string, error) {
 		return "1.21.4", "", nil
 	}
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
 		return false, nil
+	}
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
+		return nil
 	}
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
 		getMinecraftVersionFunc = oldVersionFunc
 		syncWhitelistFunc = oldSyncWhitelistFunc
+		checkScheduledShutdownFunc = oldCheckFunc
 	}()
 
-	// Mock GetStatus for checkScheduledShutdown (called after UpdateStatus)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(assert.AnError)
 
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
-
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
-	mockDB.AssertExpectations(t)
+	mockClient.AssertExpectations(t)
 }
 
 func TestGetMinecraftPlayerCount(t *testing.T) {
@@ -123,7 +165,7 @@ func TestGetUptime(t *testing.T) {
 	oldReadFile := osReadFile
 	osReadFile = func(filename string) ([]byte, error) {
 		if filename == "/proc/uptime" {
-			return []byte("172800.00 123456.78"), nil // 2 days in seconds
+			return []byte("172800.00 123456.78"), nil
 		}
 		return nil, fmt.Errorf("file not found")
 	}
@@ -146,8 +188,6 @@ func TestGetUptimeInvalidOutput(t *testing.T) {
 }
 
 func TestGetInstanceIP(t *testing.T) {
-	// This test would require mocking the metadata client
-	// For now, we'll test the function structure
 	_ = func() (string, error) {
 		return getInstanceIP()
 	}
@@ -195,7 +235,7 @@ func TestGetMinecraftVersion_VanillaRcon(t *testing.T) {
 func TestGetMinecraftVersion_CommandFails(t *testing.T) {
 	oldExecCommand := execCommand
 	execCommand = func(name string, args ...string) *exec.Cmd {
-		return exec.Command("false") // exits with error
+		return exec.Command("false")
 	}
 	defer func() { execCommand = oldExecCommand }()
 
@@ -231,26 +271,25 @@ func TestFormatDuration_Zero(t *testing.T) {
 }
 
 func TestRunStatusUpdate_PlayerCountError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 0, fmt.Errorf("rcon error")
 	}
 	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
 
-	// Mock for checkScheduledShutdown
 	oldCheck := checkScheduledShutdownFunc
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error {
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
 		return nil
 	}
 	defer func() { checkScheduledShutdownFunc = oldCheck }()
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
 func TestRunStatusUpdate_UptimeError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 5, 20, nil }
@@ -261,95 +300,91 @@ func TestRunStatusUpdate_UptimeError(t *testing.T) {
 	}()
 
 	oldCheck := checkScheduledShutdownFunc
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() { checkScheduledShutdownFunc = oldCheck }()
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
 func TestRunStatusUpdate_VersionError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
 	oldSyncFunc := syncWhitelistFunc
 	oldIPFunc := getInstanceIPFunc
+	oldCheck := checkScheduledShutdownFunc
 
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 5, 20, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "", "", fmt.Errorf("version error") }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
 	getInstanceIPFunc = func() (string, error) { return "1.2.3.4:25565", nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
 		getMinecraftVersionFunc = oldVersionFunc
 		syncWhitelistFunc = oldSyncFunc
 		getInstanceIPFunc = oldIPFunc
+		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	oldCheck := checkScheduledShutdownFunc
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
-	defer func() { checkScheduledShutdownFunc = oldCheck }()
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
-
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // version error is non-fatal
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }
 
 func TestRunStatusUpdate_IPError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
 	oldSyncFunc := syncWhitelistFunc
 	oldIPFunc := getInstanceIPFunc
+	oldCheck := checkScheduledShutdownFunc
 
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 5, 20, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
 	getInstanceIPFunc = func() (string, error) { return "", fmt.Errorf("metadata error") }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
 		getMinecraftVersionFunc = oldVersionFunc
 		syncWhitelistFunc = oldSyncFunc
 		getInstanceIPFunc = oldIPFunc
+		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	oldCheck := checkScheduledShutdownFunc
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
-	defer func() { checkScheduledShutdownFunc = oldCheck }()
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
-
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // IP error is non-fatal
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }
 
-// --- importWhitelistIfEmpty tests ---
-
 func TestImportWhitelistIfEmpty_AlreadyHasEntries(t *testing.T) {
-	mockDB := new(MockDB)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{
+	mockClient := new(MockAgentClient)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{
 		{Username: "player1", UUID: "uuid-1"},
 	}, nil)
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
 func TestImportWhitelistIfEmpty_EmptyWhitelist(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	entries := []MinecraftWhitelistEntry{
 		{UUID: "uuid-1", Name: "player1"},
@@ -361,88 +396,81 @@ func TestImportWhitelistIfEmpty_EmptyWhitelist(t *testing.T) {
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		callCount++
 		if callCount == 1 {
-			// whitelist.json read
 			return exec.Command("echo", string(entriesJSON))
 		}
-		// server.properties read
 		return exec.Command("echo", "white-list=true")
 	}
 
-	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(nil)
-	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistConfig")).Return(nil)
+	mockClient.On("AddWhitelistEntry", mock.Anything, mock.AnythingOfType("dbtypes.WhitelistEntry")).Return(nil)
+	mockClient.On("SetWhitelistConfig", mock.Anything, mock.AnythingOfType("dbtypes.WhitelistConfig")).Return(nil)
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
 func TestImportWhitelistIfEmpty_EmptyJSON(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		return exec.Command("echo", "[]")
 	}
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
 func TestImportWhitelistIfEmpty_ReadError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		return exec.Command("false")
 	}
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
-// --- syncWhitelist tests ---
-
 func TestSyncWhitelist_Success(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{
 		{Username: "player1", UUID: "uuid-1"},
 	}, nil)
 
-	// Mock exec for getMinecraftWhitelist (cat whitelist.json) and getWhitelistEnabledStatus (cat server.properties)
 	callCount := 0
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		callCount++
 		if callCount == 1 {
-			// whitelist.json
 			entries := []MinecraftWhitelistEntry{{UUID: "uuid-1", Name: "player1"}}
 			data, _ := json.Marshal(entries)
 			return exec.Command("echo", string(data))
 		}
-		// server.properties
 		return exec.Command("echo", "white-list=true")
 	}
 
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.True(t, enabled)
 }
 
 func TestSyncWhitelist_AddAndRemove(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: false}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: false}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{
 		{Username: "newplayer", UUID: "uuid-new"},
 	}, nil)
 
@@ -450,38 +478,42 @@ func TestSyncWhitelist_AddAndRemove(t *testing.T) {
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		callCount++
 		if callCount == 1 {
-			// whitelist.json - has oldplayer not in firestore
 			entries := []MinecraftWhitelistEntry{{UUID: "uuid-old", Name: "oldplayer"}}
 			data, _ := json.Marshal(entries)
 			return exec.Command("echo", string(data))
 		}
-		// All other commands succeed
 		return exec.Command("true")
 	}
 
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.False(t, enabled)
 }
 
 func TestSyncWhitelist_GetConfigError(t *testing.T) {
-	mockDB := new(MockDB)
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{}, fmt.Errorf("db error"))
+	mockClient := new(MockAgentClient)
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{}, fmt.Errorf("http error"))
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
-	_, err := syncWhitelist(context.Background(), mockDB, "test-instance")
-	assert.Error(t, err)
+	oldExec := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "[]")
+	}
+	defer func() { execCommand = oldExec }()
+
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	assert.False(t, enabled)
 }
 
 func TestSyncWhitelist_GetEntriesError(t *testing.T) {
-	mockDB := new(MockDB)
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry(nil), fmt.Errorf("entries error"))
+	mockClient := new(MockAgentClient)
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry(nil), fmt.Errorf("entries error"))
 
-	_, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	_, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
-
-// --- getMinecraftWhitelist tests ---
 
 func TestGetMinecraftWhitelist_Success(t *testing.T) {
 	oldExec := execCommand
@@ -522,8 +554,6 @@ func TestGetMinecraftWhitelist_InvalidJSON(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- addPlayerToMinecraftWhitelist tests ---
-
 func TestAddPlayerToMinecraftWhitelist_Success(t *testing.T) {
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
@@ -548,8 +578,6 @@ func TestAddPlayerToMinecraftWhitelist_Error(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- removePlayerFromMinecraftWhitelist tests ---
-
 func TestRemovePlayerFromMinecraftWhitelist_Success(t *testing.T) {
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
@@ -573,8 +601,6 @@ func TestRemovePlayerFromMinecraftWhitelist_Error(t *testing.T) {
 	err := removePlayerFromMinecraftWhitelist("testplayer")
 	assert.Error(t, err)
 }
-
-// --- getWhitelistEnabledStatus tests ---
 
 func TestGetWhitelistEnabledStatus_True(t *testing.T) {
 	oldExec := execCommand
@@ -631,8 +657,6 @@ func TestGetWhitelistEnabledStatus_NoWhitelistLine(t *testing.T) {
 	assert.False(t, getWhitelistEnabledStatus())
 }
 
-// --- setWhitelistEnabled tests ---
-
 func TestSetWhitelistEnabled_On(t *testing.T) {
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
@@ -669,8 +693,6 @@ func TestSetWhitelistEnabled_Error(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- sendMinecraftMessage tests ---
-
 func TestSendMinecraftMessage_Success(t *testing.T) {
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
@@ -694,8 +716,6 @@ func TestSendMinecraftMessage_Error(t *testing.T) {
 	err := sendMinecraftMessage("hello")
 	assert.Error(t, err)
 }
-
-// --- saveMinecraftWorld tests ---
 
 func TestSaveMinecraftWorld_Success(t *testing.T) {
 	oldExec := execCommand
@@ -721,48 +741,45 @@ func TestSaveMinecraftWorld_Error(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- checkScheduledShutdown tests ---
-
 func TestCheckScheduledShutdown_NoShutdown(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 
-	// Reset global state
 	shutdownWarningState = WarningStateNone
 	lastScheduledShutdownTime = nil
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
 		ScheduledShutdown: nil,
 	}, nil)
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
 func TestCheckScheduledShutdown_GetStatusError(t *testing.T) {
-	mockDB := new(MockDB)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, fmt.Errorf("db error"))
+	mockClient := new(MockAgentClient)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, fmt.Errorf("http error"))
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
 func TestCheckScheduledShutdown_FutureShutdown_NoWarning(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	shutdownWarningState = WarningStateNone
 	lastScheduledShutdownTime = nil
 
 	futureTime := time.Now().Add(30 * time.Minute)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
 		ScheduledShutdown: &futureTime,
 	}, nil)
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.Equal(t, WarningStateNone, shutdownWarningState)
 }
 
 func TestCheckScheduledShutdown_FiveMinWarning(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	shutdownWarningState = WarningStateNone
 	lastScheduledShutdownTime = nil
 
@@ -771,17 +788,17 @@ func TestCheckScheduledShutdown_FiveMinWarning(t *testing.T) {
 	defer func() { sendMinecraftMessageFunc = oldSendMsg }()
 
 	fiveMinFromNow := time.Now().Add(3 * time.Minute)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
 		ScheduledShutdown: &fiveMinFromNow,
 	}, nil)
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.Equal(t, WarningStateFiveMin, shutdownWarningState)
 }
 
 func TestCheckScheduledShutdown_OneMinWarning(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	shutdownWarningState = WarningStateFiveMin
 	lastScheduledShutdownTime = nil
 
@@ -790,93 +807,188 @@ func TestCheckScheduledShutdown_OneMinWarning(t *testing.T) {
 	defer func() { sendMinecraftMessageFunc = oldSendMsg }()
 
 	oneMinFromNow := time.Now().Add(30 * time.Second)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
 		ScheduledShutdown: &oneMinFromNow,
 	}, nil)
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.Equal(t, WarningStateOneMin, shutdownWarningState)
 }
 
 func TestCheckScheduledShutdown_ShutdownCancelled(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	prevTime := time.Now().Add(10 * time.Minute)
 	shutdownWarningState = WarningStateFiveMin
 	lastScheduledShutdownTime = &prevTime
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
 		ScheduledShutdown: nil,
 	}, nil)
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.Equal(t, WarningStateNone, shutdownWarningState)
 	assert.Nil(t, lastScheduledShutdownTime)
 }
 
-// --- initiateScheduledShutdown tests ---
-
-func TestInitiateScheduledShutdown_Success(t *testing.T) {
-	mockDB := new(MockDB)
+func TestCheckScheduledShutdown_TimeReached(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	shutdownWarningState = WarningStateOneMin
+	lastScheduledShutdownTime = nil
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
 
 	oldSendMsg := sendMinecraftMessageFunc
 	oldSaveWorld := saveMinecraftWorldFunc
-	oldStopInst := stopInstanceFunc
 	sendMinecraftMessageFunc = func(msg string) error { return nil }
 	saveMinecraftWorldFunc = func() error { return nil }
-	stopInstanceFunc = func(ctx context.Context) error { return nil }
 	defer func() {
 		sendMinecraftMessageFunc = oldSendMsg
 		saveMinecraftWorldFunc = oldSaveWorld
-		stopInstanceFunc = oldStopInst
 	}()
 
-	// Reset global state
+	pastTime := time.Now().Add(-1 * time.Minute)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
+		ScheduledShutdown: &pastTime,
+	}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(nil)
+
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+}
+
+func TestCheckScheduledShutdown_NewShutdownTime(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	oldTime := time.Now().Add(20 * time.Minute)
+	shutdownWarningState = WarningStateFiveMin
+	lastScheduledShutdownTime = &oldTime
+
+	newTime := time.Now().Add(30 * time.Minute)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
+		ScheduledShutdown: &newTime,
+	}, nil)
+
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	assert.Equal(t, WarningStateNone, shutdownWarningState)
+}
+
+func TestCheckScheduledShutdown_FiveMinWarningError(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	shutdownWarningState = WarningStateNone
+	lastScheduledShutdownTime = nil
+
+	oldSendMsg := sendMinecraftMessageFunc
+	sendMinecraftMessageFunc = func(msg string) error { return fmt.Errorf("rcon error") }
+	defer func() { sendMinecraftMessageFunc = oldSendMsg }()
+
+	fiveMinFromNow := time.Now().Add(3 * time.Minute)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
+		ScheduledShutdown: &fiveMinFromNow,
+	}, nil)
+
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	assert.Equal(t, WarningStateFiveMin, shutdownWarningState)
+}
+
+func TestCheckScheduledShutdown_OneMinWarningError(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	shutdownWarningState = WarningStateFiveMin
+	lastScheduledShutdownTime = nil
+
+	oldSendMsg := sendMinecraftMessageFunc
+	sendMinecraftMessageFunc = func(msg string) error { return fmt.Errorf("rcon error") }
+	defer func() { sendMinecraftMessageFunc = oldSendMsg }()
+
+	thirtySecFromNow := time.Now().Add(30 * time.Second)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
+		ScheduledShutdown: &thirtySecFromNow,
+	}, nil)
+
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	assert.Equal(t, WarningStateOneMin, shutdownWarningState)
+}
+
+func TestInitiateScheduledShutdown_Success(t *testing.T) {
+	mockClient := new(MockAgentClient)
+
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
+
+	oldSendMsg := sendMinecraftMessageFunc
+	oldSaveWorld := saveMinecraftWorldFunc
+	sendMinecraftMessageFunc = func(msg string) error { return nil }
+	saveMinecraftWorldFunc = func() error { return nil }
+	defer func() {
+		sendMinecraftMessageFunc = oldSendMsg
+		saveMinecraftWorldFunc = oldSaveWorld
+	}()
+
 	shutdownWarningState = WarningStateOneMin
 	prevTime := time.Now()
 	lastScheduledShutdownTime = &prevTime
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(nil)
 
-	// Override the sleep — we can't, but 5 seconds is acceptable for test
-
-	// Use a short context timeout to not wait 5 seconds for the sleep
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := initiateScheduledShutdown(ctx, mockDB, "test-instance")
+	err := initiateScheduledShutdown(ctx, mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.Equal(t, WarningStateNone, shutdownWarningState)
 	assert.Nil(t, lastScheduledShutdownTime)
 }
 
 func TestInitiateScheduledShutdown_StopError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
+
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
 
 	oldSendMsg := sendMinecraftMessageFunc
 	oldSaveWorld := saveMinecraftWorldFunc
-	oldStopInst := stopInstanceFunc
 	sendMinecraftMessageFunc = func(msg string) error { return nil }
 	saveMinecraftWorldFunc = func() error { return nil }
-	stopInstanceFunc = func(ctx context.Context) error { return fmt.Errorf("stop failed") }
 	defer func() {
 		sendMinecraftMessageFunc = oldSendMsg
 		saveMinecraftWorldFunc = oldSaveWorld
-		stopInstanceFunc = oldStopInst
 	}()
 
 	shutdownWarningState = WarningStateNone
 	lastScheduledShutdownTime = nil
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(fmt.Errorf("stop failed"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := initiateScheduledShutdown(ctx, mockDB, "test-instance")
+	err := initiateScheduledShutdown(ctx, mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
@@ -891,34 +1003,30 @@ func TestGetUptime_ReadFileError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- syncWhitelist: NotFound config falls back to disabled ---
-
-func TestSyncWhitelist_ConfigNotFound(t *testing.T) {
-	mockDB := new(MockDB)
+func TestSyncWhitelist_NotFoundConfig(t *testing.T) {
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{}, grpcstatus.Error(codes.NotFound, "not found"))
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{}, fmt.Errorf("not found"))
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		return exec.Command("echo", "[]")
 	}
 
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.False(t, enabled)
 }
 
-// --- syncWhitelist: add player error is logged but not fatal ---
-
 func TestSyncWhitelist_AddPlayerError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{
 		{Username: "newplayer", UUID: "uuid-new"},
 	}, nil)
 
@@ -926,91 +1034,53 @@ func TestSyncWhitelist_AddPlayerError(t *testing.T) {
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		callCount++
 		if callCount == 1 {
-			// whitelist.json - empty
 			return exec.Command("echo", "[]")
 		}
 		if callCount == 2 {
-			// add player - fail
 			return exec.Command("false")
 		}
-		// server.properties
 		return exec.Command("echo", "white-list=true")
 	}
 
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.True(t, enabled)
 }
 
-// --- syncWhitelist: remove player error is logged but not fatal ---
-
 func TestSyncWhitelist_RemovePlayerError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	callCount := 0
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		callCount++
 		if callCount == 1 {
-			// whitelist.json - has a player not in firestore
 			entries := []MinecraftWhitelistEntry{{UUID: "uuid-old", Name: "oldplayer"}}
 			data, _ := json.Marshal(entries)
 			return exec.Command("echo", string(data))
 		}
 		if callCount == 2 {
-			// remove player - fail
 			return exec.Command("false")
 		}
-		// server.properties
 		return exec.Command("echo", "white-list=true")
 	}
 
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 	assert.True(t, enabled)
 }
-
-// --- syncWhitelist: whitelist enabled toggle ---
 
 func TestSyncWhitelist_ToggleWhitelistEnabled(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	// Config says enabled=true, but server has white-list=false
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
-
-	callCount := 0
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		callCount++
-		if callCount == 1 {
-			return exec.Command("echo", "[]") // whitelist.json
-		}
-		if callCount == 2 {
-			return exec.Command("echo", "white-list=false") // server.properties - disabled
-		}
-		return exec.Command("true") // setWhitelistEnabled rcon
-	}
-
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err)
-	assert.True(t, enabled)
-}
-
-// --- syncWhitelist: setWhitelistEnabled error ---
-
-func TestSyncWhitelist_SetWhitelistEnabledError(t *testing.T) {
-	mockDB := new(MockDB)
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
-
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	callCount := 0
 	execCommand = func(name string, args ...string) *exec.Cmd {
@@ -1021,197 +1091,179 @@ func TestSyncWhitelist_SetWhitelistEnabledError(t *testing.T) {
 		if callCount == 2 {
 			return exec.Command("echo", "white-list=false")
 		}
-		return exec.Command("false") // setWhitelistEnabled fails
+		return exec.Command("true")
 	}
 
-	enabled, err := syncWhitelist(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // error is logged, not returned
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 	assert.True(t, enabled)
 }
 
-// --- syncWhitelist: getMinecraftWhitelist error ---
-
-func TestSyncWhitelist_GetMinecraftWhitelistError(t *testing.T) {
-	mockDB := new(MockDB)
+func TestSyncWhitelist_SetWhitelistEnabledError(t *testing.T) {
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{Enabled: true}, nil)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
+	callCount := 0
 	execCommand = func(name string, args ...string) *exec.Cmd {
-		return exec.Command("false") // whitelist.json read fails
+		callCount++
+		if callCount == 1 {
+			return exec.Command("echo", "[]")
+		}
+		if callCount == 2 {
+			return exec.Command("echo", "white-list=false")
+		}
+		return exec.Command("false")
 	}
 
-	_, err := syncWhitelist(context.Background(), mockDB, "test-instance")
+	enabled, err := syncWhitelist(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	assert.True(t, enabled)
+}
+
+func TestSyncWhitelist_GetMinecraftWhitelistError(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	oldExec := execCommand
+	defer func() { execCommand = oldExec }()
+
+	mockClient.On("GetWhitelistConfig", mock.Anything).Return(dbtypes.WhitelistConfig{Enabled: true}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
+
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("false")
+	}
+
+	_, err := syncWhitelist(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
-// --- checkScheduledShutdown: shutdown time reached ---
-
-func TestCheckScheduledShutdown_TimeReached(t *testing.T) {
-	mockDB := new(MockDB)
+func TestCheckScheduledShutdown_NewShutdownTimeResetsWarningAndTimeReached(t *testing.T) {
+	mockClient := new(MockAgentClient)
 	shutdownWarningState = WarningStateOneMin
 	lastScheduledShutdownTime = nil
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
 
 	oldSendMsg := sendMinecraftMessageFunc
 	oldSaveWorld := saveMinecraftWorldFunc
-	oldStopInst := stopInstanceFunc
 	sendMinecraftMessageFunc = func(msg string) error { return nil }
 	saveMinecraftWorldFunc = func() error { return nil }
-	stopInstanceFunc = func(ctx context.Context) error { return nil }
 	defer func() {
 		sendMinecraftMessageFunc = oldSendMsg
 		saveMinecraftWorldFunc = oldSaveWorld
-		stopInstanceFunc = oldStopInst
 	}()
 
 	pastTime := time.Now().Add(-1 * time.Minute)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
 		ScheduledShutdown: &pastTime,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(nil)
 
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
+	err := checkScheduledShutdown(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
-
-// --- checkScheduledShutdown: new different shutdown time resets warning ---
-
-func TestCheckScheduledShutdown_NewShutdownTime(t *testing.T) {
-	mockDB := new(MockDB)
-	oldTime := time.Now().Add(20 * time.Minute)
-	shutdownWarningState = WarningStateFiveMin
-	lastScheduledShutdownTime = &oldTime
-
-	newTime := time.Now().Add(30 * time.Minute)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		ScheduledShutdown: &newTime,
-	}, nil)
-
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err)
-	assert.Equal(t, WarningStateNone, shutdownWarningState)
-}
-
-// --- checkScheduledShutdown: send warning error is logged ---
-
-func TestCheckScheduledShutdown_FiveMinWarningError(t *testing.T) {
-	mockDB := new(MockDB)
-	shutdownWarningState = WarningStateNone
-	lastScheduledShutdownTime = nil
-
-	oldSendMsg := sendMinecraftMessageFunc
-	sendMinecraftMessageFunc = func(msg string) error { return fmt.Errorf("rcon error") }
-	defer func() { sendMinecraftMessageFunc = oldSendMsg }()
-
-	fiveMinFromNow := time.Now().Add(3 * time.Minute)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		ScheduledShutdown: &fiveMinFromNow,
-	}, nil)
-
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err)
-	assert.Equal(t, WarningStateFiveMin, shutdownWarningState)
-}
-
-func TestCheckScheduledShutdown_OneMinWarningError(t *testing.T) {
-	mockDB := new(MockDB)
-	shutdownWarningState = WarningStateFiveMin
-	lastScheduledShutdownTime = nil
-
-	oldSendMsg := sendMinecraftMessageFunc
-	sendMinecraftMessageFunc = func(msg string) error { return fmt.Errorf("rcon error") }
-	defer func() { sendMinecraftMessageFunc = oldSendMsg }()
-
-	thirtySecFromNow := time.Now().Add(30 * time.Second)
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
-		ScheduledShutdown: &thirtySecFromNow,
-	}, nil)
-
-	err := checkScheduledShutdown(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err)
-	assert.Equal(t, WarningStateOneMin, shutdownWarningState)
-}
-
-// --- initiateScheduledShutdown: GetStatus error ---
 
 func TestInitiateScheduledShutdown_GetStatusError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
+
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
 
 	oldSendMsg := sendMinecraftMessageFunc
 	oldSaveWorld := saveMinecraftWorldFunc
-	oldStopInst := stopInstanceFunc
 	sendMinecraftMessageFunc = func(msg string) error { return nil }
 	saveMinecraftWorldFunc = func() error { return nil }
-	stopInstanceFunc = func(ctx context.Context) error { return nil }
 	defer func() {
 		sendMinecraftMessageFunc = oldSendMsg
 		saveMinecraftWorldFunc = oldSaveWorld
-		stopInstanceFunc = oldStopInst
 	}()
 
 	shutdownWarningState = WarningStateOneMin
 	lastScheduledShutdownTime = nil
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, fmt.Errorf("db error"))
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, fmt.Errorf("http error"))
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(nil)
 
-	err := initiateScheduledShutdown(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // GetStatus error is logged, not returned
+	err := initiateScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }
-
-// --- initiateScheduledShutdown: UpdateStatus error ---
 
 func TestInitiateScheduledShutdown_UpdateStatusError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
+
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
 
 	oldSendMsg := sendMinecraftMessageFunc
 	oldSaveWorld := saveMinecraftWorldFunc
-	oldStopInst := stopInstanceFunc
 	sendMinecraftMessageFunc = func(msg string) error { return nil }
 	saveMinecraftWorldFunc = func() error { return nil }
-	stopInstanceFunc = func(ctx context.Context) error { return nil }
 	defer func() {
 		sendMinecraftMessageFunc = oldSendMsg
 		saveMinecraftWorldFunc = oldSaveWorld
-		stopInstanceFunc = oldStopInst
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(fmt.Errorf("update error"))
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(fmt.Errorf("update error"))
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(nil)
 
-	err := initiateScheduledShutdown(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // logged, not returned
+	err := initiateScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }
 
-// --- initiateScheduledShutdown: sendMessage and saveWorld errors ---
-
 func TestInitiateScheduledShutdown_MessageAndSaveErrors(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
+
+	oldGetProjectID := getProjectIDFunc
+	oldGetZone := getZoneFunc
+	getProjectIDFunc = func() (string, error) { return "test-project", nil }
+	getZoneFunc = func() (string, error) { return "test-zone", nil }
+	defer func() {
+		getProjectIDFunc = oldGetProjectID
+		getZoneFunc = oldGetZone
+	}()
 
 	oldSendMsg := sendMinecraftMessageFunc
 	oldSaveWorld := saveMinecraftWorldFunc
-	oldStopInst := stopInstanceFunc
 	sendMinecraftMessageFunc = func(msg string) error { return fmt.Errorf("msg error") }
 	saveMinecraftWorldFunc = func() error { return fmt.Errorf("save error") }
-	stopInstanceFunc = func(ctx context.Context) error { return nil }
 	defer func() {
 		sendMinecraftMessageFunc = oldSendMsg
 		saveMinecraftWorldFunc = oldSaveWorld
-		stopInstanceFunc = oldStopInst
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
+	mockClient.On("StopInstance", mock.Anything, "test-project", "test-zone").Return(nil)
 
-	err := initiateScheduledShutdown(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // errors are logged, shutdown continues
+	err := initiateScheduledShutdown(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }
 
-// --- runStatusUpdate: full success path ---
-
 func TestRunStatusUpdate_FullSuccess(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1223,9 +1275,9 @@ func TestRunStatusUpdate_FullSuccess(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) { return true, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return true, nil }
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
@@ -1235,17 +1287,15 @@ func TestRunStatusUpdate_FullSuccess(t *testing.T) {
 		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
-// --- runStatusUpdate: checkScheduledShutdown error is non-fatal ---
-
 func TestRunStatusUpdate_CheckShutdownError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1257,9 +1307,9 @@ func TestRunStatusUpdate_CheckShutdownError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error {
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
 		return fmt.Errorf("shutdown check error")
 	}
 	defer func() {
@@ -1271,17 +1321,15 @@ func TestRunStatusUpdate_CheckShutdownError(t *testing.T) {
 		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
-// --- runStatusUpdate: syncWhitelist error is non-fatal ---
-
 func TestRunStatusUpdate_SyncWhitelistError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1293,11 +1341,11 @@ func TestRunStatusUpdate_SyncWhitelistError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) {
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
 		return false, fmt.Errorf("sync error")
 	}
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
@@ -1307,17 +1355,15 @@ func TestRunStatusUpdate_SyncWhitelistError(t *testing.T) {
 		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
-// --- runStatusUpdate: UpdateStatus error ---
-
 func TestRunStatusUpdate_UpdateStatusError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1329,9 +1375,9 @@ func TestRunStatusUpdate_UpdateStatusError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
@@ -1341,17 +1387,15 @@ func TestRunStatusUpdate_UpdateStatusError(t *testing.T) {
 		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(fmt.Errorf("db error"))
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(fmt.Errorf("http error"))
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
-// --- runStatusUpdate: version returns rawOutput ---
-
 func TestRunStatusUpdate_VersionWithRawOutput(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1363,9 +1407,9 @@ func TestRunStatusUpdate_VersionWithRawOutput(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "raw output here", nil }
-	syncWhitelistFunc = func(ctx context.Context, dbConn db.DB, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
-	checkScheduledShutdownFunc = func(ctx context.Context, dbConn db.DB, instanceName string) error { return nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
 		getMinecraftPlayerCountFunc = oldGetFunc
 		getUptimeFunc = oldUptimeFunc
@@ -1375,21 +1419,15 @@ func TestRunStatusUpdate_VersionWithRawOutput(t *testing.T) {
 		checkScheduledShutdownFunc = oldCheck
 	}()
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
-	err := runStatusUpdate(context.Background(), mockDB, "test-instance")
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
 }
 
-// --- getInstanceIP: success ---
-
 func TestGetInstanceIP_Success(t *testing.T) {
-	// Can't easily test since it calls metadata.ExternalIP() directly
-	// This is covered via runStatusUpdate tests using getInstanceIPFunc
 }
-
-// --- getUptime: success ---
 
 func TestGetUptime_Success(t *testing.T) {
 	oldReadFile := osReadFile
@@ -1414,24 +1452,20 @@ func TestGetUptime_InvalidFormat(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- importWhitelistIfEmpty: GetWhitelistEntries error ---
-
 func TestImportWhitelistIfEmpty_GetEntriesError(t *testing.T) {
-	mockDB := new(MockDB)
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry(nil), fmt.Errorf("db error"))
+	mockClient := new(MockAgentClient)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry(nil), fmt.Errorf("http error"))
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
 	assert.Error(t, err)
 }
 
-// --- importWhitelistIfEmpty: AddWhitelistEntry error ---
-
 func TestImportWhitelistIfEmpty_AddEntryError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	entries := []MinecraftWhitelistEntry{{UUID: "uuid-1", Name: "player1"}}
 	entriesJSON, _ := json.Marshal(entries)
@@ -1445,21 +1479,19 @@ func TestImportWhitelistIfEmpty_AddEntryError(t *testing.T) {
 		return exec.Command("echo", "white-list=false")
 	}
 
-	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(fmt.Errorf("add error"))
-	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistConfig")).Return(nil)
+	mockClient.On("AddWhitelistEntry", mock.Anything, mock.AnythingOfType("dbtypes.WhitelistEntry")).Return(fmt.Errorf("add error"))
+	mockClient.On("SetWhitelistConfig", mock.Anything, mock.AnythingOfType("dbtypes.WhitelistConfig")).Return(nil)
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // errors are logged, not returned
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }
 
-// --- importWhitelistIfEmpty: SetWhitelistConfig error ---
-
 func TestImportWhitelistIfEmpty_SetConfigError(t *testing.T) {
-	mockDB := new(MockDB)
+	mockClient := new(MockAgentClient)
 	oldExec := execCommand
 	defer func() { execCommand = oldExec }()
 
-	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+	mockClient.On("GetWhitelistEntries", mock.Anything).Return([]dbtypes.WhitelistEntry{}, nil)
 
 	entries := []MinecraftWhitelistEntry{{UUID: "uuid-1", Name: "player1"}}
 	entriesJSON, _ := json.Marshal(entries)
@@ -1473,9 +1505,9 @@ func TestImportWhitelistIfEmpty_SetConfigError(t *testing.T) {
 		return exec.Command("echo", "white-list=true")
 	}
 
-	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(nil)
-	mockDB.On("SetWhitelistConfig", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistConfig")).Return(fmt.Errorf("config error"))
+	mockClient.On("AddWhitelistEntry", mock.Anything, mock.AnythingOfType("dbtypes.WhitelistEntry")).Return(nil)
+	mockClient.On("SetWhitelistConfig", mock.Anything, mock.AnythingOfType("dbtypes.WhitelistConfig")).Return(fmt.Errorf("config error"))
 
-	err := importWhitelistIfEmpty(context.Background(), mockDB, "test-instance")
-	assert.NoError(t, err) // error is logged
+	err := importWhitelistIfEmpty(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
 }

@@ -500,7 +500,7 @@ func TestUpdateServer_Recreate(t *testing.T) {
 		ServerState:          "RUNNING",
 		PendingCommandResult: "completed",
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	// stampServerConfig mocks
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)

@@ -28,7 +28,7 @@ func TestFirestoreDB_GetWhitelistConfig_Success(t *testing.T) {
 	mockDoc.On("Collection", "data").Return(mockSubCol)
 	mockSubCol.On("Doc", "whitelist").Return(mockSubDoc)
 	mockSubDoc.On("Get", ctx).Return(mockSnap, nil)
-	mockSnap.On("DataTo", mock.AnythingOfType("*db.WhitelistConfig")).Return(nil).Run(func(args mock.Arguments) {
+	mockSnap.On("DataTo", mock.AnythingOfType("*dbtypes.WhitelistConfig")).Return(nil).Run(func(args mock.Arguments) {
 		cfg := args.Get(0).(*WhitelistConfig)
 		cfg.Enabled = true
 	})
@@ -111,7 +111,7 @@ func TestFirestoreDB_GetWhitelistEntries_Success(t *testing.T) {
 	mockIter.On("Next").Return(mockSnap, nil).Once()
 	mockIter.On("Next").Return(nil, assert.AnError).Once()
 	mockIter.On("Stop").Return()
-	mockSnap.On("DataTo", mock.AnythingOfType("*db.WhitelistEntry")).Return(nil).Run(func(args mock.Arguments) {
+	mockSnap.On("DataTo", mock.AnythingOfType("*dbtypes.WhitelistEntry")).Return(nil).Run(func(args mock.Arguments) {
 		e := args.Get(0).(*WhitelistEntry)
 		e.Username = "Steve"
 		e.UUID = "uuid-1"
@@ -625,7 +625,7 @@ func TestFirestoreDB_GetWhitelistEntries_DataToError(t *testing.T) {
 	mockIter.On("Next").Return(mockSnap, nil).Once()
 	mockIter.On("Next").Return(nil, assert.AnError).Once()
 	mockIter.On("Stop").Return()
-	mockSnap.On("DataTo", mock.AnythingOfType("*db.WhitelistEntry")).Return(assert.AnError)
+	mockSnap.On("DataTo", mock.AnythingOfType("*dbtypes.WhitelistEntry")).Return(assert.AnError)
 
 	entries, err := db.GetWhitelistEntries(ctx, "srv")
 	assert.NoError(t, err)
