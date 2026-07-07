@@ -179,7 +179,7 @@ func TestHandleInstanceStart(t *testing.T) {
 		Players:     db.Players{Current: 0, Max: 20},
 		ServerState: db.ServerStateStopped,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	auditLog := AuditLogEntry{}
 	auditLog.ProtoPayload.MethodName = "v1.compute.instances.start"
@@ -188,7 +188,7 @@ func TestHandleInstanceStart(t *testing.T) {
 	assert.NotPanics(t, func() {
 		handleInstanceStart(context.Background(), auditLog)
 	})
-	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status"))
+	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status"))
 }
 
 func TestHandleInstancePreempted(t *testing.T) {
@@ -200,7 +200,7 @@ func TestHandleInstancePreempted(t *testing.T) {
 		Players:     db.Players{Current: 0, Max: 20},
 		ServerState: db.ServerStateRunning,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	auditLog := AuditLogEntry{}
 	auditLog.ProtoPayload.MethodName = "v1.compute.instances.preempted"
@@ -839,7 +839,7 @@ func TestUpdateInstanceState_GetStatusError(t *testing.T) {
 	defer cleanup()
 
 	mockDB.On("GetStatus", mock.Anything, "my-inst").Return(db.Status{}, assert.AnError)
-	mockDB.On("UpdateStatus", mock.Anything, "my-inst", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "my-inst", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	err := updateInstanceState(context.Background(), "my-inst", db.ServerStateStopped)
 	assert.NoError(t, err)
@@ -851,7 +851,7 @@ func TestUpdateInstanceState_UpdateError(t *testing.T) {
 	defer cleanup()
 
 	mockDB.On("GetStatus", mock.Anything, "my-inst").Return(db.Status{ServerState: db.ServerStateRunning}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-inst", mock.AnythingOfType("db.Status")).Return(assert.AnError)
+	mockDB.On("UpdateStatus", mock.Anything, "my-inst", mock.AnythingOfType("dbtypes.Status")).Return(assert.AnError)
 
 	err := updateInstanceState(context.Background(), "my-inst", db.ServerStateStopped)
 	assert.Error(t, err)
@@ -897,7 +897,7 @@ func TestEventsHandler_StartEvent(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "my-instance").Return(db.Status{
 		Players: db.Players{Current: 0, Max: 20}, ServerState: db.ServerStateStopped,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	data, _ := json.Marshal(AuditLogEntry{
 		ProtoPayload: struct {
@@ -913,7 +913,7 @@ func TestEventsHandler_StartEvent(t *testing.T) {
 	})
 	processAuditLogEvent(data)
 
-	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status"))
+	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status"))
 }
 
 func TestEventsHandler_PreemptedEvent(t *testing.T) {
@@ -924,7 +924,7 @@ func TestEventsHandler_PreemptedEvent(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "my-instance").Return(db.Status{
 		Players: db.Players{Current: 0, Max: 20}, ServerState: db.ServerStateRunning,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	data, _ := json.Marshal(AuditLogEntry{
 		ProtoPayload: struct {
@@ -940,7 +940,7 @@ func TestEventsHandler_PreemptedEvent(t *testing.T) {
 	})
 	processAuditLogEvent(data)
 
-	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status"))
+	mockDB.AssertCalled(t, "UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status"))
 }
 
 func TestEventsHandler_UnknownEvent(t *testing.T) {
@@ -1022,7 +1022,7 @@ func TestStartServerByID_Success(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
 		Players: db.Players{Current: 2, Max: 20}, ServerState: db.ServerStateStopped,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	req := httptest.NewRequest("POST", "/api/servers/srv1/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -1104,7 +1104,7 @@ func TestStopServerByID_Success(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
 		Players: db.Players{Current: 2, Max: 20}, ServerState: db.ServerStateRunning,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	req := httptest.NewRequest("POST", "/api/servers/srv1/stop", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -1354,7 +1354,7 @@ func TestAddWhitelistByID_Success(t *testing.T) {
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
 		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
 	}, nil)
-	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("db.WhitelistEntry")).Return(nil)
+	mockDB.On("AddWhitelistEntry", mock.Anything, "test-instance", mock.AnythingOfType("dbtypes.WhitelistEntry")).Return(nil)
 
 	body, _ := json.Marshal(servers.AddPlayerRequest{Username: "TestPlayer"})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/whitelist", bytes.NewReader(body))
@@ -1534,7 +1534,7 @@ func TestScheduleShutdownByID_Success(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
 		ServerState: db.ServerStateRunning,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	body, _ := json.Marshal(servers.ScheduleShutdownRequest{ShutdownTime: futureTime.Format(time.RFC3339)})
 	req := httptest.NewRequest("POST", "/api/servers/srv1/shutdown/schedule", bytes.NewReader(body))
@@ -1600,7 +1600,7 @@ func TestCancelScheduledShutdownByID_Success(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
 		ServerState: db.ServerStateRunning,
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("db.Status")).Return(nil)
+	mockDB.On("UpdateStatus", mock.Anything, "test-instance", mock.AnythingOfType("dbtypes.Status")).Return(nil)
 
 	req := httptest.NewRequest("DELETE", "/api/servers/srv1/shutdown/schedule", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -1670,7 +1670,7 @@ func TestHandleInstanceStart_UpdateError(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "my-instance").Return(db.Status{
 		Players: db.Players{Current: 0, Max: 20},
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
+	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status")).Return(assert.AnError)
 
 	auditLog := AuditLogEntry{}
 	auditLog.ProtoPayload.ResourceName = "projects/p/zones/z/instances/my-instance"
@@ -1687,7 +1687,7 @@ func TestHandleInstancePreempted_UpdateError(t *testing.T) {
 	mockDB.On("GetStatus", mock.Anything, "my-instance").Return(db.Status{
 		Players: db.Players{Current: 0, Max: 20},
 	}, nil)
-	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("db.Status")).Return(assert.AnError)
+	mockDB.On("UpdateStatus", mock.Anything, "my-instance", mock.AnythingOfType("dbtypes.Status")).Return(assert.AnError)
 
 	auditLog := AuditLogEntry{}
 	auditLog.ProtoPayload.ResourceName = "projects/p/zones/z/instances/my-instance"
