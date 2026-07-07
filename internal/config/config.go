@@ -25,6 +25,8 @@ type Config struct {
 	CloudTasksRegion         string
 	ControllerServiceAccount string
 	ControllerVersion        string
+	DBBackend                string
+	DaprStateStoreName       string
 }
 
 // Default values for configuration
@@ -58,6 +60,20 @@ func Load() (Config, error) {
 		ControllerServiceAccount: viper.GetString("CONTROLLER_SERVICE_ACCOUNT"),
 	}
 
+	dbBackend := viper.GetString("DB_BACKEND")
+	if dbBackend == "" {
+		dbBackend = "firestore"
+	} else if dbBackend != "firestore" && dbBackend != "dapr" {
+		return cfg, fmt.Errorf("DB_BACKEND must be 'firestore' or 'dapr', got %q", dbBackend)
+	}
+	cfg.DBBackend = dbBackend
+
+	daprStateStoreName := viper.GetString("DAPR_STATE_STORE_NAME")
+	if daprStateStoreName == "" {
+		daprStateStoreName = "statestore"
+	}
+	cfg.DaprStateStoreName = daprStateStoreName
+
 	if cfg.MachineAgentImage == "" {
 		log.Print("MACHINE_AGENT_IMAGE is not set")
 		return cfg, fmt.Errorf("MACHINE_AGENT_IMAGE must be set")
@@ -87,5 +103,10 @@ func (c Config) DatabaseID() string {
 
 // NewDBConnection creates a database connection using this config.
 func (c Config) NewDBConnection(ctx context.Context) (db.DB, error) {
-	return db.NewConnection(ctx, c.ProjectID, c.DatabaseID())
+	switch c.DBBackend {
+	case "dapr":
+		return db.NewDaprDB(ctx, c.DaprStateStoreName)
+	default:
+		return db.NewConnection(ctx, c.ProjectID, c.DatabaseID())
+	}
 }

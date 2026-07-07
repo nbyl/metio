@@ -78,6 +78,49 @@ func TestLoad_PartialEnvVars(t *testing.T) {
 	assert.Equal(t, "test-image:latest", cfg.MachineAgentImage)
 }
 
+func TestLoad_DBBackendDefaults(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	os.Unsetenv("DB_BACKEND")
+	os.Unsetenv("DAPR_STATE_STORE_NAME")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, "firestore", cfg.DBBackend)
+	assert.Equal(t, "statestore", cfg.DaprStateStoreName)
+}
+
+func TestLoad_DBBackendDapr(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	t.Setenv("DB_BACKEND", "dapr")
+	t.Setenv("DAPR_STATE_STORE_NAME", "custom-store")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, "dapr", cfg.DBBackend)
+	assert.Equal(t, "custom-store", cfg.DaprStateStoreName)
+}
+
+func TestLoad_DBBackendInvalid(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	t.Setenv("DB_BACKEND", "postgres")
+
+	_, err := Load()
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `DB_BACKEND must be 'firestore' or 'dapr'`)
+}
+
 func TestDatabaseID(t *testing.T) {
 	tests := []struct {
 		name     string
