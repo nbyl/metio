@@ -6,7 +6,7 @@ spec:
   type: state.gcp.firestore
   version: v1
   metadata:
-  - name: databaseId
-    value: "(default)"
-  - name: projectId
+  - name: project_id
     value: "metio-local"
+  - name: endpoint
+    value: "localhost:8081"

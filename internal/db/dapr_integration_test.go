@@ -55,7 +55,7 @@ func TestDaprDB_Integration_StatusCRUD(t *testing.T) {
 
 	got, err = db.GetStatus(ctx, instance)
 	require.NoError(t, err)
-	assert.Equal(t, int32(5), got.Players.Current)
+	assert.Equal(t, 5, got.Players.Current)
 }
 
 func TestDaprDB_Integration_WhitelistCRUD(t *testing.T) {

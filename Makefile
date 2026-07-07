@@ -87,7 +87,11 @@ develop: generate-env
 DAPRD_BIN ?= $(HOME)/.dapr/bin/daprd
 DATASTORE_PORT ?= 8081
 
-dev-dapr-setup: ## Initialize Dapr runtime if not already done
+dev-dapr-setup: ## Initialize Dapr runtime and gcloud components if not already done
+	@gcloud components install beta cloud-datastore-emulator --quiet 2>/dev/null; \
+	if [ $$? -ne 0 ]; then \
+		echo "WARNING: gcloud components install failed; emulator may not work."; \
+	fi
 	@if [ ! -f "$(DAPRD_BIN)" ]; then \
 		echo "Running dapr init --slim to download the daprd binary..."; \
 		dapr init --slim; \
@@ -97,7 +101,7 @@ dev-dapr-setup: ## Initialize Dapr runtime if not already done
 
 dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
 	@echo "Starting Datastore emulator..."
-	@gcloud beta emulators datastore start \
+	@gcloud beta emulators datastore start --quiet \
 		--host-port=localhost:$(DATASTORE_PORT) \
 		--project=metio-local \
 		--no-store-on-disk \
@@ -116,12 +120,24 @@ dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
 	 $(DAPRD_BIN) --app-id controller \
 		--resources-path ./dapr/components \
 		--dapr-grpc-port 50001 \
+		--dapr-http-port 3500 \
 		&> /tmp/daprd.log &
 	@echo "Waiting for daprd to be ready..."
-	@for i in $$(seq 1 30); do \
-		if curl -s http://localhost:3500/v1.0/healthz/outbound > /dev/null 2>&1; then break; fi; \
+	@ready=0; \
+	for i in $$(seq 1 30); do \
+		if curl -s http://localhost:3500/v1.0/healthz/outbound > /dev/null 2>&1; then \
+			ready=1; \
+			break; \
+		fi; \
 		sleep 1; \
-	done
+	done; \
+	if [ "$$ready" -eq 0 ]; then \
+		echo "ERROR: daprd did not become ready within 30s"; \
+		echo "--- /tmp/daprd.log ---"; \
+		cat /tmp/daprd.log; \
+		echo "--- end ---"; \
+		exit 1; \
+	fi
 	@echo "daprd ready"
 	@echo ""
 	@echo "Dapr infrastructure is running:"
