@@ -56,6 +56,27 @@ This means `DaprDB` uses **index keys** for list operations (finding all childre
 | Provisioning steps (AddProvisioningStep, CompleteProvisioning, FailProvisioning) | Read `provisioning:` → mutate in memory → `SaveState` back. Non-atomic: acceptable for single-user control plane. |
 | Multi-operation (CreateServerConfig appends index, DeleteServerConfig removes from index, SetWhitelistEntries replaces index) | Read-modify-write on `serverindex` or `whitelistidx:` + per-item writes. Non-atomic; document a reconcile/repair path for rare index drift. |
 
+### ServerConfig.ID Recovery
+
+`ServerConfig.ID` is tagged `firestore:"-"` — it is derived from the Firestore document ID and not stored in the document body. For the Dapr adapter, the same approach applies:
+
+1. **On write (`SaveState`):** `ServerConfig.ID` is tagged `json:"-"` so it is omitted from the serialized JSON blob. The Dapr key `serverconfig:{serverID}` already encodes the identity.
+2. **On read (`GetState`):** Parse `{serverID}` from the Dapr key suffix (e.g., extract `"myserver"` from `"serverconfig:myserver"`) and set `ServerConfig.ID` after deserialization.
+3. **On bulk read (`GetBulkState`):** Same suffix-parsing applied to each key in the result set.
+
+This mirrors the current pattern at `internal/db/crud.go:438` (`config.ID = doc.GetID()`). The Dapr adapter abstracts this in a helper method, e.g.:
+
+```go
+func parseServerConfigID(key string) string {
+    // key = "serverconfig:{serverID}" — extract serverID
+    parts := strings.SplitN(key, ":", 2)
+    if len(parts) == 2 {
+        return parts[1]
+    }
+    return ""
+}
+```
+
 ### Struct Tag Changes
 
 Data models currently carry only `firestore:"..."` tags. Dapr state stores serialize to JSON, so every struct field needs a `json:"..."` tag:
@@ -140,6 +161,20 @@ The existing Native-mode database remains untouched until #254 removes it.
 - Controller: unchanged (current spec — preserve existing CPU/memory).
 - daprd: 0.1 vCPU / 128 MiB (lightweight sidecar; scales with the controller).
 - Total within Cloud Run's per-container-pod resource limits.
+
+### Data Migration Strategy
+
+Data migration from Firestore (Native mode) to the Dapr Datastore-mode database is tracked by #253 and executed as a one-off batch job (not a controller deployment). The strategy:
+
+1. **Deterministic key mapping**: Each Dapr key is a deterministic function of the source Firestore path per the table in [Existing Firestore Document Path → Dapr Key Mapping](#existing-firestore-document-path--dapr-key-mapping). A migration script reads each Firestore document, constructs the target Dapr key, and writes via the Dapr State API.
+
+2. **Index reconstruction**: The `serverindex` and `whitelistidx:{name}` keys have no Firestore equivalent — they are new index structures. After migrating all data documents, the script reads all `serverconfig:{id}` keys and `whitelist:{name}:{uuid}` keys to build and write the index keys.
+
+3. **Data integrity**: After migration, the script verifies that every index entry (in `serverindex`) has a corresponding data key (`serverconfig:{id}`), and vice versa. Mismatches are logged and flagged for manual review.
+
+4. **Rollback**: The Firestore-native database is kept until #254 explicitly removes it. A rollback is simply a matter of switching `DB_BACKEND` to `firestore` and re-deploying. Data in the Datastore-mode database is left in place for a later re-migration attempt.
+
+5. **No downtime**: The migration runs offline (controller is not serving during migration). The Dapr adapter (`DaprDB`) does not need to read from the Native-mode database — it only reads from the Datastore-mode database once `DB_BACKEND=dapr` is toggled.
 
 ### Scale-to-Zero
 

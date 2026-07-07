@@ -3,9 +3,9 @@ package db
 import "time"
 
 type ShutdownSchedule struct {
-	Enabled  bool   `firestore:"enabled"`
-	Time     string `firestore:"time"`
-	Timezone string `firestore:"timezone"`
+	Enabled  bool   `json:"enabled" firestore:"enabled"`
+	Time     string `json:"time" firestore:"time"`
+	Timezone string `json:"timezone" firestore:"timezone"`
 }
 
 func (s *ShutdownSchedule) IsValid() bool {
@@ -19,18 +19,18 @@ func (s *ShutdownSchedule) IsValid() bool {
 }
 
 type ServerConfig struct {
-	ID                          string            `firestore:"-"`
-	Name                        string            `firestore:"name"`
-	Region                      string            `firestore:"region"`
-	Zone                        string            `firestore:"zone"`
-	MachineType                 string            `firestore:"machineType"`
-	MinecraftVersion            string            `firestore:"minecraftVersion"`
-	DiskSizeGB                  int               `firestore:"diskSizeGB"`
-	InfraVersion                int               `firestore:"infraVersion,omitempty"`
-	DeployedByControllerVersion string            `firestore:"deployedByControllerVersion,omitempty"`
-	MachineAgentImage           string            `firestore:"machineAgentImage,omitempty"`
-	ExistingAddress             string            `firestore:"existingAddress,omitempty"`
-	ShutdownSchedule            *ShutdownSchedule `firestore:"shutdownSchedule,omitempty"`
-	CreatedAt                   time.Time         `firestore:"createdAt"`
-	UpdatedAt                   time.Time         `firestore:"updatedAt"`
+	ID                          string            `json:"-" firestore:"-"`
+	Name                        string            `json:"name" firestore:"name"`
+	Region                      string            `json:"region" firestore:"region"`
+	Zone                        string            `json:"zone" firestore:"zone"`
+	MachineType                 string            `json:"machineType" firestore:"machineType"`
+	MinecraftVersion            string            `json:"minecraftVersion" firestore:"minecraftVersion"`
+	DiskSizeGB                  int               `json:"diskSizeGB" firestore:"diskSizeGB"`
+	InfraVersion                int               `json:"infraVersion,omitempty" firestore:"infraVersion,omitempty"`
+	DeployedByControllerVersion string            `json:"deployedByControllerVersion,omitempty" firestore:"deployedByControllerVersion,omitempty"`
+	MachineAgentImage           string            `json:"machineAgentImage,omitempty" firestore:"machineAgentImage,omitempty"`
+	ExistingAddress             string            `json:"existingAddress,omitempty" firestore:"existingAddress,omitempty"`
+	ShutdownSchedule            *ShutdownSchedule `json:"shutdownSchedule,omitempty" firestore:"shutdownSchedule,omitempty"`
+	CreatedAt                   time.Time         `json:"createdAt" firestore:"createdAt"`
+	UpdatedAt                   time.Time         `json:"updatedAt" firestore:"updatedAt"`
 }

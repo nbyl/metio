@@ -12,10 +12,10 @@ import (
 
 // PulumiSettings stores the auto-provisioned Pulumi state bucket configuration.
 type PulumiSettings struct {
-	StateBucket   string    `firestore:"stateBucket"`
-	Initialized   bool      `firestore:"initialized"`
-	InitializedAt time.Time `firestore:"initializedAt"`
-	InitializedBy string    `firestore:"initializedBy"`
+	StateBucket   string    `json:"stateBucket" firestore:"stateBucket"`
+	Initialized   bool      `json:"initialized" firestore:"initialized"`
+	InitializedAt time.Time `json:"initializedAt" firestore:"initializedAt"`
+	InitializedBy string    `json:"initializedBy" firestore:"initializedBy"`
 }
 
 func (db *FirestoreDB) GetPulumiSettings(ctx context.Context) (*PulumiSettings, error) {
