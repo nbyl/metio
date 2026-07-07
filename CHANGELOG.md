@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.0](https://github.com/nbyl/metio/compare/v1.4.1...v1.5.0) (2026-07-07)
+
+
+### Features
+
+* implement controller agent API with HMAC-JWT per-server token auth ([#300](https://github.com/nbyl/metio/issues/300)) ([6d4da14](https://github.com/nbyl/metio/commit/6d4da146b8c9142c8c3e15222db6031cf89e5326))
+* implement controller agent API with HMAC-JWT per-server token auth ([#300](https://github.com/nbyl/metio/issues/300)) ([7b02679](https://github.com/nbyl/metio/commit/7b02679b95a3a080769334b0418001cede302e2a))
+
+
+### Bug Fixes
+
+* save image tags to build/*.txt and push to Artifact Registry in local docker targets ([391775d](https://github.com/nbyl/metio/commit/391775d3c504513e512b737258ca9db2a79fbeb5))
+* split docker image targets for CI and deploy, run image builds on PRs ([250a4d9](https://github.com/nbyl/metio/commit/250a4d93c54d8f29a08446024658baf98e7a8991))
+* split docker image targets for CI and deploy, run image builds on PRs ([2280df1](https://github.com/nbyl/metio/commit/2280df1625b703925ab47efed1df2fecce9d3a5e))
+
 ## [1.4.1](https://github.com/nbyl/metio/compare/v1.4.0...v1.4.1) (2026-07-02)
 
 

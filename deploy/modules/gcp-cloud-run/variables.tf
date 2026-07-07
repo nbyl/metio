@@ -24,13 +24,13 @@ variable "admin_users" {
 variable "controller_image" {
   description = "The container image for the controller service. Override to pin a specific version."
   type        = string
-  default     = "europe-docker.pkg.dev/metio-distribution/metio/controller:1.4.1" # x-release-please-version
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/controller:1.5.0" # x-release-please-version
 }
 
 variable "machine_agent_image" {
   description = "Docker image for metio-machine-agent. Override to pin a specific version."
   type        = string
-  default     = "europe-docker.pkg.dev/metio-distribution/metio/machine-agent:1.4.1" # x-release-please-version
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/machine-agent:1.5.0" # x-release-please-version
 }
 
 variable "environment" {
