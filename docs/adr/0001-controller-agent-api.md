@@ -122,8 +122,12 @@ substrate move and with multiple worlds per host, so choosing it now closes no d
 
 - **Portability:** the agent no longer depends on Firestore or GCP IAM for state.
 - **Single integration point:** datastore/Dapr changes touch the controller only.
-- **Reduced VM privileges:** the per-world VM SA can drop `roles/datastore.user` and the
-  broad datastore scope.
+- **Reduced VM privileges:** the per-world VM SA drops `roles/datastore.user`,
+  `roles/compute.instanceAdmin.v1`, `roles/monitoring.metricWriter`, and project-wide
+  storage roles. Only `logging.logWriter`, `cloudtrace.agent`, `artifactregistry.reader`,
+  and `serviceusage.serviceUsageConsumer` remain at project level; the OAuth scope stays
+  at `cloud-platform` (required for AR image pulls on GCE — IAM is the effective access
+  control).
 - **Multi-world compatible:** the API boundary does not assume world-per-VM, keeping the
   door open to co-locating multiple worlds per host (and future bin-packing).
 - **Smaller Dapr footprint:** the daprd-on-every-VM task (#259) is no longer needed.
@@ -136,9 +140,9 @@ substrate move and with multiple worlds per host, so choosing it now closes no d
   approach: a **per-server bearer token** injected through the existing `user-data`
   metadata channel (`internal/pulumi/programs/server.go:221`). (Security is not a driver,
   but the API cannot be fully unauthenticated.)
-- **Self-stop must move:** VM self-stop (`cmd/machine-agent/main.go:296`) relocates to the
-  controller, or behind a pluggable agent interface, since the agent should shed Compute
-  API access along with datastore access.
+- **Self-stop moved to controller:** VM self-stop now calls the controller HTTP API
+  (`client.StopInstance`); the agent no longer uses the Compute API directly. This allowed
+  removing `roles/compute.instanceAdmin.v1` from the VM SA.
 
 ## Sequencing with the Dapr Initiative (#252–259)
 
