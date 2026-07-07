@@ -13,7 +13,8 @@
 		"ghcr.io/devcontainers/features/node:1": {},
 		"ghcr.io/gvatsal60/dev-container-features/pre-commit:1": {}
 	},
-	"postCreateCommand": "sudo chmod 666 /var/run/docker.sock && sudo mkdir -p /home/vscode/.local/state && sudo chown vscode:vscode /home/vscode/.local /home/vscode/.local/state && cd web && npm install",
+	"forwardPorts": [50001, 8081],
+	"postCreateCommand": "sudo chmod 666 /var/run/docker.sock && sudo mkdir -p /home/vscode/.local/state && sudo chown vscode:vscode /home/vscode/.local /home/vscode/.local/state && cd web && npm install && dapr init --slim",
 	"customizations": {
 		"vscode": {
 			"extensions": [
