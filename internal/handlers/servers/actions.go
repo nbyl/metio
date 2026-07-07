@@ -2,6 +2,7 @@ package servers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -9,11 +10,112 @@ import (
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/gorilla/mux"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/handlers/agent"
+	"github.com/nbyl/metio/internal/pulumi/programs"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func HandleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tracer := otel.Tracer("server-handler")
+	ctx, span := tracer.Start(ctx, "handleUpdateAgent")
+	defer span.End()
+
+	vars := mux.Vars(r)
+	serverID := vars["id"]
+
+	dbConn, cfg, err := GetDBConnection(ctx)
+	if err != nil {
+		log.Printf("Error creating db connection: %v", err)
+		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
+		return
+	}
+
+	serverConfig, err := dbConn.GetServerConfig(ctx, serverID)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "get_server_config_failed"))
+		log.Printf("Error getting server config: %v", err)
+		writeJSONError(w, "server not found", http.StatusNotFound)
+		return
+	}
+
+	if ProvisioningService == nil {
+		writeJSONError(w, "provisioning service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	originalConfig := *serverConfig
+	if err := dbConn.SaveConfigSnapshot(ctx, serverID, &originalConfig); err != nil {
+		log.Printf("Error saving config snapshot: %v", err)
+		writeJSONError(w, "failed to save config snapshot", http.StatusInternalServerError)
+		return
+	}
+
+	serverConfig.MachineAgentImage = cfg.MachineAgentImage
+	serverConfig.UpdatedAt = time.Now()
+
+	if err := db.ValidateServerConfig(serverConfig); err != nil {
+		writeJSONError(w, fmt.Sprintf("validation error: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	if err := dbConn.UpdateServerConfig(ctx, serverID, serverConfig); err != nil {
+		log.Printf("Error updating server config: %v", err)
+		writeJSONError(w, "failed to update server config", http.StatusInternalServerError)
+		return
+	}
+
+	token, err := agent.MintToken(serverConfig.Name)
+	if err != nil {
+		log.Printf("Error minting agent token: %v", err)
+		writeJSONError(w, "failed to create agent token", http.StatusInternalServerError)
+		return
+	}
+
+	programConfig := &programs.ServerConfig{
+		Name:              serverConfig.Name,
+		ServerID:          serverID,
+		Region:            serverConfig.Region,
+		Zone:              serverConfig.Zone,
+		MachineType:       serverConfig.MachineType,
+		MinecraftVersion:  serverConfig.MinecraftVersion,
+		DiskSizeGB:        serverConfig.DiskSizeGB,
+		Environment:       cfg.Environment,
+		MachineAgentImage: cfg.MachineAgentImage,
+		GCPProject:        cfg.ProjectID,
+		ExistingAddress:   serverConfig.ExistingAddress,
+		ControllerURL:     cfg.BaseURL,
+		AgentToken:        token,
+	}
+
+	updateType := 0
+	if err := ProvisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {
+		log.Printf("Error starting agent update: %v", err)
+		if err.Error() == fmt.Sprintf("operation already in progress for server %s", serverID) {
+			writeJSONError(w, "operation already in progress for this server", http.StatusConflict)
+			return
+		}
+		if revertErr := ProvisioningService.RevertServerConfig(ctx, serverID); revertErr != nil {
+			log.Printf("Error reverting config after failed agent update: %v", revertErr)
+		}
+		writeJSONError(w, "Agent update failed. Your original configuration has been restored. Please try again later.", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprintf("/api/servers/%s/provisioning", serverID))
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(ServerResponse{
+		ID:                  serverID,
+		Config:              serverConfigToJSON(serverConfig),
+		CurrentInfraVersion: programs.CurrentInfraVersion,
+		Outdated:            true,
+		ControllerVersion:   ControllerVersion,
+	})
+}
 
 func StartServerByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -241,5 +343,6 @@ func StatusByID(w http.ResponseWriter, r *http.Request) {
 		Version:           playerStatus.Version,
 		WhitelistEnabled:  playerStatus.WhitelistEnabled,
 		ScheduledShutdown: scheduledShutdown,
+		AgentVersion:      playerStatus.AgentVersion,
 	})
 }

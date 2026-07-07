@@ -43,6 +43,7 @@ type Status struct {
 	ScheduledShutdown    *time.Time  `json:"scheduled_shutdown,omitempty" firestore:"scheduled_shutdown,omitempty"`
 	PendingCommand       string      `json:"pending_command,omitempty" firestore:"pendingCommand,omitempty"`
 	PendingCommandResult string      `json:"pending_command_result,omitempty" firestore:"pendingCommandResult,omitempty"`
+	AgentVersion         string      `json:"agent_version,omitempty" firestore:"agent_version,omitempty"`
 }
 
 type WhitelistEntry struct {

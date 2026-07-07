@@ -66,6 +66,7 @@ func initServices() (*servicesBundle, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.ControllerVersion = Version
 
 	dbConn, err := cfg.NewDBConnection(ctx)
 	if err != nil {

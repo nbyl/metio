@@ -24,6 +24,7 @@ type Config struct {
 	CloudTasksQueue          string
 	CloudTasksRegion         string
 	ControllerServiceAccount string
+	ControllerVersion        string
 }
 
 // Default values for configuration

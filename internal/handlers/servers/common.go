@@ -71,6 +71,7 @@ type StatusResponse struct {
 	Version           string      `json:"version"`
 	WhitelistEnabled  bool        `json:"whitelistEnabled"`
 	ScheduledShutdown *string     `json:"scheduledShutdown,omitempty"`
+	AgentVersion      string      `json:"agentVersion,omitempty"`
 }
 
 type PlayersJSON struct {
@@ -85,6 +86,7 @@ type ServerResponse struct {
 	CurrentInfraVersion  int              `json:"currentInfraVersion"`
 	Outdated             bool             `json:"outdated"`
 	OutdatedMachineAgent bool             `json:"outdatedMachineAgent"`
+	ControllerVersion    string           `json:"controllerVersion,omitempty"`
 }
 
 type ErrorResponse struct {
