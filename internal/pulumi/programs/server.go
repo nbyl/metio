@@ -86,15 +86,10 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		iamRoles := []string{
-			"roles/storage.objectUser",
-			"roles/storage.objectCreator",
 			"roles/logging.logWriter",
-			"roles/monitoring.metricWriter",
 			"roles/cloudtrace.agent",
 			"roles/artifactregistry.reader",
-			"roles/datastore.user",
 			"roles/serviceusage.serviceUsageConsumer",
-			"roles/compute.instanceAdmin.v1",
 		}
 
 		for _, role := range iamRoles {

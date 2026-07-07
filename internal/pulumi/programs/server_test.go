@@ -56,18 +56,13 @@ func TestServerConfigValidation(t *testing.T) {
 
 func TestIAMRolesComplete(t *testing.T) {
 	expectedRoles := []string{
-		"roles/storage.objectUser",
-		"roles/storage.objectCreator",
 		"roles/logging.logWriter",
-		"roles/monitoring.metricWriter",
 		"roles/cloudtrace.agent",
 		"roles/artifactregistry.reader",
-		"roles/datastore.user",
 		"roles/serviceusage.serviceUsageConsumer",
-		"roles/compute.instanceAdmin.v1",
 	}
 
-	assert.Len(t, expectedRoles, 9, "Should have 9 IAM roles")
+	assert.Len(t, expectedRoles, 4, "Should have 4 project-level IAM roles")
 
 	for _, role := range expectedRoles {
 		assert.Contains(t, role, "roles/", "Role should start with roles/")
