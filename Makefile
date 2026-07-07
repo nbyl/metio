@@ -121,11 +121,11 @@ dev-down: ## Stop Dapr infrastructure
 	@pkill -f "datastore" 2>/dev/null || true
 	@echo "Dapr infrastructure stopped."
 
-dev-controller: dev-up ## Start dev servers with Dapr backend (infrastructure + controller + Vite)
+dev-controller: dev-up generate-env ## Start dev servers with Dapr backend (infrastructure + controller + Vite)
 	@echo "Starting development servers with Dapr backend..."
 	@trap 'make dev-down; kill 0' EXIT; \
 	set -a; \
-	. .devcontainer/devcontainer.env; \
+	. build/local.env; \
 	DB_BACKEND=dapr; \
 	export DB_BACKEND; \
 	set +a; \
