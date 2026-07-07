@@ -46,6 +46,9 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	servers.LookupMinecraftUser = services.LookupMinecraftUser
 	servers.GetUserEmail = getUserEmail
 	servers.WriteJSONError = WriteJSONError
+	if cfg != nil {
+		servers.ControllerVersion = cfg.ControllerVersion
+	}
 
 	r := mux.NewRouter()
 

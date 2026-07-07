@@ -49,6 +49,7 @@ export interface ServerResponse {
   currentInfraVersion: number;
   outdated: boolean;
   outdatedMachineAgent?: boolean;
+  controllerVersion?: string;
 }
 
 /**
@@ -71,6 +72,7 @@ export interface StatusResponse {
   timestamp?: string;
   whitelistEnabled?: boolean;
   scheduledShutdown?: string;
+  agentVersion?: string;
 }
 
 /**

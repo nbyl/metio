@@ -105,6 +105,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		Config:              serverConfigToJSON(serverConfig),
 		CurrentInfraVersion: programs.CurrentInfraVersion,
 		Outdated:            true,
+		ControllerVersion:   ControllerVersion,
 	})
 }
 
@@ -135,6 +136,7 @@ func ListServers(w http.ResponseWriter, r *http.Request) {
 			CurrentInfraVersion:  programs.CurrentInfraVersion,
 			Outdated:             outdated,
 			OutdatedMachineAgent: outdatedMachineAgent,
+			ControllerVersion:    ControllerVersion,
 		})
 	}
 
@@ -179,6 +181,7 @@ func GetServer(w http.ResponseWriter, r *http.Request) {
 		CurrentInfraVersion:  programs.CurrentInfraVersion,
 		Outdated:             outdated,
 		OutdatedMachineAgent: outdatedMachineAgent,
+		ControllerVersion:    ControllerVersion,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -333,6 +336,7 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 		Config:              serverConfigToJSON(existingConfig),
 		CurrentInfraVersion: programs.CurrentInfraVersion,
 		Outdated:            true,
+		ControllerVersion:   ControllerVersion,
 	})
 }
 

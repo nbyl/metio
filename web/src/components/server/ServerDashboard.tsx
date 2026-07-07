@@ -18,7 +18,7 @@ import { useServers } from '../../hooks/useServers';
 import { useServerStatus } from '../../hooks/useServerStatus';
 import { useServerProvisioning } from '../../hooks/useServerProvisioning';
 import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
-import { useUpdateServer, useDeleteServer } from '../../hooks/useServerMutations';
+import { useUpdateServer, useUpdateAgent, useDeleteServer } from '../../hooks/useServerMutations';
 import {
   useWhitelist,
   useAddPlayer,
@@ -407,6 +407,7 @@ function ServerCard({ server }: ServerCardProps) {
   const stopMutation = useStopServer(server.id);
   const updateMutation = useUpdateServer();
   const deleteMutation = useDeleteServer();
+  const updateAgentMutation = useUpdateAgent(server.id);
   const { copy, copied } = useCopyToClipboard();
   const [showUpdate, setShowUpdate] = useState(false);
   const [showDestroy, setShowDestroy] = useState(false);
@@ -616,6 +617,25 @@ function ServerCard({ server }: ServerCardProps) {
             <Settings className="h-4 w-4" />
             Update
           </Button>
+          {server.outdatedMachineAgent && (
+            <Button
+              variant="primary"
+              disabled={isProvisioning || updateAgentMutation.isPending}
+              loading={updateAgentMutation.isPending}
+              onClick={() => {
+                updateAgentMutation.mutate(undefined, {
+                  onSuccess: () => {
+                    queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
+                    navigate(`/servers/${server.id}/provisioning`, {
+                      state: { serverName: server.config.name },
+                    });
+                  },
+                });
+              }}
+            >
+              Update Agent
+            </Button>
+          )}
           <Button
             variant="danger"
             disabled={isProvisioning}

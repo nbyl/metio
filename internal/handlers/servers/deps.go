@@ -18,3 +18,5 @@ var LookupMinecraftUser func(ctx context.Context, username string) (*services.Mo
 var GetUserEmail func(r *http.Request) string
 
 var WriteJSONError func(w http.ResponseWriter, message string, statusCode int)
+
+var ControllerVersion string

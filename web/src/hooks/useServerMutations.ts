@@ -114,6 +114,37 @@ export function useStartServer(serverId: string) {
   });
 }
 
+export function useUpdateAgent(serverId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (): Promise<ServerResponse> => {
+      const response = await fetch(`/api/servers/${serverId}/update-agent`, {
+        method: 'POST',
+      });
+
+      if (response.status === 401) {
+        window.location.href = '/auth/login';
+        throw new Error('Session expired');
+      }
+
+      if (!response.ok) {
+        const err: APIError = await response.json();
+        throw new Error(err.error || 'Failed to update agent');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success('Agent update started');
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
 export function useUpdateServer() {
   const queryClient = useQueryClient();
 

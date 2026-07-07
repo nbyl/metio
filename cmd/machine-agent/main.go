@@ -187,6 +187,7 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 		Version:           version,
 		WhitelistEnabled:  whitelistEnabled,
 		ScheduledShutdown: currentStatus.ScheduledShutdown,
+		AgentVersion:      Version,
 	})
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "update_status_failed"))
