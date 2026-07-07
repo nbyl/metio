@@ -8,3 +8,5 @@ spec:
   metadata:
   - name: databaseId
     value: "(default)"
+  - name: projectId
+    value: "metio-local"

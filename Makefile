@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image controller-image machine-agent-image push-images promote promote-distribution help dev-up dev-down dev-controller dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image controller-image machine-agent-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -62,11 +62,20 @@ generate-env:
 	fi
 	@echo "Generated build/local.env"
 
-# Start backend (air) and frontend (Vite) with hot reload
+# Start backend (air) and frontend (Vite) with hot reload.
+# DB_BACKEND (from the env file) controls the datastore:
+#   dapr      -> local Dapr sidecar + Datastore emulator (auto-started, torn down on exit)
+#   firestore -> Firestore (cloud), no local infra   [default]
 develop: generate-env
 	@echo "Starting development servers..."
-	@trap 'kill 0' EXIT; \
-	set -a; . build/local.env; set +a; \
+	@set -a; . build/local.env; set +a; \
+	if [ "$${DB_BACKEND:-firestore}" = "dapr" ]; then \
+		echo "DB_BACKEND=dapr -> starting local Dapr infrastructure..."; \
+		$(MAKE) dev-up || exit 1; \
+		trap 'make dev-down; kill 0' EXIT; \
+	else \
+		trap 'kill 0' EXIT; \
+	fi; \
 	cd web && npm run dev & \
 	air & \
 	wait
@@ -90,7 +99,7 @@ dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
 	@echo "Starting Datastore emulator..."
 	@gcloud beta emulators datastore start \
 		--host-port=localhost:$(DATASTORE_PORT) \
-		--project=$${GCP_PROJECT:-test-project} \
+		--project=metio-local \
 		--no-store-on-disk \
 		&> /tmp/datastore-emulator.log &
 	@echo "Waiting for Datastore emulator to be ready..."
@@ -102,11 +111,18 @@ dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
 	done
 	@echo "Datastore emulator ready on localhost:$(DATASTORE_PORT)"
 	@echo "Starting daprd..."
-	@$(DAPRD_BIN) --app-id controller \
-		--components-path ./dapr/components \
+	@DATASTORE_EMULATOR_HOST=localhost:$(DATASTORE_PORT) \
+	 GOOGLE_CLOUD_PROJECT=metio-local \
+	 $(DAPRD_BIN) --app-id controller \
+		--resources-path ./dapr/components \
 		--dapr-grpc-port 50001 \
 		&> /tmp/daprd.log &
-	@echo "daprd started"
+	@echo "Waiting for daprd to be ready..."
+	@for i in $$(seq 1 30); do \
+		if curl -s http://localhost:3500/v1.0/healthz/outbound > /dev/null 2>&1; then break; fi; \
+		sleep 1; \
+	done
+	@echo "daprd ready"
 	@echo ""
 	@echo "Dapr infrastructure is running:"
 	@echo "  Datastore emulator: localhost:$(DATASTORE_PORT)"
@@ -121,17 +137,6 @@ dev-down: ## Stop Dapr infrastructure
 	@pkill -f "datastore" 2>/dev/null || true
 	@echo "Dapr infrastructure stopped."
 
-dev-controller: dev-up generate-env ## Start dev servers with Dapr backend (infrastructure + controller + Vite)
-	@echo "Starting development servers with Dapr backend..."
-	@trap 'make dev-down; kill 0' EXIT; \
-	set -a; \
-	. build/local.env; \
-	DB_BACKEND=dapr; \
-	export DB_BACKEND; \
-	set +a; \
-	cd web && npm run dev & \
-	air & \
-	wait
 
 test-dapr-integration: dev-up ## Run DaprDB integration tests against the local Datastore emulator
 	@echo "Running DaprDB integration tests..."
@@ -346,13 +351,12 @@ help:
 	@echo "  test-web                - Run frontend Vitest suite"
 	@echo ""
 	@echo "Development:"
-	@echo "  develop                 - Start backend (air) and frontend (Vite) with hot reload"
+	@echo "  develop                 - Start backend + frontend hot reload (DB_BACKEND selects Firestore or Dapr)"
+	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Datastore emulator"
 	@echo ""
-	@echo "Dapr Development (local Dapr sidecar with Datastore emulator):"
+	@echo "Dapr Infrastructure (auto-started by 'make develop' when DB_BACKEND=dapr):"
 	@echo "  dev-up                  - Start Datastore emulator + daprd sidecar"
 	@echo "  dev-down                - Stop all Dapr infrastructure"
-	@echo "  dev-controller          - Full Dapr dev stack (infrastructure + air + Vite)"
-	@echo "  test-dapr-integration   - Run DaprDB integration tests against local emulator"
 	@echo ""
 	@echo "Deployment targets:"
 	@echo "  deploy                  - Deploy full system (alias for deploy-full)"
