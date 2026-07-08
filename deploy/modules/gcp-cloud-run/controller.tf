@@ -342,12 +342,22 @@ resource "google_cloud_run_v2_service" "controller" {
       args = [
         "./daprd",
         "--app-id", "controller",
-        "--app-port", "8080",
         "--dapr-http-port", "3500",
         "--dapr-grpc-port", "50001",
         "--resources-path", "/dapr/components",
         "--log-level", "info"
       ]
+
+      startup_probe {
+        http_get {
+          path = "/v1.0/healthz/outbound"
+          port = 3500
+        }
+        initial_delay_seconds = 5
+        period_seconds        = 5
+        timeout_seconds       = 3
+        failure_threshold     = 12
+      }
       env {
         name  = "GCP_PROJECT"
         value = var.project_id
