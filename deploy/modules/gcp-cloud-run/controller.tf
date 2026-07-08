@@ -154,6 +154,22 @@ resource "google_secret_manager_secret_version" "base_url_dummy" {
   secret_data            = "http://dummy:3000"
 }
 
+resource "google_secret_manager_secret" "dapr_statestore" {
+  secret_id = "${var.environment}-dapr-statestore"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "dapr_statestore_value" {
+  secret                 = google_secret_manager_secret.dapr_statestore.id
+  secret_data_wo_version = 0
+  secret_data            = templatefile("${path.module}/templates/statestore.yaml.tftpl", {
+    statestore_name = "${var.environment}-statestore"
+  })
+}
+
 resource "google_cloud_run_v2_service" "controller" {
   name                = "${var.environment}-controller"
   location            = var.region
@@ -173,8 +189,44 @@ resource "google_cloud_run_v2_service" "controller" {
       max_instance_count = 1
     }
 
+    volumes {
+      name = "dapr-components"
+      secret {
+        secret = google_secret_manager_secret.dapr_statestore.secret_id
+        items {
+          path  = "statestore.yaml"
+          version = "latest"
+        }
+      }
+    }
+
     containers {
+      name  = "controller"
       image = var.controller_image
+      depends_on = ["daprd"]
+
+      startup_probe {
+        initial_delay_seconds = 60
+        timeout_seconds       = 5
+        period_seconds        = 10
+        failure_threshold     = 6
+
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+      }
+
+      liveness_probe {
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+        initial_delay_seconds = 60
+        period_seconds        = 30
+        timeout_seconds       = 5
+        failure_threshold     = 3
+      }
       resources {
         limits = {
           cpu    = "1000m"
@@ -280,9 +332,35 @@ resource "google_cloud_run_v2_service" "controller" {
       }
       env {
         name  = "DAPR_STATE_STORE_NAME"
-        value = "statestore"
+        value = "${var.environment}-statestore"
       }
 
+    }
+    containers {
+      name  = "daprd"
+      image = var.daprd_image
+      args = [
+        "./daprd",
+        "--app-id", "controller",
+        "--app-port", "8080",
+        "--dapr-http-port", "3500",
+        "--dapr-grpc-port", "50001",
+        "--resources-path", "/dapr/components",
+        "--log-level", "info"
+      ]
+      env {
+        name  = "GCP_PROJECT"
+        value = var.project_id
+      }
+      resources {
+        limits = {
+          memory = "256Mi"
+        }
+      }
+      volume_mounts {
+        name       = "dapr-components"
+        mount_path = "/dapr/components"
+      }
     }
   }
 }
@@ -317,6 +395,13 @@ resource "google_secret_manager_secret_iam_member" "secret-access-base_url" {
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.base_url]
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-dapr_statestore" {
+  secret_id  = google_secret_manager_secret.dapr_statestore.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.dapr_statestore]
 }
 
 resource "random_password" "agent_jwt_secret" {

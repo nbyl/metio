@@ -20,3 +20,10 @@ resource "google_firestore_database" "metio_firestore" {
   location_id = var.region
   type        = "FIRESTORE_NATIVE"
 }
+
+resource "google_firestore_database" "dapr_statestore" {
+  project     = var.project_id
+  name        = "(default)"
+  location_id = var.region
+  type        = "DATASTORE_MODE"
+}

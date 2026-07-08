@@ -38,3 +38,9 @@ variable "environment" {
   type        = string
   default     = "development"
 }
+
+variable "daprd_image" {
+  description = "The container image for the Dapr sidecar (daprd)."
+  type        = string
+  default     = "daprio/daprd:1.18.1"
+}
