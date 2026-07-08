@@ -123,7 +123,7 @@ resource "google_secret_manager_secret" "client_id" {
 resource "google_secret_manager_secret_version" "client_id_dummy" {
   secret                 = google_secret_manager_secret.client_id.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret" "client_secret" {
@@ -137,7 +137,7 @@ resource "google_secret_manager_secret" "client_secret" {
 resource "google_secret_manager_secret_version" "client_secret_dummy" {
   secret                 = google_secret_manager_secret.client_secret.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret" "base_url" {
@@ -151,7 +151,7 @@ resource "google_secret_manager_secret" "base_url" {
 resource "google_secret_manager_secret_version" "base_url_dummy" {
   secret                 = google_secret_manager_secret.base_url.id
   secret_data_wo_version = 0
-  secret_data            = "http://dummy:3000"
+  secret_data_wo         = "http://dummy:3000"
 }
 
 resource "google_secret_manager_secret" "dapr_statestore" {
@@ -165,7 +165,7 @@ resource "google_secret_manager_secret" "dapr_statestore" {
 resource "google_secret_manager_secret_version" "dapr_statestore_value" {
   secret                 = google_secret_manager_secret.dapr_statestore.id
   secret_data_wo_version = 0
-  secret_data            = templatefile("${path.module}/templates/statestore.yaml.tftpl", {
+  secret_data_wo = templatefile("${path.module}/templates/statestore.yaml.tftpl", {
     statestore_name = "${var.environment}-statestore"
   })
 }
@@ -194,15 +194,15 @@ resource "google_cloud_run_v2_service" "controller" {
       secret {
         secret = google_secret_manager_secret.dapr_statestore.secret_id
         items {
-          path  = "statestore.yaml"
+          path    = "statestore.yaml"
           version = "latest"
         }
       }
     }
 
     containers {
-      name  = "controller"
-      image = var.controller_image
+      name       = "controller"
+      image      = var.controller_image
       depends_on = ["daprd"]
 
       ports {
@@ -341,8 +341,8 @@ resource "google_cloud_run_v2_service" "controller" {
 
     }
     containers {
-      name  = "daprd"
-      image = var.daprd_image
+      name    = "daprd"
+      image   = var.daprd_image
       command = ["/daprd"]
       args = [
         "--app-id", "controller",
@@ -434,7 +434,7 @@ resource "google_secret_manager_secret" "agent_jwt_secret" {
 resource "google_secret_manager_secret_version" "agent_jwt_secret_value" {
   secret                 = google_secret_manager_secret.agent_jwt_secret.id
   secret_data_wo_version = 0
-  secret_data            = random_password.agent_jwt_secret.result
+  secret_data_wo         = random_password.agent_jwt_secret.result
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-agent_jwt_secret" {
@@ -455,7 +455,7 @@ resource "google_secret_manager_secret" "firebase_api_key" {
 resource "google_secret_manager_secret_version" "firebase_api_key_dummy" {
   secret                 = google_secret_manager_secret.firebase_api_key.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_key" {
