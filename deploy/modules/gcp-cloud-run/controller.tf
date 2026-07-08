@@ -343,8 +343,8 @@ resource "google_cloud_run_v2_service" "controller" {
     containers {
       name  = "daprd"
       image = var.daprd_image
+      command = ["/daprd"]
       args = [
-        "./daprd",
         "--app-id", "controller",
         "--dapr-http-port", "3500",
         "--dapr-grpc-port", "50001",
