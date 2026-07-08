@@ -205,6 +205,10 @@ resource "google_cloud_run_v2_service" "controller" {
       image = var.controller_image
       depends_on = ["daprd"]
 
+      ports {
+        container_port = 8080
+      }
+
       startup_probe {
         initial_delay_seconds = 60
         timeout_seconds       = 5
