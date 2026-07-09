@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image controller-image machine-agent-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-daprd-image controller-image machine-agent-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -213,6 +213,12 @@ ci-machine-agent-image:
 	echo "Building machine-agent image for CI: ghcr.io/nbyl/metio/machine-agent:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} -f cmd/machine-agent/Dockerfile --load .
 
+# CI daprd image build — tag for ghcr.io, load into local daemon (no push)
+ci-daprd-image:
+	@SHA=$$(git rev-parse --short HEAD); \
+	echo "Building daprd image for CI: ghcr.io/nbyl/metio/daprd:$${SHA}"; \
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/daprd:$${SHA} -f deploy/daprd/Dockerfile --load .
+
 # Local controller image build + push to Artifact Registry
 controller-image:
 	@mkdir -p build
@@ -231,10 +237,20 @@ machine-agent-image:
 	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --push . ; \
 	echo "$${IMAGE}" > build/machine-agent-image.txt
 
+# Local daprd image build + push to Artifact Registry
+daprd-image:
+	@mkdir -p build
+	@SHA=$$(git rev-parse --short HEAD); \
+	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/daprd:$${SHA}"; \
+	echo "Building daprd image: $${IMAGE}"; \
+	docker buildx build --platform linux/amd64 -f deploy/daprd/Dockerfile -t $${IMAGE} --push . ; \
+	echo "$${IMAGE}" > build/daprd-image.txt
+
 # Push images to ghcr.io
 push-images:
 	docker push ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD)
 	docker push ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD)
+	docker push ghcr.io/nbyl/metio/daprd:$(shell git rev-parse --short HEAD)
 
 # Promote image tags (usage: make promote FROM=a1b2c3d4 TO=main)
 promote:
@@ -244,41 +260,48 @@ promote:
 	fi
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
+	docker buildx imagetools create -t ghcr.io/nbyl/metio/daprd:$(TO) ghcr.io/nbyl/metio/daprd:$(FROM)
 
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
 DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
 	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(SHA)
 	docker push $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker push $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker push $(DISTRO_REGISTRY)/daprd:$(SHA)
 	if [ -n "$(VERSION)" ]; then \
 		docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker push $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 	fi
 
-# Build both Docker images (local, without gcloud)
-build-images: controller-image machine-agent-image
+# Build all Docker images (local, without gcloud)
+build-images: controller-image machine-agent-image daprd-image
 	@echo "All Docker images built successfully"
 
 # Deploy infrastructure: apply OpenTofu with pre-built Docker images
 deploy: deploy-full
 
-# Deploy full system: build both images and deploy all infrastructure
+# Deploy full system: build all images and deploy all infrastructure
 deploy-full: build-images
 	@set -e ;\
-	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ]; then \
+	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ] || [ ! -f "build/daprd-image.txt" ]; then \
 		echo "Error: Image tag files not found. Run 'make build-images' first." ;\
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
 	echo "Deploying full system with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -auto-approve
 
 # Deploy infrastructure only: use existing images or module defaults
 deploy-infrastructure:
@@ -293,6 +316,11 @@ deploy-infrastructure:
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
 		echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+	fi ;\
+	if [ -f "build/daprd-image.txt" ]; then \
+		DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
+		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
 	fi ;\
 	echo "Deploying infrastructure only with OpenTofu..." ;\
 	tofu -chdir=deploy apply $${ARGS} -auto-approve
@@ -310,21 +338,28 @@ deploy-machine-agent: build-machine-agent-image
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
 	fi ;\
+	if [ -f "build/daprd-image.txt" ]; then \
+		DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
+		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	tofu -chdir=deploy apply $${ARGS} -auto-approve
 
-# Deploy controller only: build controller image and update Cloud Run service
-deploy-controller: controller-image
+# Deploy controller only: build controller and daprd images and update Cloud Run service
+deploy-controller: controller-image daprd-image
 	@set -e ;\
-	if [ ! -f "build/controller-image.txt" ]; then \
-		echo "Error: Controller image tag file not found. Run 'make build-controller-image' first." ;\
+	if [ ! -f "build/controller-image.txt" ] || [ ! -f "build/daprd-image.txt" ]; then \
+		echo "Error: Image tag files not found. Run 'make controller-image daprd-image' first." ;\
 		exit 1 ;\
 	fi ;\
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+	tofu -chdir=deploy apply -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:
@@ -353,13 +388,15 @@ help:
 	@echo "  <binary>                - Build specific binary (e.g., make controller)"
 	@echo "  controller-image        - Build controller Docker image and push to Artifact Registry"
 	@echo "  machine-agent-image     - Build machine-agent image and push to Artifact Registry"
+	@echo "  daprd-image             - Build daprd image with baked statestore and push to Artifact Registry"
 	@echo "  ci-controller-image     - Build controller image for CI (ghcr.io tag, no push)"
 	@echo "  ci-machine-agent-image  - Build machine-agent image for CI (ghcr.io tag, no push)"
+	@echo "  ci-daprd-image          - Build daprd image for CI (ghcr.io tag, no push)"
 	@echo "  push-images             - Push images to ghcr.io"
 	@echo "  promote                 - Retag image (make promote FROM=<sha> TO=<tag>)"
 	@echo "  build-machine-agent-image - Build machine-agent via gcloud builds (legacy)"
 	@echo "  build-controller-image  - Build controller via gcloud builds (legacy)"
-	@echo "  build-images            - Build both Docker images"
+	@echo "  build-images            - Build all Docker images (controller, machine-agent, daprd)"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test                    - Run all tests (backend + frontend)"

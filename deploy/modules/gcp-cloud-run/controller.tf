@@ -154,22 +154,6 @@ resource "google_secret_manager_secret_version" "base_url_dummy" {
   secret_data_wo         = "http://dummy:3000"
 }
 
-resource "google_secret_manager_secret" "dapr_statestore" {
-  secret_id = "${var.environment}-dapr-statestore"
-
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "dapr_statestore_value" {
-  secret                 = google_secret_manager_secret.dapr_statestore.id
-  secret_data_wo_version = 0
-  secret_data_wo = templatefile("${path.module}/templates/statestore.yaml.tftpl", {
-    statestore_name = "${var.environment}-statestore"
-  })
-}
-
 resource "google_cloud_run_v2_service" "controller" {
   name                = "${var.environment}-controller"
   location            = var.region
@@ -187,17 +171,6 @@ resource "google_cloud_run_v2_service" "controller" {
 
     scaling {
       max_instance_count = 1
-    }
-
-    volumes {
-      name = "dapr-components"
-      secret {
-        secret = google_secret_manager_secret.dapr_statestore.secret_id
-        items {
-          path    = "statestore.yaml"
-          version = "latest"
-        }
-      }
     }
 
     containers {
@@ -336,7 +309,11 @@ resource "google_cloud_run_v2_service" "controller" {
       }
       env {
         name  = "DAPR_STATE_STORE_NAME"
-        value = "${var.environment}-statestore"
+        value = "statestore"
+      }
+      env {
+        name  = "DAPR_GRPC_PORT"
+        value = "50001"
       }
 
     }
@@ -370,10 +347,6 @@ resource "google_cloud_run_v2_service" "controller" {
         limits = {
           memory = "256Mi"
         }
-      }
-      volume_mounts {
-        name       = "dapr-components"
-        mount_path = "/dapr/components"
       }
     }
   }
@@ -409,13 +382,6 @@ resource "google_secret_manager_secret_iam_member" "secret-access-base_url" {
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.base_url]
-}
-
-resource "google_secret_manager_secret_iam_member" "secret-access-dapr_statestore" {
-  secret_id  = google_secret_manager_secret.dapr_statestore.id
-  role       = "roles/secretmanager.secretAccessor"
-  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
-  depends_on = [google_secret_manager_secret.dapr_statestore]
 }
 
 resource "random_password" "agent_jwt_secret" {
