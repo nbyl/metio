@@ -339,10 +339,6 @@ resource "google_cloud_run_v2_service" "controller" {
         timeout_seconds       = 3
         failure_threshold     = 12
       }
-      env {
-        name  = "GCP_PROJECT"
-        value = var.project_id
-      }
       resources {
         limits = {
           memory = "256Mi"

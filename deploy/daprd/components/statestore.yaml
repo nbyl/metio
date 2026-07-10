@@ -6,5 +6,8 @@ spec:
   type: state.gcp.firestore
   version: v1
   metadata:
+  # "*detect-project-id*" is a Google Cloud Go sentinel constant
+  # that triggers auto-detection from ADC/metadata at runtime.
+  # See: https://pkg.go.dev/cloud.google.com/go#hdr-Project_ID
   - name: project_id
-    value: "{env:GCP_PROJECT}"
+    value: "*detect-project-id*"
