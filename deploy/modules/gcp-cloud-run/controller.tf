@@ -183,10 +183,10 @@ resource "google_cloud_run_v2_service" "controller" {
       }
 
       startup_probe {
-        initial_delay_seconds = 60
-        timeout_seconds       = 5
-        period_seconds        = 10
-        failure_threshold     = 6
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 3
+        failure_threshold     = 20
 
         http_get {
           path = "/healthz"
@@ -199,7 +199,7 @@ resource "google_cloud_run_v2_service" "controller" {
           path = "/healthz"
           port = 8080
         }
-        initial_delay_seconds = 60
+        initial_delay_seconds = 10
         period_seconds        = 30
         timeout_seconds       = 5
         failure_threshold     = 3
@@ -209,6 +209,7 @@ resource "google_cloud_run_v2_service" "controller" {
           cpu    = "1000m"
           memory = "1Gi"
         }
+        startup_cpu_boost = true
       }
       env {
         name  = "ENVIRONMENT"

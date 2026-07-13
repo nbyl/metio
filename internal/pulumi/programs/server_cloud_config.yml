@@ -89,7 +89,7 @@ write_files:
       WorkingDirectory=/home/metio
       TimeoutStartSec=0
       Restart=always
-      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${region}-docker.pkg.dev
+      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries ${imageRegistryHost}
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
       ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull ${machineAgentImage} && exit 0; sleep 10; done; exit 1'
