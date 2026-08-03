@@ -38,3 +38,9 @@ variable "environment" {
   type        = string
   default     = "development"
 }
+
+variable "daprd_image" {
+  description = "The Dapr sidecar image with baked statestore components. Override to pin a specific version."
+  type        = string
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/daprd:1.5.0" # x-release-please-version
+}

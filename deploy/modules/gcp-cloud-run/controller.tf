@@ -123,7 +123,7 @@ resource "google_secret_manager_secret" "client_id" {
 resource "google_secret_manager_secret_version" "client_id_dummy" {
   secret                 = google_secret_manager_secret.client_id.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret" "client_secret" {
@@ -137,7 +137,7 @@ resource "google_secret_manager_secret" "client_secret" {
 resource "google_secret_manager_secret_version" "client_secret_dummy" {
   secret                 = google_secret_manager_secret.client_secret.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret" "base_url" {
@@ -151,7 +151,7 @@ resource "google_secret_manager_secret" "base_url" {
 resource "google_secret_manager_secret_version" "base_url_dummy" {
   secret                 = google_secret_manager_secret.base_url.id
   secret_data_wo_version = 0
-  secret_data            = "http://dummy:3000"
+  secret_data_wo         = "http://dummy:3000"
 }
 
 resource "google_cloud_run_v2_service" "controller" {
@@ -174,12 +174,42 @@ resource "google_cloud_run_v2_service" "controller" {
     }
 
     containers {
-      image = var.controller_image
+      name       = "controller"
+      image      = var.controller_image
+      depends_on = ["daprd"]
+
+      ports {
+        container_port = 8080
+      }
+
+      startup_probe {
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 3
+        failure_threshold     = 20
+
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+      }
+
+      liveness_probe {
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+        initial_delay_seconds = 10
+        period_seconds        = 30
+        timeout_seconds       = 5
+        failure_threshold     = 3
+      }
       resources {
         limits = {
           cpu    = "1000m"
           memory = "1Gi"
         }
+        startup_cpu_boost = true
       }
       env {
         name  = "ENVIRONMENT"
@@ -282,7 +312,39 @@ resource "google_cloud_run_v2_service" "controller" {
         name  = "DAPR_STATE_STORE_NAME"
         value = "statestore"
       }
+      env {
+        name  = "DAPR_GRPC_PORT"
+        value = "50001"
+      }
 
+    }
+    containers {
+      name    = "daprd"
+      image   = var.daprd_image
+      command = ["/daprd"]
+      args = [
+        "--app-id", "controller",
+        "--dapr-http-port", "3500",
+        "--dapr-grpc-port", "50001",
+        "--resources-path", "/dapr/components",
+        "--log-level", "info"
+      ]
+
+      startup_probe {
+        http_get {
+          path = "/v1.0/healthz/outbound"
+          port = 3500
+        }
+        initial_delay_seconds = 5
+        period_seconds        = 5
+        timeout_seconds       = 3
+        failure_threshold     = 12
+      }
+      resources {
+        limits = {
+          memory = "256Mi"
+        }
+      }
     }
   }
 }
@@ -335,7 +397,7 @@ resource "google_secret_manager_secret" "agent_jwt_secret" {
 resource "google_secret_manager_secret_version" "agent_jwt_secret_value" {
   secret                 = google_secret_manager_secret.agent_jwt_secret.id
   secret_data_wo_version = 0
-  secret_data            = random_password.agent_jwt_secret.result
+  secret_data_wo         = random_password.agent_jwt_secret.result
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-agent_jwt_secret" {
@@ -356,7 +418,7 @@ resource "google_secret_manager_secret" "firebase_api_key" {
 resource "google_secret_manager_secret_version" "firebase_api_key_dummy" {
   secret                 = google_secret_manager_secret.firebase_api_key.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_key" {

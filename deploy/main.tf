@@ -23,4 +23,5 @@ module "gcp_cloud_run" {
   admin_users         = var.admin_users
   controller_image    = var.controller_image
   machine_agent_image = var.machine_agent_image
+  daprd_image         = var.daprd_image
 }

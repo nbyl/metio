@@ -21,7 +21,17 @@ type TemplateConfig struct {
 	AgentToken        string
 }
 
+func imageRegistryHost(image string, fallbackRegion string) string {
+	host, _, _ := strings.Cut(image, "/")
+	if strings.Contains(host, ".") {
+		return host
+	}
+	return fallbackRegion + "-docker.pkg.dev"
+}
+
 func RenderCloudConfig(config *TemplateConfig) (string, error) {
+	imageHost := imageRegistryHost(config.MachineAgentImage, config.Region)
+
 	replacements := map[string]string{
 		"${region}":            config.Region,
 		"${gcpProject}":        config.GCPProject,
@@ -33,6 +43,7 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 		"${rconPassword}":      config.RCONPassword,
 		"${controllerUrl}":     config.ControllerURL,
 		"${agentToken}":        config.AgentToken,
+		"${imageRegistryHost}": imageHost,
 	}
 
 	result := cloudConfigTemplate
