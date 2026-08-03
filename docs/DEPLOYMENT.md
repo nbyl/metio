@@ -110,14 +110,13 @@ module "metio" {
 The `//deploy/modules/gcp-cloud-run` path tells OpenTofu to reference the module subdirectory inside the repository.
 
 This creates:
-- **Firestore database** (native mode) for storing server state
+- **Firestore database** (Datastore mode) used by the Dapr state store component
 - **Cloud Run service** (controller) with the default release image
 - **Pub/Sub topic + subscription** for compute instance lifecycle events
 - **Log sink** routing compute audit logs to Pub/Sub
 - **Custom IAM role** with permissions for the controller service account
 - **Secret Manager secrets** for OAuth credentials and API keys
 - **GCS bucket** for Pulumi state storage
-- **Firestore security rules** and composite indexes
 
 ### Step 3: Populate Secrets
 
@@ -187,7 +186,7 @@ The first time you log in, the dashboard will direct you to the Setup Wizard at 
 
 1. **Creates a Pulumi state bucket** in GCS (named `{environment}-metio-pulumi-state`)
 2. **Verifies GCP API enablement** and project readiness
-3. **Saves settings** to Firestore for future use
+3. **Saves settings** to the Dapr state store for future use
 
 If the state bucket already exists with proper Metio labels (`managed-by: metio`, `purpose: pulumi-state`), the wizard adopts it.
 
@@ -206,9 +205,9 @@ You can also bypass the wizard by setting the `PULUMI_STATE_BUCKET` environment 
 The provisioning process:
 1. **Upserts a Pulumi stack** in the state bucket
 2. **Deploys infrastructure**: GCE VM, boot disk, service account, firewall rules, IAM bindings, backup bucket
-3. **Reports progress** via Firestore provisioning status (polled by the frontend every 2 seconds)
+3. **Reports progress** via the provisioning status in the state store (polled by the frontend every 2 seconds)
 
-The VM boots with the machine-agent as the startup command, which connects back to Firestore to report status.
+The VM boots with the machine-agent as the startup command, which connects back to the controller to report status.
 
 ### Configuration Options
 
@@ -279,7 +278,7 @@ Builds both images and applies all OpenTofu infrastructure.
 
 - **Controller logs**: View in Cloud Logging with the query `resource.type = "cloud_run_revision" AND resource.labels.service_name = "development-controller"`
 - **Server VM logs**: View the machine-agent startup logs with `resource.type = "gce_instance" AND resource.labels.instance_id = "<instance-id>"`
-- **Pulumi operations**: Provisioning progress is streamed to Firestore and displayed in the frontend
+- **Pulumi operations**: Provisioning progress is streamed to the state store and displayed in the frontend
 - **Infrastructure state**: View `terraform.tfstate` or use `tofu show`
 
 ### Troubleshooting
@@ -291,7 +290,7 @@ Builds both images and applies all OpenTofu infrastructure.
 | "Not authenticated" at login | Email not in `admin_users` | Add your email to `metio.auto.tfvars` and re-run `tofu apply` |
 | Server stays in "Provisioning" | Pulumi operation failed | Check Cloud Logging for the controller, or check the server's Pulumi stack directly |
 | Cloud Run startup fails | Missing secrets or wrong image | Verify all 4 secrets have current versions, check image exists in ghcr.io |
-| Firestore permission denied | Rules not deployed | Run `tofu apply` to ensure Firestore rules are active |
+| State store unreachable | Dapr sidecar failed to start | Check the controller's `daprd` container logs and the Datastore database state |
 | Pulumi state locked | Concurrent operation | Wait for the operation to complete or use `pulumi cancel` manually |
 | "Instance not found" | VM was manually deleted | Destroy and recreate the server from the dashboard |
 | Backup bucket deletion fails | Objects exist in the bucket | Destroy individual servers first (this cleans up their resources) |
@@ -308,23 +307,22 @@ Metio includes GitHub Actions CI/CD (`.github/workflows/ci.yml`) for automated b
 ### Architecture Reference
 
 ```
-┌─────────────┐      ┌──────────────────────┐      ┌─────────────┐
-│   Browser   │──────│   Cloud Run           │──────│  Firestore  │
-│  (React UI) │  │  │  (Controller + API)   │  │  │   (State)   │
-└─────────────┘      └──────────────────────┘      └──────┬──────┘
-                            │                               │
-                            │ Pub/Sub                       │
-                            ▼                               │
-                      ┌──────────────────────┐              │
-                      │ GCE Compute Engine   │──────────────┘
-                      │ (Minecraft Server +  │
-                      │  Machine Agent)      │
-                      └──────────────────────┘
+┌─────────────┐      ┌──────────────────────────────┐
+│   Browser   │──────│   Cloud Run                  │
+│  (React UI) │      │  (Controller + API + daprd)  │────┐
+└─────────────┘      └──────────────┬───────────────┘    │
+                                   │ Pub/Sub              │ Dapr state store
+                                   ▼                      │ (Datastore-mode)
+                             ┌────────────────────┐       │
+                             │ GCE Compute Engine │───────┘
+                             │ (Minecraft Server +│
+                             │  Machine Agent)    │
+                             └────────────────────┘
 ```
 
 - **Controller** (Go + React): Serves the UI and REST API, manages Pulumi stacks, handles OAuth
-- **Machine Agent** (Go): Runs on each VM, reports Minecraft status, syncs whitelist, handles shutdowns
-- **Firestore**: Server config, provisioning status, runtime status (players, uptime)
+- **Machine Agent** (Go): Runs on each VM, reports Minecraft status via the controller API, syncs whitelist, handles shutdowns
+- **Dapr state store**: Server config, provisioning status, runtime status (players, uptime) stored via the Dapr sidecar
 - **Pub/Sub**: Forwards compute instance lifecycle events (start/stop) to the controller
 - **Pulumi**: Each server gets its own stack stored in a GCS state bucket
-- **OpenTofu**: Manages shared infrastructure (controller, Firestore, Pub/Sub, secrets)
+- **OpenTofu**: Manages shared infrastructure (controller, state store, Pub/Sub, secrets)

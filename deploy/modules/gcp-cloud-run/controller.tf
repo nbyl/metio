@@ -305,10 +305,6 @@ resource "google_cloud_run_v2_service" "controller" {
         }
       }
       env {
-        name  = "DB_BACKEND"
-        value = "firestore"
-      }
-      env {
         name  = "DAPR_STATE_STORE_NAME"
         value = "statestore"
       }

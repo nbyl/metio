@@ -8,28 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHealthHandler_FirestoreBackend(t *testing.T) {
-	original := requireDaprCheck
-	requireDaprCheck = func() bool { return false }
-	defer func() { requireDaprCheck = original }()
-
-	req := httptest.NewRequest("GET", "/healthz", nil)
-	rec := httptest.NewRecorder()
-	healthHandler(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"status":"healthy"}`, rec.Body.String())
-}
-
-func TestHealthHandler_DaprBackend_Healthy(t *testing.T) {
-	originalCheck := daprHealthCheck
-	originalRequire := requireDaprCheck
+func TestHealthHandler_Healthy(t *testing.T) {
+	original := daprHealthCheck
 	daprHealthCheck = func() bool { return true }
-	requireDaprCheck = func() bool { return true }
-	defer func() {
-		daprHealthCheck = originalCheck
-		requireDaprCheck = originalRequire
-	}()
+	defer func() { daprHealthCheck = original }()
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -39,15 +21,10 @@ func TestHealthHandler_DaprBackend_Healthy(t *testing.T) {
 	assert.JSONEq(t, `{"status":"healthy"}`, rec.Body.String())
 }
 
-func TestHealthHandler_DaprBackend_Unhealthy(t *testing.T) {
-	originalCheck := daprHealthCheck
-	originalRequire := requireDaprCheck
+func TestHealthHandler_Unhealthy(t *testing.T) {
+	original := daprHealthCheck
 	daprHealthCheck = func() bool { return false }
-	requireDaprCheck = func() bool { return true }
-	defer func() {
-		daprHealthCheck = originalCheck
-		requireDaprCheck = originalRequire
-	}()
+	defer func() { daprHealthCheck = original }()
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	rec := httptest.NewRecorder()
