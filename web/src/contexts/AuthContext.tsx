@@ -31,23 +31,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkAuth = useCallback(async () => {
-    try {
-      const response = await fetch('/api/auth/me');
-      if (response.ok) {
-        const data: AuthMeResponse = await response.json();
-        setIsAuthenticated(data.authenticated);
-        setUser(data.authenticated && data.email ? { email: data.email } : null);
-      } else {
+  const checkAuth = useCallback(() => {
+    return fetch('/api/auth/me')
+      .then((response) => {
+        if (response.ok) {
+          return response.json() as Promise<AuthMeResponse>;
+        }
         setIsAuthenticated(false);
         setUser(null);
-      }
-    } catch {
-      setIsAuthenticated(false);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+        return Promise.resolve(null);
+      })
+      .then((data) => {
+        if (data) {
+          setIsAuthenticated(data.authenticated);
+          setUser(data.authenticated && data.email ? { email: data.email } : null);
+        }
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+        setUser(null);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   useEffect(() => {
