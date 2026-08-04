@@ -24,4 +24,5 @@ module "gcp_cloud_run" {
   controller_image    = var.controller_image
   machine_agent_image = var.machine_agent_image
   daprd_image         = var.daprd_image
+  postgres_mode       = var.postgres_mode
 }
