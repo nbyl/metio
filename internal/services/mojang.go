@@ -54,14 +54,25 @@ func NewMojangClient() *MojangClient {
 }
 
 // LookupUser looks up a Minecraft user by username.
-// It first tries the Mojang API, then falls back to PlayerDB if the user is not found.
-// Returns the profile if found, nil if not found, or an error on API failure.
+// It first tries the Mojang API, then falls back to PlayerDB if the user is not found
+// or Mojang is unavailable. Returns the profile if found, nil if not found, or an error
+// on API failure.
 func (c *MojangClient) LookupUser(ctx context.Context, username string) (*MojangProfile, error) {
 	// Try Mojang API first
 	profile, err := c.lookupMojang(ctx, username)
 	if err != nil {
-		// On hard errors (network, rate limit, etc.), don't fallback
-		return nil, err
+		// Mojang is unavailable (network, rate limit, server error) — try PlayerDB as fallback
+		log.Printf("Mojang API error for user %q: %v, trying PlayerDB fallback", username, err)
+		profile, pdbErr := c.lookupPlayerDB(ctx, username)
+		if pdbErr != nil {
+			log.Printf("PlayerDB fallback failed for user %q: %v", username, pdbErr)
+			// Preserve the original Mojang error so callers can distinguish an outage from a not-found
+			return nil, err
+		}
+		if profile != nil {
+			log.Printf("PlayerDB fallback found user %q as %q (UUID: %s)", username, profile.Name, profile.ID)
+		}
+		return profile, nil
 	}
 	if profile != nil {
 		return profile, nil
@@ -131,20 +142,24 @@ func (c *MojangClient) lookupPlayerDB(ctx context.Context, username string) (*Mo
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("unexpected status code from PlayerDB: %d", resp.StatusCode)
-	}
-
 	var pdbResp playerDBResponse
 	if err := json.NewDecoder(resp.Body).Decode(&pdbResp); err != nil {
+		// PlayerDB returns 400/404 (not found) without a decodable body in some cases;
+		// treat those as "not found" rather than a hard error.
+		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("failed to decode PlayerDB response: %w", err)
 	}
 
+	// PlayerDB reports not-found via success:false, historically with HTTP 404 but
+	// now with HTTP 400 (e.g. "minecraft.invalid_username"). Both are "not found".
 	if !pdbResp.Success {
 		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code from PlayerDB: %d", resp.StatusCode)
 	}
 
 	// Convert PlayerDB response to MojangProfile format

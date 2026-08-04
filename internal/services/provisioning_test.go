@@ -100,13 +100,6 @@ func TestProvisioningStateString(t *testing.T) {
 	assert.Equal(t, "UNKNOWN", db.ProvisioningState(99).String())
 }
 
-func TestProvisioningStateFirestoreValue(t *testing.T) {
-	assert.Equal(t, "pending", db.ProvisioningStatePending.FirestoreValue())
-	assert.Equal(t, "in_progress", db.ProvisioningStateInProgress.FirestoreValue())
-	assert.Equal(t, "completed", db.ProvisioningStateCompleted.FirestoreValue())
-	assert.Equal(t, "failed", db.ProvisioningStateFailed.FirestoreValue())
-}
-
 func TestProvisioningOperation(t *testing.T) {
 	assert.Equal(t, 0, int(db.ProvisioningOperationCreate))
 	assert.Equal(t, 1, int(db.ProvisioningOperationUpdate))
@@ -118,12 +111,6 @@ func TestProvisioningOperationString(t *testing.T) {
 	assert.Equal(t, "UPDATE", db.ProvisioningOperationUpdate.String())
 	assert.Equal(t, "DESTROY", db.ProvisioningOperationDestroy.String())
 	assert.Equal(t, "UNKNOWN", db.ProvisioningOperation(99).String())
-}
-
-func TestProvisioningOperationFirestoreValue(t *testing.T) {
-	assert.Equal(t, "create", db.ProvisioningOperationCreate.FirestoreValue())
-	assert.Equal(t, "update", db.ProvisioningOperationUpdate.FirestoreValue())
-	assert.Equal(t, "destroy", db.ProvisioningOperationDestroy.FirestoreValue())
 }
 
 func TestNewProvisioningService(t *testing.T) {

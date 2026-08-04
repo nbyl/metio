@@ -136,6 +136,123 @@ func TestLookupUser_MojangReturns404_PlayerDBFallback(t *testing.T) {
 	assert.Equal(t, "boboGHG", profile.Name)
 }
 
+func TestLookupUser_MojangReturns404_PlayerDBReturns400(t *testing.T) {
+	// Mojang returns 404 — should fall back to PlayerDB, which now returns 400 (not 404)
+	// for unknown/invalid usernames (e.g. "minecraft.invalid_username") — treat as not found
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mojangServer.Close()
+
+	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(playerDBResponse{
+			Code:    "minecraft.invalid_username",
+			Message: "Failed to get player data.",
+			Success: false,
+		})
+	}))
+	defer playerDBServer.Close()
+
+	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
+	profile, err := client.LookupUser(context.Background(), "nonexistentuser12345")
+
+	require.NoError(t, err)
+	assert.Nil(t, profile)
+}
+
+func TestLookupUser_MojangReturns204_PlayerDBReturns400(t *testing.T) {
+	// Mojang returns 204 (migrated account) — should fall back to PlayerDB, which now
+	// returns 400 (not 404) for not-found — treat as not found
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer mojangServer.Close()
+
+	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(playerDBResponse{
+			Code:    "minecraft.invalid_username",
+			Message: "Failed to get player data.",
+			Success: false,
+		})
+	}))
+	defer playerDBServer.Close()
+
+	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
+	profile, err := client.LookupUser(context.Background(), "nonexistentuser12345")
+
+	require.NoError(t, err)
+	assert.Nil(t, profile)
+}
+
+func TestLookupUser_MojangReturns204_PlayerDBReturns400_ValidPlayer(t *testing.T) {
+	// The regression: PlayerDB now returns 400 (not 404) for a migrated account like
+	// boboGHG. Prior behavior treated 400 as a hard error, which LookupUser swallowed
+	// into "not found" — rejecting valid players. PlayerDB may return 200 + success:true
+	// for the same username when resolved; this test verifies the 400 not-found path
+	// is handled without producing a hard error, and the resolved path still works.
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer mojangServer.Close()
+
+	playerDBRequests := 0
+	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		playerDBRequests++
+		if playerDBRequests == 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(playerDBResponse{
+				Code:    "minecraft.invalid_username",
+				Message: "Failed to get player data.",
+				Success: false,
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(playerDBResponse{
+			Code:    "player.found",
+			Message: "Successfully found player by given ID.",
+			Success: true,
+			Data: struct {
+				Player struct {
+					ID       string `json:"id"`
+					Username string `json:"username"`
+					RawID    string `json:"raw_id"`
+				} `json:"player"`
+			}{
+				Player: struct {
+					ID       string `json:"id"`
+					Username string `json:"username"`
+					RawID    string `json:"raw_id"`
+				}{
+					ID:       "c8d57769-3fe2-4010-9872-ccd44ba40903",
+					Username: "boboGHG",
+					RawID:    "c8d577693fe240109872ccd44ba40903",
+				},
+			},
+		})
+	}))
+	defer playerDBServer.Close()
+
+	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
+
+	// First lookup: 400 + success:false → not found, no hard error
+	profile, err := client.LookupUser(context.Background(), "boboGHG")
+	require.NoError(t, err)
+	assert.Nil(t, profile)
+
+	// Second lookup: PlayerDB resolves the player
+	profile, err = client.LookupUser(context.Background(), "boboGHG")
+	require.NoError(t, err)
+	require.NotNil(t, profile)
+	assert.Equal(t, "c8d577693fe240109872ccd44ba40903", profile.ID)
+	assert.Equal(t, "boboGHG", profile.Name)
+}
+
 func TestLookupUser_BothAPIsReturnNotFound(t *testing.T) {
 	// Both Mojang and PlayerDB return not found — should return nil
 	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,17 +272,128 @@ func TestLookupUser_BothAPIsReturnNotFound(t *testing.T) {
 	assert.Nil(t, profile)
 }
 
-func TestLookupUser_MojangRateLimited_NoFallback(t *testing.T) {
-	// Mojang returns 429 — should return error, no fallback
+func TestLookupUser_MojangRateLimited_PlayerDBFallback(t *testing.T) {
+	// Mojang returns 429 — should fall back to PlayerDB
 	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer mojangServer.Close()
 
-	playerDBCalled := false
 	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playerDBCalled = true
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(playerDBResponse{
+			Code:    "player.found",
+			Message: "Successfully found player by given ID.",
+			Success: true,
+			Data: struct {
+				Player struct {
+					ID       string `json:"id"`
+					Username string `json:"username"`
+					RawID    string `json:"raw_id"`
+				} `json:"player"`
+			}{
+				Player: struct {
+					ID       string `json:"id"`
+					Username string `json:"username"`
+					RawID    string `json:"raw_id"`
+				}{
+					ID:       "069a79f4-44e9-4726-a5be-fca90e38aaf5",
+					Username: "Notch",
+					RawID:    "069a79f444e94726a5befca90e38aaf5",
+				},
+			},
+		})
+	}))
+	defer playerDBServer.Close()
+
+	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
+	profile, err := client.LookupUser(context.Background(), "Notch")
+
+	require.NoError(t, err)
+	require.NotNil(t, profile)
+	assert.Equal(t, "069a79f444e94726a5befca90e38aaf5", profile.ID)
+	assert.Equal(t, "Notch", profile.Name)
+}
+
+func TestLookupUser_MojangServerError_PlayerDBFallback(t *testing.T) {
+	// Mojang returns 500 — should fall back to PlayerDB
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mojangServer.Close()
+
+	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(playerDBResponse{
+			Code:    "player.found",
+			Message: "Successfully found player by given ID.",
+			Success: true,
+			Data: struct {
+				Player struct {
+					ID       string `json:"id"`
+					Username string `json:"username"`
+					RawID    string `json:"raw_id"`
+				} `json:"player"`
+			}{
+				Player: struct {
+					ID       string `json:"id"`
+					Username string `json:"username"`
+					RawID    string `json:"raw_id"`
+				}{
+					ID:       "069a79f4-44e9-4726-a5be-fca90e38aaf5",
+					Username: "Notch",
+					RawID:    "069a79f444e94726a5befca90e38aaf5",
+				},
+			},
+		})
+	}))
+	defer playerDBServer.Close()
+
+	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
+	profile, err := client.LookupUser(context.Background(), "Notch")
+
+	require.NoError(t, err)
+	require.NotNil(t, profile)
+	assert.Equal(t, "069a79f444e94726a5befca90e38aaf5", profile.ID)
+	assert.Equal(t, "Notch", profile.Name)
+}
+
+func TestLookupUser_MojangError_PlayerDBNotFound_ReturnsNil(t *testing.T) {
+	// Mojang errors but PlayerDB gives a clean "not found" — that is authoritative,
+	// so LookupUser returns nil (not found) rather than the Mojang error
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer mojangServer.Close()
+
+	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(playerDBResponse{
+			Code:    "minecraft.invalid_username",
+			Message: "Failed to get player data.",
+			Success: false,
+		})
+	}))
+	defer playerDBServer.Close()
+
+	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
+	profile, err := client.LookupUser(context.Background(), "Notch")
+
+	require.NoError(t, err)
+	assert.Nil(t, profile)
+}
+
+func TestLookupUser_MojangError_PlayerDBError_ReturnsMojangError(t *testing.T) {
+	// Both Mojang and PlayerDB fail — return the original Mojang error so the caller
+	// can distinguish an outage from a not-found
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer mojangServer.Close()
+
+	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer playerDBServer.Close()
 
@@ -175,30 +403,6 @@ func TestLookupUser_MojangRateLimited_NoFallback(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limited")
 	assert.Nil(t, profile)
-	assert.False(t, playerDBCalled, "PlayerDB should not be called when Mojang returns an error")
-}
-
-func TestLookupUser_MojangServerError_NoFallback(t *testing.T) {
-	// Mojang returns 500 — should return error, no fallback
-	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer mojangServer.Close()
-
-	playerDBCalled := false
-	playerDBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playerDBCalled = true
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer playerDBServer.Close()
-
-	client := newTestMojangClient(mojangServer.URL, playerDBServer.URL)
-	profile, err := client.LookupUser(context.Background(), "Notch")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unexpected status code")
-	assert.Nil(t, profile)
-	assert.False(t, playerDBCalled, "PlayerDB should not be called when Mojang returns an error")
 }
 
 func TestLookupUser_PlayerDBReturnsSuccessFalse(t *testing.T) {

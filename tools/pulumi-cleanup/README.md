@@ -10,7 +10,7 @@ The controller's `WorkspaceManager.DestroyStack`
 (`internal/pulumi/workspace.go:70`) handles the happy path. When provisioning
 fails partway through, the stack may orphan 17+ GCP resources (firewall, disk,
 backup bucket, address, resource policy, service account, IAM bindings, etc.)
-without ever reaching a stable Firestore record. This tool lets an operator
+without ever reaching a stable state-store record. This tool lets an operator
 manually tear down those resources and clean up state.
 
 ## Prerequisites
@@ -49,10 +49,10 @@ pulumi destroy --yes
 pulumi stack rm 0dcbaca4-2a26-489c-b4a3-d2fad8bb6483 --yes
 ```
 
-### Firestore Cleanup
+### State Store Cleanup
 
-After destroying the stack, the controller's Firestore document at
-`serverConfigs/<uuid>` must also be removed.
+After destroying the stack, the controller's state record for the server (stored in the
+Dapr state store) must also be removed.
 
 **Recommended:** use the controller API (idempotent, exercises the same code
 path the user interface calls):
@@ -60,13 +60,6 @@ path the user interface calls):
 ```bash
 # Reachable controller (local or Cloud Run):
 curl -X DELETE "http://localhost:8080/api/servers/0dcbaca4-2a26-489c-b4a3-d2fad8bb6483"
-```
-
-**Fallback:** delete directly via gcloud:
-
-```bash
-gcloud firestore documents delete \
-  projects/minecraftbyl/databases/(default)/documents/serverConfigs/0dcbaca4-2a26-489c-b4a3-d2fad8bb6483
 ```
 
 ## Safety Note

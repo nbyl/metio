@@ -3,3 +3,7 @@ project_id = "TBD"
 region     = "TBD"
 zone       = "TBD"
 admin_users = "your-email@example.com"
+# "cloudsql" (default) auto-provisions a Cloud SQL instance and writes the
+# connection string to the postgres-connection-string secret;
+# "byo" expects a user-filled postgres-connection-string secret (e.g. Neon, CockroachDB)
+# postgres_mode = "cloudsql"

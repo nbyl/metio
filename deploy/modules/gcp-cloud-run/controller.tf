@@ -64,12 +64,6 @@ resource "google_project_iam_custom_role" "controller-role" {
     "compute.subnetworks.useExternalIp",
     "compute.zoneOperations.get",
     "compute.zones.get",
-    "datastore.entities.allocateIds",
-    "datastore.entities.create",
-    "datastore.entities.delete",
-    "datastore.entities.get",
-    "datastore.entities.list",
-    "datastore.entities.update",
     "iam.serviceAccounts.actAs",
     "iam.serviceAccounts.create",
     "iam.serviceAccounts.delete",
@@ -123,7 +117,7 @@ resource "google_secret_manager_secret" "client_id" {
 resource "google_secret_manager_secret_version" "client_id_dummy" {
   secret                 = google_secret_manager_secret.client_id.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret" "client_secret" {
@@ -137,7 +131,7 @@ resource "google_secret_manager_secret" "client_secret" {
 resource "google_secret_manager_secret_version" "client_secret_dummy" {
   secret                 = google_secret_manager_secret.client_secret.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret" "base_url" {
@@ -151,7 +145,7 @@ resource "google_secret_manager_secret" "base_url" {
 resource "google_secret_manager_secret_version" "base_url_dummy" {
   secret                 = google_secret_manager_secret.base_url.id
   secret_data_wo_version = 0
-  secret_data            = "http://dummy:3000"
+  secret_data_wo         = "http://dummy:3000"
 }
 
 resource "google_cloud_run_v2_service" "controller" {
@@ -174,12 +168,42 @@ resource "google_cloud_run_v2_service" "controller" {
     }
 
     containers {
-      image = var.controller_image
+      name       = "controller"
+      image      = var.controller_image
+      depends_on = ["daprd"]
+
+      ports {
+        container_port = 8080
+      }
+
+      startup_probe {
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 3
+        failure_threshold     = 20
+
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+      }
+
+      liveness_probe {
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+        initial_delay_seconds = 10
+        period_seconds        = 30
+        timeout_seconds       = 5
+        failure_threshold     = 3
+      }
       resources {
         limits = {
           cpu    = "1000m"
           memory = "1Gi"
         }
+        startup_cpu_boost = true
       }
       env {
         name  = "ENVIRONMENT"
@@ -275,14 +299,57 @@ resource "google_cloud_run_v2_service" "controller" {
         }
       }
       env {
-        name  = "DB_BACKEND"
-        value = "firestore"
-      }
-      env {
         name  = "DAPR_STATE_STORE_NAME"
         value = "statestore"
       }
+      env {
+        name  = "DAPR_GRPC_PORT"
+        value = "50001"
+      }
 
+    }
+    containers {
+      name    = "daprd"
+      image   = var.daprd_image
+      command = ["/daprd"]
+      args = [
+        "--app-id", "controller",
+        "--dapr-http-port", "3500",
+        "--dapr-grpc-port", "50001",
+        "--resources-path", "/dapr/components",
+        "--log-level", "info"
+      ]
+
+      startup_probe {
+        http_get {
+          path = "/v1.0/healthz/outbound"
+          port = 3500
+        }
+        initial_delay_seconds = 5
+        period_seconds        = 5
+        timeout_seconds       = 3
+        failure_threshold     = 12
+      }
+      resources {
+        limits = {
+          memory = "256Mi"
+        }
+      }
+      volume_mounts {
+        name       = "dapr-secrets"
+        mount_path = "/dapr/secrets"
+      }
+    }
+    volumes {
+      name = "dapr-secrets"
+      secret {
+        secret       = google_secret_manager_secret.postgres_connection_string.id
+        default_mode = "0444"
+        items {
+          path    = "secrets.json"
+          version = "latest"
+        }
+      }
     }
   }
 }
@@ -335,7 +402,7 @@ resource "google_secret_manager_secret" "agent_jwt_secret" {
 resource "google_secret_manager_secret_version" "agent_jwt_secret_value" {
   secret                 = google_secret_manager_secret.agent_jwt_secret.id
   secret_data_wo_version = 0
-  secret_data            = random_password.agent_jwt_secret.result
+  secret_data_wo         = random_password.agent_jwt_secret.result
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-agent_jwt_secret" {
@@ -356,7 +423,7 @@ resource "google_secret_manager_secret" "firebase_api_key" {
 resource "google_secret_manager_secret_version" "firebase_api_key_dummy" {
   secret                 = google_secret_manager_secret.firebase_api_key.id
   secret_data_wo_version = 0
-  secret_data            = "dummy"
+  secret_data_wo         = "dummy"
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_key" {
@@ -364,6 +431,28 @@ resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_k
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.firebase_api_key]
+}
+
+resource "google_secret_manager_secret" "postgres_connection_string" {
+  secret_id = "${var.environment}-postgres-connection-string"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "postgres_connection_string_dummy" {
+  count                  = var.postgres_mode == "byo" ? 1 : 0
+  secret                 = google_secret_manager_secret.postgres_connection_string.id
+  secret_data_wo_version = 0
+  secret_data_wo         = jsonencode({ "postgres-connection-string" = "postgres://REPLACE-ME:REPLACE-ME@REPLACE-ME:5432/metio?sslmode=require" })
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-postgres_connection_string" {
+  secret_id  = google_secret_manager_secret.postgres_connection_string.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.postgres_connection_string]
 }
 
 resource "google_project_iam_member" "sa_storage_object_admin" {

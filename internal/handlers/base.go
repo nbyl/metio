@@ -54,6 +54,7 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 
 	r.Use(TracingMiddleware)
 
+	r.HandleFunc("/healthz", healthHandler).Methods("GET")
 	r.HandleFunc("/auth/login", loginHandler).Methods("GET")
 	r.HandleFunc("/auth/callback", callbackHandler).Methods("GET")
 	r.HandleFunc("/events", eventsHandler).Methods("POST")

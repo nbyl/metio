@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image controller-image machine-agent-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-daprd-image controller-image machine-agent-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -63,19 +63,13 @@ generate-env:
 	@echo "Generated build/local.env"
 
 # Start backend (air) and frontend (Vite) with hot reload.
-# DB_BACKEND (from the env file) controls the datastore:
-#   dapr      -> local Dapr sidecar + Datastore emulator (auto-started, torn down on exit)
-#   firestore -> Firestore (cloud), no local infra   [default]
+# Dapr sidecar + local Postgres are always started (and torn down on exit).
 develop: generate-env
 	@echo "Starting development servers..."
 	@set -a; . build/local.env; set +a; \
-	if [ "$${DB_BACKEND:-firestore}" = "dapr" ]; then \
-		echo "DB_BACKEND=dapr -> starting local Dapr infrastructure..."; \
-		$(MAKE) dev-up || exit 1; \
-		trap 'make dev-down; kill 0' EXIT; \
-	else \
-		trap 'kill 0' EXIT; \
-	fi; \
+	echo "Starting local Dapr infrastructure..."; \
+	$(MAKE) dev-up || exit 1; \
+	trap 'make dev-down; kill 0' EXIT; \
 	cd web && npm run dev & \
 	air & \
 	wait
@@ -85,13 +79,13 @@ develop: generate-env
 # ──────────────────────────────────────────────
 
 DAPRD_BIN ?= $(HOME)/.dapr/bin/daprd
-DATASTORE_PORT ?= 8081
+POSTGRES_PORT ?= 5432
+POSTGRES_CONTAINER ?= metio-postgres
+POSTGRES_IMAGE ?= postgres:18
+POSTGRES_DB ?= metio
+LOCAL_SECRETS_FILE ?= dapr/secrets/secrets.json
 
-dev-dapr-setup: ## Initialize Dapr runtime and gcloud components if not already done
-	@gcloud components install beta cloud-datastore-emulator --quiet 2>/dev/null; \
-	if [ $$? -ne 0 ]; then \
-		echo "WARNING: gcloud components install failed; emulator may not work."; \
-	fi
+dev-dapr-setup: ## Initialize Dapr runtime if not already done
 	@if [ ! -f "$(DAPRD_BIN)" ]; then \
 		echo "Running dapr init --slim to download the daprd binary..."; \
 		dapr init --slim; \
@@ -99,25 +93,41 @@ dev-dapr-setup: ## Initialize Dapr runtime and gcloud components if not already 
 		echo "daprd already installed at $(DAPRD_BIN)"; \
 	fi
 
-dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
-	@echo "Starting Datastore emulator..."
-	@gcloud beta emulators datastore start --quiet \
-		--host-port=localhost:$(DATASTORE_PORT) \
-		--project=metio-local \
-		--no-store-on-disk \
-		&> /tmp/datastore-emulator.log &
-	@echo "Waiting for Datastore emulator to be ready..."
-	@for i in $$(seq 1 30); do \
-		if curl -s http://localhost:$(DATASTORE_PORT) > /dev/null 2>&1; then \
+dev-up: dev-dapr-setup ## Start Dapr infrastructure (Postgres container + daprd)
+	@if [ ! -f "$(LOCAL_SECRETS_FILE)" ]; then \
+		echo "Creating local secrets file $(LOCAL_SECRETS_FILE)..."; \
+		mkdir -p $$(dirname $(LOCAL_SECRETS_FILE)); \
+		printf '{\n  "postgres-connection-string": "host=localhost user=postgres password=postgres port=$(POSTGRES_PORT) connect_timeout=10 database=$(POSTGRES_DB)"\n}\n' > $(LOCAL_SECRETS_FILE); \
+	fi
+	@echo "Starting Postgres container..."
+	@docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
+	@docker run -d --name $(POSTGRES_CONTAINER) \
+		-p $(POSTGRES_PORT):5432 \
+		-e POSTGRES_PASSWORD=postgres \
+		-e POSTGRES_DB=$(POSTGRES_DB) \
+		-v metio-postgres-data:/var/lib/postgresql \
+		$(POSTGRES_IMAGE) \
+		&> /tmp/postgres-container.log
+	@echo "Waiting for Postgres to be ready..."
+	@ready=0; \
+	for i in $$(seq 1 30); do \
+		if docker exec $(POSTGRES_CONTAINER) pg_isready -U postgres -d $(POSTGRES_DB) > /dev/null 2>&1; then \
+			ready=1; \
 			break; \
 		fi; \
 		sleep 1; \
-	done
-	@echo "Datastore emulator ready on localhost:$(DATASTORE_PORT)"
+	done; \
+	if [ "$$ready" -eq 0 ]; then \
+		echo "ERROR: Postgres did not become ready within 30s"; \
+		echo "--- /tmp/postgres-container.log ---"; \
+		cat /tmp/postgres-container.log; \
+		echo "--- end ---"; \
+		docker logs $(POSTGRES_CONTAINER) 2>&1; \
+		exit 1; \
+	fi
+	@echo "Postgres ready on localhost:$(POSTGRES_PORT) (db: $(POSTGRES_DB))"
 	@echo "Starting daprd..."
-	@DATASTORE_EMULATOR_HOST=localhost:$(DATASTORE_PORT) \
-	 GOOGLE_CLOUD_PROJECT=metio-local \
-	 $(DAPRD_BIN) --app-id controller \
+	@$(DAPRD_BIN) --app-id controller \
 		--resources-path ./dapr/components \
 		--dapr-grpc-port 50001 \
 		--dapr-http-port 3500 \
@@ -141,20 +151,20 @@ dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
 	@echo "daprd ready"
 	@echo ""
 	@echo "Dapr infrastructure is running:"
-	@echo "  Datastore emulator: localhost:$(DATASTORE_PORT)"
-	@echo "  daprd (gRPC):       localhost:50001"
+	@echo "  Postgres:      localhost:$(POSTGRES_PORT) (db: $(POSTGRES_DB))"
+	@echo "  daprd (gRPC):  localhost:50001"
 	@echo ""
 	@echo "Run 'make dev-down' to stop."
 
 dev-down: ## Stop Dapr infrastructure
 	@echo "Stopping daprd..."
 	@pkill daprd 2>/dev/null || true
-	@echo "Stopping Datastore emulator..."
-	@pkill -f "datastore" 2>/dev/null || true
+	@echo "Stopping Postgres container..."
+	@docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
 	@echo "Dapr infrastructure stopped."
 
 
-test-dapr-integration: dev-up ## Run DaprDB integration tests against the local Datastore emulator
+test-dapr-integration: dev-up ## Run DaprDB integration tests against the local Postgres
 	@echo "Running DaprDB integration tests..."
 	@trap 'make dev-down' EXIT; \
 	go test -tags=integration -count=1 ./internal/db/ -run TestDaprDB_Integration -v
@@ -213,6 +223,12 @@ ci-machine-agent-image:
 	echo "Building machine-agent image for CI: ghcr.io/nbyl/metio/machine-agent:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} -f cmd/machine-agent/Dockerfile --load .
 
+# CI daprd image build — tag for ghcr.io, load into local daemon (no push)
+ci-daprd-image:
+	@SHA=$$(git rev-parse --short HEAD); \
+	echo "Building daprd image for CI: ghcr.io/nbyl/metio/daprd:$${SHA}"; \
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/daprd:$${SHA} -f deploy/daprd/Dockerfile --load .
+
 # Local controller image build + push to Artifact Registry
 controller-image:
 	@mkdir -p build
@@ -231,10 +247,20 @@ machine-agent-image:
 	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --push . ; \
 	echo "$${IMAGE}" > build/machine-agent-image.txt
 
+# Local daprd image build + push to Artifact Registry
+daprd-image:
+	@mkdir -p build
+	@SHA=$$(git rev-parse --short HEAD); \
+	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/daprd:$${SHA}"; \
+	echo "Building daprd image: $${IMAGE}"; \
+	docker buildx build --platform linux/amd64 -f deploy/daprd/Dockerfile -t $${IMAGE} --push . ; \
+	echo "$${IMAGE}" > build/daprd-image.txt
+
 # Push images to ghcr.io
 push-images:
 	docker push ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD)
 	docker push ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD)
+	docker push ghcr.io/nbyl/metio/daprd:$(shell git rev-parse --short HEAD)
 
 # Promote image tags (usage: make promote FROM=a1b2c3d4 TO=main)
 promote:
@@ -244,41 +270,48 @@ promote:
 	fi
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
+	docker buildx imagetools create -t ghcr.io/nbyl/metio/daprd:$(TO) ghcr.io/nbyl/metio/daprd:$(FROM)
 
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
 DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
 	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(SHA)
 	docker push $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker push $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker push $(DISTRO_REGISTRY)/daprd:$(SHA)
 	if [ -n "$(VERSION)" ]; then \
 		docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker push $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 	fi
 
-# Build both Docker images (local, without gcloud)
-build-images: controller-image machine-agent-image
+# Build all Docker images (local, without gcloud)
+build-images: controller-image machine-agent-image daprd-image
 	@echo "All Docker images built successfully"
 
 # Deploy infrastructure: apply OpenTofu with pre-built Docker images
 deploy: deploy-full
 
-# Deploy full system: build both images and deploy all infrastructure
+# Deploy full system: build all images and deploy all infrastructure
 deploy-full: build-images
 	@set -e ;\
-	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ]; then \
+	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ] || [ ! -f "build/daprd-image.txt" ]; then \
 		echo "Error: Image tag files not found. Run 'make build-images' first." ;\
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
 	echo "Deploying full system with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -auto-approve
 
 # Deploy infrastructure only: use existing images or module defaults
 deploy-infrastructure:
@@ -293,6 +326,11 @@ deploy-infrastructure:
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
 		echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+	fi ;\
+	if [ -f "build/daprd-image.txt" ]; then \
+		DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
+		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
 	fi ;\
 	echo "Deploying infrastructure only with OpenTofu..." ;\
 	tofu -chdir=deploy apply $${ARGS} -auto-approve
@@ -310,21 +348,28 @@ deploy-machine-agent: build-machine-agent-image
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
 	fi ;\
+	if [ -f "build/daprd-image.txt" ]; then \
+		DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
+		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	tofu -chdir=deploy apply $${ARGS} -auto-approve
 
-# Deploy controller only: build controller image and update Cloud Run service
-deploy-controller: controller-image
+# Deploy controller only: build controller and daprd images and update Cloud Run service
+deploy-controller: controller-image daprd-image
 	@set -e ;\
-	if [ ! -f "build/controller-image.txt" ]; then \
-		echo "Error: Controller image tag file not found. Run 'make build-controller-image' first." ;\
+	if [ ! -f "build/controller-image.txt" ] || [ ! -f "build/daprd-image.txt" ]; then \
+		echo "Error: Image tag files not found. Run 'make controller-image daprd-image' first." ;\
 		exit 1 ;\
 	fi ;\
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
+	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -target=module.gcp-cloud-run.google_cloud_run_v2_service.controller -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -auto-approve
+	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+	tofu -chdir=deploy apply -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:
@@ -353,13 +398,15 @@ help:
 	@echo "  <binary>                - Build specific binary (e.g., make controller)"
 	@echo "  controller-image        - Build controller Docker image and push to Artifact Registry"
 	@echo "  machine-agent-image     - Build machine-agent image and push to Artifact Registry"
+	@echo "  daprd-image             - Build daprd image with baked statestore and push to Artifact Registry"
 	@echo "  ci-controller-image     - Build controller image for CI (ghcr.io tag, no push)"
 	@echo "  ci-machine-agent-image  - Build machine-agent image for CI (ghcr.io tag, no push)"
+	@echo "  ci-daprd-image          - Build daprd image for CI (ghcr.io tag, no push)"
 	@echo "  push-images             - Push images to ghcr.io"
 	@echo "  promote                 - Retag image (make promote FROM=<sha> TO=<tag>)"
 	@echo "  build-machine-agent-image - Build machine-agent via gcloud builds (legacy)"
 	@echo "  build-controller-image  - Build controller via gcloud builds (legacy)"
-	@echo "  build-images            - Build both Docker images"
+	@echo "  build-images            - Build all Docker images (controller, machine-agent, daprd)"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test                    - Run all tests (backend + frontend)"
@@ -367,11 +414,11 @@ help:
 	@echo "  test-web                - Run frontend Vitest suite"
 	@echo ""
 	@echo "Development:"
-	@echo "  develop                 - Start backend + frontend hot reload (DB_BACKEND selects Firestore or Dapr)"
-	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Datastore emulator"
+	@echo "  develop                 - Start backend + frontend hot reload (Dapr + Postgres)"
+	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Postgres"
 	@echo ""
-	@echo "Dapr Infrastructure (auto-started by 'make develop' when DB_BACKEND=dapr):"
-	@echo "  dev-up                  - Start Datastore emulator + daprd sidecar"
+	@echo "Dapr Infrastructure (auto-started by 'make develop'):"
+	@echo "  dev-up                  - Start Postgres container + daprd sidecar"
 	@echo "  dev-down                - Stop all Dapr infrastructure"
 	@echo ""
 	@echo "Deployment targets:"

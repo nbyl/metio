@@ -30,21 +30,6 @@ func (s ProvisioningState) String() string {
 	}
 }
 
-func (s ProvisioningState) FirestoreValue() string {
-	switch s {
-	case ProvisioningStatePending:
-		return "pending"
-	case ProvisioningStateInProgress:
-		return "in_progress"
-	case ProvisioningStateCompleted:
-		return "completed"
-	case ProvisioningStateFailed:
-		return "failed"
-	default:
-		return "unknown"
-	}
-}
-
 func (s ProvisioningState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
 }
@@ -112,34 +97,21 @@ func (o *ProvisioningOperation) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (o ProvisioningOperation) FirestoreValue() string {
-	switch o {
-	case ProvisioningOperationCreate:
-		return "create"
-	case ProvisioningOperationUpdate:
-		return "update"
-	case ProvisioningOperationDestroy:
-		return "destroy"
-	default:
-		return "unknown"
-	}
-}
-
 type ProvisioningStep struct {
-	Name      string            `json:"name" firestore:"name"`
-	Status    ProvisioningState `json:"status" firestore:"status"`
-	Message   string            `json:"message" firestore:"message"`
-	Timestamp time.Time         `json:"timestamp" firestore:"timestamp"`
+	Name      string            `json:"name"`
+	Status    ProvisioningState `json:"status"`
+	Message   string            `json:"message"`
+	Timestamp time.Time         `json:"timestamp"`
 }
 
 type ProvisioningStatus struct {
-	ID          string                `json:"id" firestore:"id"`
-	Operation   ProvisioningOperation `json:"operation" firestore:"operation"`
-	State       ProvisioningState     `json:"state" firestore:"state"`
-	StartedAt   time.Time             `json:"startedAt" firestore:"started_at"`
-	CompletedAt *time.Time            `json:"completedAt,omitempty" firestore:"completed_at,omitempty"`
-	CurrentStep string                `json:"currentStep" firestore:"current_step"`
-	Steps       []ProvisioningStep    `json:"steps" firestore:"steps"`
-	Error       string                `json:"error,omitempty" firestore:"error,omitempty"`
-	Outputs     map[string]string     `json:"outputs,omitempty" firestore:"outputs,omitempty"`
+	ID          string                `json:"id"`
+	Operation   ProvisioningOperation `json:"operation"`
+	State       ProvisioningState     `json:"state"`
+	StartedAt   time.Time             `json:"startedAt"`
+	CompletedAt *time.Time            `json:"completedAt,omitempty"`
+	CurrentStep string                `json:"currentStep"`
+	Steps       []ProvisioningStep    `json:"steps"`
+	Error       string                `json:"error,omitempty"`
+	Outputs     map[string]string     `json:"outputs,omitempty"`
 }

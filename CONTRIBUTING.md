@@ -78,29 +78,28 @@ A development container is configured in `.devcontainer/` for VS Code with:
 ### System Diagram
 
 ```
-┌─────────────┐      ┌──────────────────────┐      ┌─────────────┐
-│   Browser   │──────│   Cloud Run           │──────│  Firestore  │
-│  (React UI) │  │  │  (Controller + API)   │  │  │   (State)   │
-└─────────────┘      └──────────────────────┘      └──────┬──────┘
-                            │                               │
-                            │ Pub/Sub                       │
-                            ▼                               │
-                      ┌──────────────────────┐              │
-                      │ GCE Compute Engine   │──────────────┘
-                      │ (Minecraft Server +  │
-                      │  Machine Agent)      │
-                      └──────────────────────┘
+┌─────────────┐      ┌──────────────────────────────┐
+│   Browser   │──────│   Cloud Run                  │
+│  (React UI) │      │  (Controller + API + daprd)  │────┐
+└─────────────┘      └──────────────┬───────────────┘    │ Dapr state store
+                                   │ Pub/Sub              │ (PostgreSQL)
+                                   ▼                      │
+                             ┌────────────────────┐       │
+                             │ GCE Compute Engine │───────┘
+                             │ (Minecraft Server +│
+                             │  Machine Agent)    │
+                             └────────────────────┘
 ```
 
 ### Components
 
 **Controller** (`cmd/controller/`): Go HTTP server deployed on Cloud Run. Serves the React SPA and REST API. Receives Pub/Sub lifecycle events. Manages Pulumi stacks for each server (create, update, destroy). Handles Google OAuth2 login.
 
-**Machine Agent** (`cmd/machine-agent/`): Go binary running as the startup command on each Minecraft VM. Reports server status (players, uptime, version) to Firestore. Syncs the whitelist between Firestore and Minecraft's `whitelist.json`. Handles scheduled shutdowns (in-game warnings, world save, VM stop). Uses GCE metadata for self-identification.
+**Machine Agent** (`cmd/machine-agent/`): Go binary running as the startup command on each Minecraft VM. Reports server status (players, uptime, version) through the controller API. Syncs the whitelist. Handles scheduled shutdowns (in-game warnings, world save, VM stop). Uses GCE metadata for self-identification.
 
 **Frontend** (`web/`): React 19 SPA built with Vite. Communicates with the controller through a REST API. Polls for server status and provisioning progress.
 
-**Firestore**: Native-mode database storing server config, provisioning status, and runtime status. Database ID format: `{environment}-{region}-metio-db`.
+**Dapr state store**: The controller reads and writes server config, provisioning status, and runtime status through a Dapr sidecar. The state is backed by PostgreSQL (Cloud SQL or BYO, see [ADR-0003](docs/adr/0003-postgresql-state-backend.md)).
 
 **Pulumi**: Each server has its own Pulumi stack (stored in a GCS state bucket) that defines GCE VM, boot disk, service account, firewall rules, IAM bindings, and backup bucket.
 
@@ -129,7 +128,7 @@ metio/
 │   │   ├── Dockerfile        # Multi-stage build (Node → Go → Alpine)
 │   │   └── cloudbuild.yaml   # Cloud Build config
 │   └── machine-agent/        # VM status reporter
-│       ├── main.go           # Entry point, Firestore sync loop
+│       ├── main.go           # Entry point, status sync loop
 │       ├── main_test.go
 │       ├── Dockerfile
 │       └── cloudbuild.yaml
@@ -137,8 +136,9 @@ metio/
 │   ├── config/               # Viper-based env var loading
 │   │   ├── config.go         # Config struct, Load()
 │   │   └── config_test.go
-│   ├── db/                   # Firestore data access layer
+│   ├── db/                   # Dapr state store data access layer
 │   │   ├── db.go             # DB interface
+│   │   ├── dapr.go           # DaprDB adapter
 │   │   ├── types.go          # Status, ServerConfig, ProvisioningStatus
 │   │   ├── server_config.go  # Server CRUD
 │   │   ├── provisioning.go   # Provisioning status operations
@@ -208,10 +208,10 @@ metio/
 │   ├── metio.auto.tfvars.sample
 │   └── modules/
 │       └── gcp-cloud-run/    # GCP Cloud Run infrastructure module
-│           ├── main.tf       # Provider config, Firestore DB
+│           ├── main.tf       # Provider config
 │           ├── controller.tf # Cloud Run, IAM, secrets
+│           ├── postgres.tf   # Cloud SQL provisioning (cloudsql mode)
 │           ├── events.tf     # Pub/Sub, log sink
-│           ├── firestore.tf  # Rules, indexes
 │           ├── pulumi_state.tf
 │           ├── variables.tf
 │           └── outputs.tf
@@ -311,7 +311,7 @@ Sub-packages follow the same pattern:
 - `internal/handlers/servers/routes.go` registers server-related endpoints
 - `internal/handlers/setup/routes.go` registers setup endpoints
 
-### Firestore Data Access
+### Dapr State Store Data Access
 
 The `internal/db` package defines a `DB` interface:
 
@@ -325,7 +325,7 @@ type DB interface {
 }
 ```
 
-Mock implementations live in `internal/testutil/mock_db.go` for testing. Test files in consuming packages import and re-export the mock.
+The `DaprDB` adapter (`internal/db/dapr.go`) implements the interface on top of the Dapr state store API. Mock implementations live in `internal/testutil/mock_db.go` for testing. Test files in consuming packages import and re-export the mock.
 
 ### Pulumi Infrastructure
 
@@ -349,7 +349,7 @@ The Pulumi program (`internal/pulumi/programs/server.go`) defines:
 **New API endpoint:**
 1. Add handler function in the appropriate file under `internal/handlers/`
 2. Register the route in `routes.go`
-3. Add any new Firestore operations in `internal/db/`
+3. Add any new state store operations in `internal/db/`
 4. Add business logic in `internal/services/`
 5. Write tests with `httptest` + testify mocks
 

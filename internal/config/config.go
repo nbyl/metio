@@ -25,7 +25,6 @@ type Config struct {
 	CloudTasksRegion         string
 	ControllerServiceAccount string
 	ControllerVersion        string
-	DBBackend                string
 	DaprStateStoreName       string
 }
 
@@ -60,14 +59,6 @@ func Load() (Config, error) {
 		ControllerServiceAccount: viper.GetString("CONTROLLER_SERVICE_ACCOUNT"),
 	}
 
-	dbBackend := viper.GetString("DB_BACKEND")
-	if dbBackend == "" {
-		dbBackend = "firestore"
-	} else if dbBackend != "firestore" && dbBackend != "dapr" {
-		return cfg, fmt.Errorf("DB_BACKEND must be 'firestore' or 'dapr', got %q", dbBackend)
-	}
-	cfg.DBBackend = dbBackend
-
 	daprStateStoreName := viper.GetString("DAPR_STATE_STORE_NAME")
 	if daprStateStoreName == "" {
 		daprStateStoreName = "statestore"
@@ -96,17 +87,7 @@ func LoadWithMetadata() (Config, error) {
 	return cfg, nil
 }
 
-// DatabaseID returns the formatted Firestore database ID.
-func (c Config) DatabaseID() string {
-	return fmt.Sprintf("%s-%s-metio-db", c.Environment, c.Region)
-}
-
 // NewDBConnection creates a database connection using this config.
 func (c Config) NewDBConnection(ctx context.Context) (db.DB, error) {
-	switch c.DBBackend {
-	case "dapr":
-		return db.NewDaprDB(ctx, c.DaprStateStoreName)
-	default:
-		return db.NewConnection(ctx, c.ProjectID, c.DatabaseID())
-	}
+	return db.NewDaprDB(ctx, c.DaprStateStoreName)
 }
