@@ -44,3 +44,14 @@ variable "daprd_image" {
   type        = string
   default     = "europe-docker.pkg.dev/metio-distribution/metio/daprd:1.5.0" # x-release-please-version
 }
+
+variable "postgres_mode" {
+  description = "PostgreSQL state backend topology: 'cloudsql' auto-provisions a Cloud SQL instance, 'byo' expects a user-filled connection-string secret (e.g. Neon, CockroachDB)."
+  type        = string
+  default     = "cloudsql"
+
+  validation {
+    condition     = contains(["cloudsql", "byo"], var.postgres_mode)
+    error_message = "postgres_mode must be one of 'cloudsql' or 'byo'."
+  }
+}
