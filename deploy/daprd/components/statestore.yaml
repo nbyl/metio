@@ -3,11 +3,12 @@ kind: Component
 metadata:
   name: statestore
 spec:
-  type: state.gcp.firestore
-  version: v1
+  type: state.postgresql
+  version: v2
   metadata:
-  # "*detect-project-id*" is a Google Cloud Go sentinel constant
-  # that triggers auto-detection from ADC/metadata at runtime.
-  # See: https://pkg.go.dev/cloud.google.com/go#hdr-Project_ID
-  - name: project_id
-    value: "*detect-project-id*"
+    - name: connectionString
+      secretKeyRef:
+        name: postgres-connection-string
+        key: postgres-connection-string
+auth:
+  secretStore: local-secret-file
