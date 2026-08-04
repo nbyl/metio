@@ -448,6 +448,7 @@ resource "google_secret_manager_secret" "postgres_connection_string" {
 }
 
 resource "google_secret_manager_secret_version" "postgres_connection_string_dummy" {
+  count                  = var.postgres_mode == "byo" ? 1 : 0
   secret                 = google_secret_manager_secret.postgres_connection_string.id
   secret_data_wo_version = 0
   secret_data_wo         = jsonencode({ "postgres-connection-string" = "postgres://REPLACE-ME:REPLACE-ME@REPLACE-ME:5432/metio?sslmode=require" })
