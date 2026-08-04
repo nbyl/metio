@@ -16,4 +16,5 @@ This directory records significant architecture decisions for Metio using a ligh
 | ADR | Title | Status |
 |-----|-------|--------|
 | [0001](0001-controller-agent-api.md) | Machine-agent writes state through a Controller API | Accepted |
+| [0002](0002-dapr-state-store-key-schema-and-topology.md) | Dapr state store key schema and Cloud Run sidecar topology | Accepted |
 | [0003](0003-postgresql-state-backend.md) | PostgreSQL state backend (Cloud SQL or BYO) | Accepted |

@@ -82,7 +82,7 @@ A development container is configured in `.devcontainer/` for VS Code with:
 │   Browser   │──────│   Cloud Run                  │
 │  (React UI) │      │  (Controller + API + daprd)  │────┐
 └─────────────┘      └──────────────┬───────────────┘    │ Dapr state store
-                                   │ Pub/Sub              │ (Datastore-mode)
+                                   │ Pub/Sub              │ (PostgreSQL)
                                    ▼                      │
                              ┌────────────────────┐       │
                              │ GCE Compute Engine │───────┘
@@ -99,7 +99,7 @@ A development container is configured in `.devcontainer/` for VS Code with:
 
 **Frontend** (`web/`): React 19 SPA built with Vite. Communicates with the controller through a REST API. Polls for server status and provisioning progress.
 
-**Dapr state store**: The controller reads and writes server config, provisioning status, and runtime status through a Dapr sidecar. The state is backed by a Datastore-mode Firestore database (`(default)`).
+**Dapr state store**: The controller reads and writes server config, provisioning status, and runtime status through a Dapr sidecar. The state is backed by PostgreSQL (Cloud SQL or BYO, see [ADR-0003](docs/adr/0003-postgresql-state-backend.md)).
 
 **Pulumi**: Each server has its own Pulumi stack (stored in a GCS state bucket) that defines GCE VM, boot disk, service account, firewall rules, IAM bindings, and backup bucket.
 
@@ -208,8 +208,9 @@ metio/
 │   ├── metio.auto.tfvars.sample
 │   └── modules/
 │       └── gcp-cloud-run/    # GCP Cloud Run infrastructure module
-│           ├── main.tf       # Provider config, Firestore (Datastore mode) DB
+│           ├── main.tf       # Provider config
 │           ├── controller.tf # Cloud Run, IAM, secrets
+│           ├── postgres.tf   # Cloud SQL provisioning (cloudsql mode)
 │           ├── events.tf     # Pub/Sub, log sink
 │           ├── pulumi_state.tf
 │           ├── variables.tf
