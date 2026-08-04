@@ -3,10 +3,12 @@ kind: Component
 metadata:
   name: statestore
 spec:
-  type: state.gcp.firestore
-  version: v1
+  type: state.postgresql
+  version: v2
   metadata:
-  - name: project_id
-    value: "metio-local"
-  - name: endpoint
-    value: "localhost:8081"
+    - name: connectionString
+      secretKeyRef:
+        name: postgres-connection-string
+        key: postgres-connection-string
+auth:
+  secretStore: local-secret-file
