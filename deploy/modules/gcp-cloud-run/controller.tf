@@ -341,6 +341,21 @@ resource "google_cloud_run_v2_service" "controller" {
           memory = "256Mi"
         }
       }
+      volume_mounts {
+        name       = "dapr-secrets"
+        mount_path = "/dapr/secrets"
+      }
+    }
+    volumes {
+      name = "dapr-secrets"
+      secret {
+        secret       = google_secret_manager_secret.postgres_connection_string.id
+        default_mode = "0444"
+        items {
+          path    = "secrets.json"
+          version = "latest"
+        }
+      }
     }
   }
 }
@@ -422,6 +437,27 @@ resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_k
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.controller_service_account.email}"
   depends_on = [google_secret_manager_secret.firebase_api_key]
+}
+
+resource "google_secret_manager_secret" "postgres_connection_string" {
+  secret_id = "${var.environment}-postgres-connection-string"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "postgres_connection_string_dummy" {
+  secret                 = google_secret_manager_secret.postgres_connection_string.id
+  secret_data_wo_version = 0
+  secret_data_wo         = jsonencode({ "postgres-connection-string" = "postgres://REPLACE-ME:REPLACE-ME@REPLACE-ME:5432/metio?sslmode=require" })
+}
+
+resource "google_secret_manager_secret_iam_member" "secret-access-postgres_connection_string" {
+  secret_id  = google_secret_manager_secret.postgres_connection_string.id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
+  depends_on = [google_secret_manager_secret.postgres_connection_string]
 }
 
 resource "google_project_iam_member" "sa_storage_object_admin" {
