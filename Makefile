@@ -63,7 +63,7 @@ generate-env:
 	@echo "Generated build/local.env"
 
 # Start backend (air) and frontend (Vite) with hot reload.
-# Dapr sidecar + Datastore emulator are always started (and torn down on exit).
+# Dapr sidecar + local Postgres are always started (and torn down on exit).
 develop: generate-env
 	@echo "Starting development servers..."
 	@set -a; . build/local.env; set +a; \
@@ -79,13 +79,13 @@ develop: generate-env
 # ──────────────────────────────────────────────
 
 DAPRD_BIN ?= $(HOME)/.dapr/bin/daprd
-DATASTORE_PORT ?= 8081
+POSTGRES_PORT ?= 5432
+POSTGRES_CONTAINER ?= metio-postgres
+POSTGRES_IMAGE ?= postgres:18
+POSTGRES_DB ?= metio
+LOCAL_SECRETS_FILE ?= dapr/secrets/secrets.json
 
-dev-dapr-setup: ## Initialize Dapr runtime and gcloud components if not already done
-	@gcloud components install beta cloud-datastore-emulator --quiet 2>/dev/null; \
-	if [ $$? -ne 0 ]; then \
-		echo "WARNING: gcloud components install failed; emulator may not work."; \
-	fi
+dev-dapr-setup: ## Initialize Dapr runtime if not already done
 	@if [ ! -f "$(DAPRD_BIN)" ]; then \
 		echo "Running dapr init --slim to download the daprd binary..."; \
 		dapr init --slim; \
@@ -93,25 +93,41 @@ dev-dapr-setup: ## Initialize Dapr runtime and gcloud components if not already 
 		echo "daprd already installed at $(DAPRD_BIN)"; \
 	fi
 
-dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
-	@echo "Starting Datastore emulator..."
-	@gcloud beta emulators datastore start --quiet \
-		--host-port=localhost:$(DATASTORE_PORT) \
-		--project=metio-local \
-		--no-store-on-disk \
-		&> /tmp/datastore-emulator.log &
-	@echo "Waiting for Datastore emulator to be ready..."
-	@for i in $$(seq 1 30); do \
-		if curl -s http://localhost:$(DATASTORE_PORT) > /dev/null 2>&1; then \
+dev-up: dev-dapr-setup ## Start Dapr infrastructure (Postgres container + daprd)
+	@if [ ! -f "$(LOCAL_SECRETS_FILE)" ]; then \
+		echo "Creating local secrets file $(LOCAL_SECRETS_FILE)..."; \
+		mkdir -p $$(dirname $(LOCAL_SECRETS_FILE)); \
+		printf '{\n  "postgres-connection-string": "host=localhost user=postgres password=postgres port=$(POSTGRES_PORT) connect_timeout=10 database=$(POSTGRES_DB)"\n}\n' > $(LOCAL_SECRETS_FILE); \
+	fi
+	@echo "Starting Postgres container..."
+	@docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
+	@docker run -d --name $(POSTGRES_CONTAINER) \
+		-p $(POSTGRES_PORT):5432 \
+		-e POSTGRES_PASSWORD=postgres \
+		-e POSTGRES_DB=$(POSTGRES_DB) \
+		-v metio-postgres-data:/var/lib/postgresql \
+		$(POSTGRES_IMAGE) \
+		&> /tmp/postgres-container.log
+	@echo "Waiting for Postgres to be ready..."
+	@ready=0; \
+	for i in $$(seq 1 30); do \
+		if docker exec $(POSTGRES_CONTAINER) pg_isready -U postgres -d $(POSTGRES_DB) > /dev/null 2>&1; then \
+			ready=1; \
 			break; \
 		fi; \
 		sleep 1; \
-	done
-	@echo "Datastore emulator ready on localhost:$(DATASTORE_PORT)"
+	done; \
+	if [ "$$ready" -eq 0 ]; then \
+		echo "ERROR: Postgres did not become ready within 30s"; \
+		echo "--- /tmp/postgres-container.log ---"; \
+		cat /tmp/postgres-container.log; \
+		echo "--- end ---"; \
+		docker logs $(POSTGRES_CONTAINER) 2>&1; \
+		exit 1; \
+	fi
+	@echo "Postgres ready on localhost:$(POSTGRES_PORT) (db: $(POSTGRES_DB))"
 	@echo "Starting daprd..."
-	@DATASTORE_EMULATOR_HOST=localhost:$(DATASTORE_PORT) \
-	 GOOGLE_CLOUD_PROJECT=metio-local \
-	 $(DAPRD_BIN) --app-id controller \
+	@$(DAPRD_BIN) --app-id controller \
 		--resources-path ./dapr/components \
 		--dapr-grpc-port 50001 \
 		--dapr-http-port 3500 \
@@ -135,20 +151,20 @@ dev-up: dev-dapr-setup ## Start Dapr infrastructure (datastore emulator + daprd)
 	@echo "daprd ready"
 	@echo ""
 	@echo "Dapr infrastructure is running:"
-	@echo "  Datastore emulator: localhost:$(DATASTORE_PORT)"
-	@echo "  daprd (gRPC):       localhost:50001"
+	@echo "  Postgres:      localhost:$(POSTGRES_PORT) (db: $(POSTGRES_DB))"
+	@echo "  daprd (gRPC):  localhost:50001"
 	@echo ""
 	@echo "Run 'make dev-down' to stop."
 
 dev-down: ## Stop Dapr infrastructure
 	@echo "Stopping daprd..."
 	@pkill daprd 2>/dev/null || true
-	@echo "Stopping Datastore emulator..."
-	@pkill -f "datastore" 2>/dev/null || true
+	@echo "Stopping Postgres container..."
+	@docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
 	@echo "Dapr infrastructure stopped."
 
 
-test-dapr-integration: dev-up ## Run DaprDB integration tests against the local Datastore emulator
+test-dapr-integration: dev-up ## Run DaprDB integration tests against the local Postgres
 	@echo "Running DaprDB integration tests..."
 	@trap 'make dev-down' EXIT; \
 	go test -tags=integration -count=1 ./internal/db/ -run TestDaprDB_Integration -v
@@ -398,11 +414,11 @@ help:
 	@echo "  test-web                - Run frontend Vitest suite"
 	@echo ""
 	@echo "Development:"
-	@echo "  develop                 - Start backend + frontend hot reload (Dapr + Datastore emulator)"
-	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Datastore emulator"
+	@echo "  develop                 - Start backend + frontend hot reload (Dapr + Postgres)"
+	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Postgres"
 	@echo ""
 	@echo "Dapr Infrastructure (auto-started by 'make develop'):"
-	@echo "  dev-up                  - Start Datastore emulator + daprd sidecar"
+	@echo "  dev-up                  - Start Postgres container + daprd sidecar"
 	@echo "  dev-down                - Stop all Dapr infrastructure"
 	@echo ""
 	@echo "Deployment targets:"
