@@ -439,16 +439,18 @@ function ServerCard({ server }: ServerCardProps) {
         ? getStatusLabel(currentStatus.serverState)
         : 'Unknown',
     },
-    {
-      label: 'Players',
-      value: currentStatus
-        ? `${currentStatus.players.current}/${currentStatus.players.max}`
-        : '-',
-    },
-    {
-      label: 'Uptime',
-      value: currentStatus?.uptime || '-',
-    },
+    ...(isRunning
+      ? [
+          {
+            label: 'Players',
+            value: `${currentStatus!.players.current}/${currentStatus!.players.max}`,
+          },
+          {
+            label: 'Uptime',
+            value: currentStatus?.uptime || '-',
+          },
+        ]
+      : []),
     {
       label: 'IP',
       value: currentStatus?.instanceIP || '-',
