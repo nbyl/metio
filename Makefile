@@ -63,19 +63,13 @@ generate-env:
 	@echo "Generated build/local.env"
 
 # Start backend (air) and frontend (Vite) with hot reload.
-# DB_BACKEND (from the env file) controls the datastore:
-#   dapr      -> local Dapr sidecar + Datastore emulator (auto-started, torn down on exit)
-#   firestore -> Firestore (cloud), no local infra   [default]
+# Dapr sidecar + Datastore emulator are always started (and torn down on exit).
 develop: generate-env
 	@echo "Starting development servers..."
 	@set -a; . build/local.env; set +a; \
-	if [ "$${DB_BACKEND:-firestore}" = "dapr" ]; then \
-		echo "DB_BACKEND=dapr -> starting local Dapr infrastructure..."; \
-		$(MAKE) dev-up || exit 1; \
-		trap 'make dev-down; kill 0' EXIT; \
-	else \
-		trap 'kill 0' EXIT; \
-	fi; \
+	echo "Starting local Dapr infrastructure..."; \
+	$(MAKE) dev-up || exit 1; \
+	trap 'make dev-down; kill 0' EXIT; \
 	cd web && npm run dev & \
 	air & \
 	wait
@@ -404,10 +398,10 @@ help:
 	@echo "  test-web                - Run frontend Vitest suite"
 	@echo ""
 	@echo "Development:"
-	@echo "  develop                 - Start backend + frontend hot reload (DB_BACKEND selects Firestore or Dapr)"
+	@echo "  develop                 - Start backend + frontend hot reload (Dapr + Datastore emulator)"
 	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Datastore emulator"
 	@echo ""
-	@echo "Dapr Infrastructure (auto-started by 'make develop' when DB_BACKEND=dapr):"
+	@echo "Dapr Infrastructure (auto-started by 'make develop'):"
 	@echo "  dev-up                  - Start Datastore emulator + daprd sidecar"
 	@echo "  dev-down                - Stop all Dapr infrastructure"
 	@echo ""
