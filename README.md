@@ -59,7 +59,7 @@ Once deployed, visit your Metio instance, complete the setup wizard, and create 
 │   Browser   │──────│   Cloud Run           │
 │  (React UI) │      │  (Controller + daprd) │────┐
 └─────────────┘      └──────────┬─────────────┘    │ Dapr state store
-                               │                    │ (Datastore-mode)
+                               │                    │ (PostgreSQL)
                                │ Pub/Sub            │
                                ▼                    │
                       ┌─────────────────┐           │
@@ -71,7 +71,7 @@ Once deployed, visit your Metio instance, complete the setup wizard, and create 
 
 - **Browser**: React SPA served by Cloud Run
 - **Controller**: Go backend handling API requests, OAuth, and Pulumi orchestration
-- **Dapr state store**: Stores server state, player counts, configuration via the Dapr sidecar
+- **Dapr state store**: Stores server state, player counts, configuration via the Dapr sidecar, backed by PostgreSQL (Cloud SQL or BYO)
 - **Machine Agent**: Runs on each VM, reports Minecraft status through the controller API
 - **Pub/Sub**: Notifies controller of VM lifecycle events
 
@@ -88,7 +88,7 @@ Once deployed, visit your Metio instance, complete the setup wizard, and create 
 - Pulumi Automation API for infrastructure orchestration
 
 ### Infrastructure
-- GCP: Cloud Run, Compute Engine, Firestore (Dapr state store), Pub/Sub
+- GCP: Cloud Run, Compute Engine, Cloud SQL or BYO PostgreSQL (Dapr state store), Pub/Sub
 - CI/CD: GitHub Actions, OpenTofu
 - Container registry: ghcr.io
 

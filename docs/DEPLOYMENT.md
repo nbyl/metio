@@ -24,7 +24,6 @@ Enable these APIs in your project:
 gcloud services enable \
   cloudresourcemanager.googleapis.com \
   compute.googleapis.com \
-  firestore.googleapis.com \
   pubsub.googleapis.com \
   secretmanager.googleapis.com \
   artifactregistry.googleapis.com \
@@ -33,6 +32,9 @@ gcloud services enable \
   iam.googleapis.com \
   storage.googleapis.com
 ```
+
+> In `cloudsql` mode, OpenTofu enables `sqladmin.googleapis.com` automatically — you don't
+> need to enable it here.
 
 ### OAuth Consent Screen
 
@@ -71,13 +73,55 @@ cp metio.auto.tfvars.sample metio.auto.tfvars
 Edit `metio.auto.tfvars`:
 
 ```hcl
-project_id  = "your-project-id"
-region      = "europe-west3"
-zone        = "europe-west3-a"
-admin_users = "your-email@example.com"
+project_id    = "your-project-id"
+region        = "europe-west3"
+zone          = "europe-west3-a"
+admin_users   = "your-email@example.com"
+postgres_mode = "cloudsql" # or "byo"
 ```
 
 The `admin_users` variable controls who can log in to the Metio dashboard. Multiple users can be comma-separated.
+
+### PostgreSQL State Backend
+
+Metio stores all state in PostgreSQL, accessed through the Dapr sidecar. The `postgres_mode` variable selects one of two topologies (see [ADR-0003](adr/0003-postgresql-state-backend.md)):
+
+| Mode | Provisioning | Cost | Best for |
+|------|-------------|------|----------|
+| `cloudsql` | OpenTofu auto-provisions a Cloud SQL Postgres instance and writes the connection string to a Secret Manager secret | ~$7–9+/month, always-on | Single-account simplicity — everything billed on one GCP project |
+| `byo` | You supply a Postgres connection string (Neon, CockroachDB, or any Postgres); OpenTofu provisions no database | ~$0 idle (free tier, scales to zero) | Cost-sensitive self-hosters |
+
+In both modes the Dapr `statestore` component reads the connection string from the
+`postgres-connection-string` secret (surfaced to daprd via a mounted volume). The state
+table (`TEXT PRIMARY KEY` + `JSONB` columns) is **auto-created by Dapr** on startup — no
+manual schema setup is required.
+
+#### `cloudsql` mode
+
+The default. `tofu apply` creates the instance, database (`metio`), user, and the
+`postgres-connection-string` secret automatically. Nothing else to do.
+
+#### `byo` mode (Neon / CockroachDB / any Postgres)
+
+1. Set `postgres_mode = "byo"` in `metio.auto.tfvars`.
+2. Create a Postgres database with your provider (e.g. a Neon project or CockroachDB cluster) and note its connection string:
+   ```
+   postgres://<user>:<password>@<host>:5432/<database>?sslmode=require
+   ```
+   TLS is required — use `sslmode=require` (or stricter). The host must be reachable from Cloud Run (public endpoint).
+3. Apply the infrastructure (`tofu apply`). OpenTofu creates the `postgres-connection-string` secret with a **placeholder** value.
+4. Populate the secret with your real connection string (a JSON document):
+   ```bash
+   echo -n '{"postgres-connection-string":"postgres://user:pass@host:5432/metio?sslmode=require"}' | \
+     gcloud secrets versions add development-postgres-connection-string --data-file=-
+   ```
+   Wait a minute or two for daprd to pick it up, then redeploy the controller if the state store was already running:
+   ```bash
+   make deploy-controller
+   ```
+
+> The secret value must be a JSON document with a single `postgres-connection-string`
+> key — that is the contract the mounted secret file is read as.
 
 ### Step 2: Deploy Shared Infrastructure
 
@@ -110,7 +154,7 @@ module "metio" {
 The `//deploy/modules/gcp-cloud-run` path tells OpenTofu to reference the module subdirectory inside the repository.
 
 This creates:
-- **Firestore database** (Datastore mode) used by the Dapr state store component
+- **PostgreSQL state backend** — in `cloudsql` mode, a Cloud SQL instance + database + user and the connection-string secret; in `byo` mode, only the secret (placeholder) for you to fill
 - **Cloud Run service** (controller) with the default release image
 - **Pub/Sub topic + subscription** for compute instance lifecycle events
 - **Log sink** routing compute audit logs to Pub/Sub
@@ -135,6 +179,10 @@ echo -n "https://your-controller-url" | gcloud secrets versions add development-
 # Firebase API key (optional, for future features)
 echo -n "your-firebase-api-key" | gcloud secrets versions add development-firebase_api_key --data-file=-
 ```
+
+If you chose `postgres_mode = "byo"`, also fill the `postgres-connection-string` secret
+(see [byo mode](#byo-mode-neon--cockroachdb--any-postgres) above). In `cloudsql` mode this
+secret is populated automatically by `tofu apply`.
 
 ### Step 4: Build and Deploy the Controller Image
 
@@ -290,7 +338,7 @@ Builds both images and applies all OpenTofu infrastructure.
 | "Not authenticated" at login | Email not in `admin_users` | Add your email to `metio.auto.tfvars` and re-run `tofu apply` |
 | Server stays in "Provisioning" | Pulumi operation failed | Check Cloud Logging for the controller, or check the server's Pulumi stack directly |
 | Cloud Run startup fails | Missing secrets or wrong image | Verify all 4 secrets have current versions, check image exists in ghcr.io |
-| State store unreachable | Dapr sidecar failed to start | Check the controller's `daprd` container logs and the Datastore database state |
+| State store unreachable | Dapr sidecar failed to start | Check the controller's `daprd` container logs and the `postgres-connection-string` secret / Postgres connectivity |
 | Pulumi state locked | Concurrent operation | Wait for the operation to complete or use `pulumi cancel` manually |
 | "Instance not found" | VM was manually deleted | Destroy and recreate the server from the dashboard |
 | Backup bucket deletion fails | Objects exist in the bucket | Destroy individual servers first (this cleans up their resources) |
@@ -312,7 +360,7 @@ Metio includes GitHub Actions CI/CD (`.github/workflows/ci.yml`) for automated b
 │  (React UI) │      │  (Controller + API + daprd)  │────┐
 └─────────────┘      └──────────────┬───────────────┘    │
                                    │ Pub/Sub              │ Dapr state store
-                                   ▼                      │ (Datastore-mode)
+                                   ▼                      │ (PostgreSQL)
                              ┌────────────────────┐       │
                              │ GCE Compute Engine │───────┘
                              │ (Minecraft Server +│
@@ -322,7 +370,7 @@ Metio includes GitHub Actions CI/CD (`.github/workflows/ci.yml`) for automated b
 
 - **Controller** (Go + React): Serves the UI and REST API, manages Pulumi stacks, handles OAuth
 - **Machine Agent** (Go): Runs on each VM, reports Minecraft status via the controller API, syncs whitelist, handles shutdowns
-- **Dapr state store**: Server config, provisioning status, runtime status (players, uptime) stored via the Dapr sidecar
+- **Dapr state store**: Server config, provisioning status, runtime status (players, uptime) stored via the Dapr sidecar in PostgreSQL
 - **Pub/Sub**: Forwards compute instance lifecycle events (start/stop) to the controller
 - **Pulumi**: Each server gets its own stack stored in a GCS state bucket
-- **OpenTofu**: Manages shared infrastructure (controller, state store, Pub/Sub, secrets)
+- **OpenTofu**: Manages shared infrastructure (controller, PostgreSQL backend, Pub/Sub, secrets)
