@@ -318,22 +318,19 @@ deploy-infrastructure:
 	@set -e ;\
 	ARGS="" ;\
 	if [ -f "build/machine-agent-image.txt" ]; then \
-		MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
-		ARGS="$${ARGS} -var=\"machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}\"" ;\
-		echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
+		set -- "$$@" -var="machine_agent_image=$$(cat build/machine-agent-image.txt)" ;\
+		echo "Machine agent image: $$(cat build/machine-agent-image.txt)" ;\
 	fi ;\
 	if [ -f "build/controller-image.txt" ]; then \
-		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
-		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
-		echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
+		set -- "$$@" -var="controller_image=$$(cat build/controller-image.txt)" ;\
+		echo "Controller image: $$(cat build/controller-image.txt)" ;\
 	fi ;\
 	if [ -f "build/daprd-image.txt" ]; then \
-		DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
-		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
-		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
+		set -- "$$@" -var="daprd_image=$$(cat build/daprd-image.txt)" ;\
+		echo "Daprd image: $$(cat build/daprd-image.txt)" ;\
 	fi ;\
 	echo "Deploying infrastructure only with OpenTofu..." ;\
-	tofu -chdir=deploy apply $${ARGS} -auto-approve
+	tofu -chdir=deploy apply "$$@" -auto-approve
 
 # Deploy machine-agent only: build machine-agent image and deploy infrastructure
 deploy-machine-agent: build-machine-agent-image

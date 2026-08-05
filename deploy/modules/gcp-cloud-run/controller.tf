@@ -154,6 +154,11 @@ resource "google_cloud_run_v2_service" "controller" {
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
 
+  depends_on = [
+    google_secret_manager_secret_version.postgres_connection_string_cloudsql,
+    google_secret_manager_secret_version.postgres_connection_string_dummy,
+  ]
+
   scaling {
     manual_instance_count = 0
     min_instance_count    = 0
@@ -332,6 +337,7 @@ resource "google_cloud_run_v2_service" "controller" {
       }
       resources {
         limits = {
+          cpu    = "1000m"
           memory = "256Mi"
         }
       }
