@@ -103,7 +103,12 @@ connection string, and stores it in a Secret Manager secret consumed by the comp
 ### 2. `byo` — bring-your-own Postgres
 
 The user supplies a PostgreSQL connection string (Neon, CockroachDB, or any Postgres);
-the module writes it to the Secret Manager secret and provisions **no** database.
+the module references the operator-managed Secret Manager secret that holds it and
+provisions **no** database. The connection-string value never enters the OpenTofu
+configuration or state: `postgres_connection_string_secret_id` names an externally managed
+secret (created and rotated outside OpenTofu), and the module only looks it up, grants the
+controller service account access, and mounts it. Because the value is never written by
+OpenTofu, the byo secret must exist **before** `tofu apply`.
 
 - Uses the provider's TLS endpoint as given.
 - **Recommended for cost-sensitive users, especially self-hosters**: free tiers scale to
@@ -161,7 +166,11 @@ keeping the component self-contained and store-agnostic.
 - **Cloud SQL breaks scale-to-zero:** accepted and intentional for the simplicity cohort;
   the BYO topology restores ~$0-idle for cost-sensitive users.
 - **Connection-string secret management:** the credential lives in Secret Manager and must
-  be rotated; BYO users manage their provider account and credentials separately.
+  be rotated; BYO users manage their provider account and credentials separately. In byo
+  mode the secret is a **prerequisite** of `tofu apply`, not an output of it — apply fails
+  at plan time if the referenced secret does not exist. A secret with no versions still
+  surfaces later as a Cloud Run health-check failure, because OpenTofu never reads the
+  value (reading it would leak it into state).
 - **Local development changes:** the local dev flow moves from the Datastore emulator to a
   local Postgres container (`dapr/components/statestore-local.yaml`, Makefile dev targets).
 
@@ -172,8 +181,8 @@ A follow-up implementation will touch infrastructure and dev tooling only:
 - `deploy/daprd/components/statestore.yaml` — switch to `state.postgresql`.
 - New `deploy/modules/gcp-cloud-run/postgres.tf` — Cloud SQL resources and the
   connection-string secret.
-- `deploy/variables.tf` + module `variables.tf` — `postgres_mode` and the BYO connection
-  string input.
+- `deploy/variables.tf` + module `variables.tf` — `postgres_mode` and
+  `postgres_connection_string_secret_id` (the BYO secret reference).
 - `dapr/components/statestore-local.yaml` + Makefile dev targets — local Postgres container.
 
 No change to `internal/db/dapr.go`; `internal/config/config.go` is unaffected beyond the

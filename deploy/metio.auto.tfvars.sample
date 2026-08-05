@@ -7,3 +7,11 @@ admin_users = "your-email@example.com"
 # connection string to the postgres-connection-string secret;
 # "byo" expects a user-filled postgres-connection-string secret (e.g. Neon, CockroachDB)
 # postgres_mode = "cloudsql"
+#
+# When postgres_mode = "byo", set this to the Secret Manager secret ID (same
+# project) that holds the connection string. The secret and its versions are
+# created and rotated outside OpenTofu — create it before applying:
+#   gcloud secrets create <secret-id>
+#   echo -n '{"postgres-connection-string":"postgres://..."}' | \
+#     gcloud secrets versions add <secret-id> --data-file=-
+# postgres_connection_string_secret_id = ""

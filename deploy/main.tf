@@ -16,13 +16,14 @@ provider "google" {
 module "gcp_cloud_run" {
   source = "./modules/gcp-cloud-run"
 
-  project_id          = var.project_id
-  region              = var.region
-  zone                = var.zone
-  environment         = var.environment
-  admin_users         = var.admin_users
-  controller_image    = var.controller_image
-  machine_agent_image = var.machine_agent_image
-  daprd_image         = var.daprd_image
-  postgres_mode       = var.postgres_mode
+  project_id                           = var.project_id
+  region                               = var.region
+  zone                                 = var.zone
+  environment                          = var.environment
+  admin_users                          = var.admin_users
+  controller_image                     = var.controller_image
+  machine_agent_image                  = var.machine_agent_image
+  daprd_image                          = var.daprd_image
+  postgres_mode                        = var.postgres_mode
+  postgres_connection_string_secret_id = var.postgres_connection_string_secret_id
 }

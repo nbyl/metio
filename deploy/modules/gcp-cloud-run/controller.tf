@@ -148,6 +148,13 @@ resource "google_secret_manager_secret_version" "base_url_dummy" {
   secret_data_wo         = "http://dummy:3000"
 }
 
+locals {
+  postgres_secret_id = one(concat(
+    google_secret_manager_secret.postgres_connection_string[*].id,
+    data.google_secret_manager_secret.postgres_connection_string_byo[*].id,
+  ))
+}
+
 resource "google_cloud_run_v2_service" "controller" {
   name                = "${var.environment}-controller"
   location            = var.region
@@ -156,7 +163,6 @@ resource "google_cloud_run_v2_service" "controller" {
 
   depends_on = [
     google_secret_manager_secret_version.postgres_connection_string_cloudsql,
-    google_secret_manager_secret_version.postgres_connection_string_dummy,
   ]
 
   scaling {
@@ -349,7 +355,7 @@ resource "google_cloud_run_v2_service" "controller" {
     volumes {
       name = "dapr-secrets"
       secret {
-        secret       = google_secret_manager_secret.postgres_connection_string.id
+        secret       = local.postgres_secret_id
         default_mode = "0444"
         items {
           path    = "secrets.json"
@@ -440,6 +446,7 @@ resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_k
 }
 
 resource "google_secret_manager_secret" "postgres_connection_string" {
+  count     = var.postgres_mode == "cloudsql" ? 1 : 0
   secret_id = "${var.environment}-postgres-connection-string"
 
   replication {
@@ -447,18 +454,15 @@ resource "google_secret_manager_secret" "postgres_connection_string" {
   }
 }
 
-resource "google_secret_manager_secret_version" "postgres_connection_string_dummy" {
-  count                  = var.postgres_mode == "byo" ? 1 : 0
-  secret                 = google_secret_manager_secret.postgres_connection_string.id
-  secret_data_wo_version = 0
-  secret_data_wo         = jsonencode({ "postgres-connection-string" = "postgres://REPLACE-ME:REPLACE-ME@REPLACE-ME:5432/metio?sslmode=require" })
+data "google_secret_manager_secret" "postgres_connection_string_byo" {
+  count     = var.postgres_mode == "byo" ? 1 : 0
+  secret_id = var.postgres_connection_string_secret_id
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-postgres_connection_string" {
-  secret_id  = google_secret_manager_secret.postgres_connection_string.id
-  role       = "roles/secretmanager.secretAccessor"
-  member     = "serviceAccount:${google_service_account.controller_service_account.email}"
-  depends_on = [google_secret_manager_secret.postgres_connection_string]
+  secret_id = local.postgres_secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.controller_service_account.email}"
 }
 
 resource "google_project_iam_member" "sa_storage_object_admin" {

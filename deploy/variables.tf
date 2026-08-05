@@ -55,3 +55,14 @@ variable "postgres_mode" {
     error_message = "postgres_mode must be one of 'cloudsql' or 'byo'."
   }
 }
+
+variable "postgres_connection_string_secret_id" {
+  description = "Secret Manager secret ID (same project) holding the BYO Postgres connection string. Required when postgres_mode = \"byo\"; the secret and its versions are managed outside OpenTofu. Ignored when \"cloudsql\"."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.postgres_mode != "byo" || trimspace(var.postgres_connection_string_secret_id) != ""
+    error_message = "postgres_connection_string_secret_id must be set when postgres_mode is \"byo\"."
+  }
+}
