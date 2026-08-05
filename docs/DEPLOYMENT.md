@@ -103,22 +103,27 @@ The default. `tofu apply` creates the instance, database (`metio`), user, and th
 
 #### `byo` mode (Neon / CockroachDB / any Postgres)
 
-1. Set `postgres_mode = "byo"` in `metio.auto.tfvars`.
+In byo mode OpenTofu **never sees the connection string** — it only references an
+externally managed Secret Manager secret by ID. The secret and its versions must exist
+*before* `tofu apply`.
+
+1. Set `postgres_mode = "byo"` in `metio.auto.tfvars` and point
+   `postgres_connection_string_secret_id` at the secret that will hold the connection
+   string.
 2. Create a Postgres database with your provider (e.g. a Neon project or CockroachDB cluster) and note its connection string:
    ```
    postgres://<user>:<password>@<host>:5432/<database>?sslmode=require
    ```
    TLS is required — use `sslmode=require` (or stricter). The host must be reachable from Cloud Run (public endpoint).
-3. Apply the infrastructure (`tofu apply`). OpenTofu creates the `postgres-connection-string` secret with a **placeholder** value.
-4. Populate the secret with your real connection string (a JSON document):
+3. Create the secret and populate it with your real connection string (a JSON document) **before** applying:
    ```bash
+   gcloud secrets create <secret-id>
    echo -n '{"postgres-connection-string":"postgres://user:pass@host:5432/metio?sslmode=require"}' | \
-     gcloud secrets versions add development-postgres-connection-string --data-file=-
+     gcloud secrets versions add <secret-id> --data-file=-
    ```
-   Wait a minute or two for daprd to pick it up, then redeploy the controller if the state store was already running:
-   ```bash
-   make deploy-controller
-   ```
+   Rotate later by adding a new version — OpenTofu mounts `latest`, so no apply is needed.
+4. Apply the infrastructure (`tofu apply`). If the referenced secret does not exist, apply
+   fails at plan time.
 
 > The secret value must be a JSON document with a single `postgres-connection-string`
 > key — that is the contract the mounted secret file is read as.
