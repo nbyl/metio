@@ -25,11 +25,17 @@ resource "google_sql_database_instance" "postgres" {
   region           = var.region
 
   settings {
-    tier = "db-f1-micro"
+    tier    = "db-f1-micro"
+    edition = "ENTERPRISE"
 
     ip_configuration {
       ipv4_enabled = true
       ssl_mode     = "ENCRYPTED_ONLY"
+
+      authorized_networks {
+        name  = "all"
+        value = "0.0.0.0/0"
+      }
     }
   }
 
