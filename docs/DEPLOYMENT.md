@@ -218,12 +218,66 @@ This runs `tofu apply -target=module.gcp-cloud-run.google_cloud_run_v2_service.c
 
 ### Step 5: Configure Domain and SSL (Optional)
 
-By default, the controller is available at a `*.run.app` URL. For a custom domain:
+By default, the controller is available at a `*.run.app` URL. To make it available under a
+custom domain, [Firebase Hosting](https://firebase.google.com/docs/hosting) is the
+recommended approach: it works in **all** Cloud Run regions (including `europe-west2`, where
+Cloud Run domain mappings are not available) and is not subject to the domain-mapping
+preview caveats.
+
+#### Approach A: Firebase Hosting (recommended)
+
+Firebase Hosting proxies every path of your domain to the controller Cloud Run service and
+provisions a TLS certificate for you. Your project likely already uses Firebase (the
+controller reads `FIREBASE_API_KEY`); if not, [add Firebase to the project](https://firebase.google.com/docs/web/setup) first.
+
+1. Install the Firebase CLI (`firebase-tools`).
+2. In a folder **separate** from the Metio source code, create a `firebase.json` that
+   rewrites all requests to the controller service:
+   ```json
+   {
+     "hosting": {
+       "rewrites": [{
+         "source": "**",
+         "run": {
+           "serviceId": "<environment>-controller",
+           "region": "<region>"
+         }
+       }]
+     }
+   }
+   ```
+   Replace `<environment>` and `<region>` with the values from your `metio.auto.tfvars`
+   (e.g. `development2-controller` in `europe-west2`).
+3. Deploy the hosting configuration:
+   ```bash
+   firebase deploy --only hosting --project <project_id>
+   ```
+4. [Connect a custom domain to Firebase Hosting](https://firebase.google.com/docs/hosting/custom-domain)
+   and follow the DNS verification steps there.
+5. Update the `<environment>-base_url` secret to `https://<your-custom-domain>` and redeploy
+   the controller for the change to take effect — the OAuth authorized redirect URI from the
+   [OAuth Client Credentials](#oauth-client-credentials) step must match this domain
+   (`https://<your-custom-domain>/auth/callback`).
+
+> This is a manual, console-driven flow: Firebase Hosting is not managed by the OpenTofu
+> module. For automated provisioning, see
+> [Firebase Hosting and Cloud Run](https://firebase.google.com/docs/hosting/cloud-run).
+
+#### Approach B: Cloud Run domain mappings (Preview, not recommended)
+
+Cloud Run's native custom-domain mapping is still in **Preview** — it is not
+production-ready and is only supported in a fixed set of regions
+(`asia-east1`, `asia-northeast1`, `asia-southeast1`, `europe-north1`, `europe-west1`,
+`europe-west4`, `us-central1`, `us-east1`, `us-east4`, `us-west1`). It is **not available
+in `europe-west2`**. If your region supports it:
 
 1. Go to **Cloud Run → Your Service → Domain Mappings**
 2. Click **Add Mapping** and follow the DNS verification steps
-3. Update the `development-base_url` secret to your custom domain
+3. Update the `<environment>-base_url` secret to your custom domain
 4. Redeploy the controller for the change to take effect
+
+See the [Cloud Run mapping docs](https://docs.cloud.google.com/run/docs/mapping-custom-domains#run)
+for the full feature limitations.
 
 ### Step 6: First-Time Authentication
 
