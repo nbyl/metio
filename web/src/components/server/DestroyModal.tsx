@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { X, AlertTriangle, HardDrive, Database, Globe, Terminal } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
-import type { ServerState } from '../../types/server';
 
 export interface DestroyModalProps {
   open: boolean;
   serverName: string;
-  serverState?: ServerState;
   onClose: () => void;
-  onConfirm: (createBackup: boolean) => void;
+  onConfirm: () => void;
   isPending: boolean;
 }
 
@@ -48,77 +46,6 @@ function WarningStep({ serverName, onNext, onCancel }: { serverName: string; onN
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
-        </Button>
-        <Button type="button" variant="danger" onClick={onNext}>
-          Continue →
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function BackupStep({
-  value,
-  onChange,
-  onNext,
-  onBack,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  onNext: () => void;
-  onBack: () => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="text-sm font-semibold text-white mb-3">Create Final Backup?</h3>
-        <div className="space-y-2">
-          <label
-            className={cn(
-              'flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors',
-              value
-                ? 'border-green-500 bg-green-900/20'
-                : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'
-            )}
-          >
-            <input
-              type="radio"
-              name="backup"
-              checked={value}
-              onChange={() => onChange(true)}
-              className="mt-0.5 accent-green-500"
-            />
-            <div>
-              <p className="text-sm font-medium text-white">Yes, create backup before destroying</p>
-              <p className="text-xs text-slate-400 mt-0.5">Recommended — takes approximately 2 minutes</p>
-            </div>
-          </label>
-          <label
-            className={cn(
-              'flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors',
-              !value
-                ? 'border-green-500 bg-green-900/20'
-                : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'
-            )}
-          >
-            <input
-              type="radio"
-              name="backup"
-              checked={!value}
-              onChange={() => onChange(false)}
-              className="mt-0.5 accent-green-500"
-            />
-            <div>
-              <p className="text-sm font-medium text-white">No, destroy immediately</p>
-              <p className="text-xs text-red-400 mt-0.5">All world data will be lost</p>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onBack}>
-          ← Back
         </Button>
         <Button type="button" variant="danger" onClick={onNext}>
           Continue →
@@ -183,18 +110,15 @@ function ConfirmStep({
 export function DestroyModal({
   open,
   serverName,
-  serverState,
   onClose,
   onConfirm,
   isPending,
 }: DestroyModalProps) {
   const [step, setStep] = useState(0);
-  const [createBackup, setCreateBackup] = useState(true);
 
   if (!open) return null;
 
-  const showBackupStep = serverState === 'RUNNING';
-  const totalSteps = showBackupStep ? 2 : 1;
+  const totalSteps = 1;
 
   const handleNext = () => {
     if (step < totalSteps) {
@@ -210,12 +134,11 @@ export function DestroyModal({
 
   const handleClose = () => {
     setStep(0);
-    setCreateBackup(true);
     onClose();
   };
 
   const handleConfirm = () => {
-    onConfirm(createBackup);
+    onConfirm();
   };
 
   return (
@@ -261,14 +184,6 @@ export function DestroyModal({
               serverName={serverName}
               onNext={handleNext}
               onCancel={handleClose}
-            />
-          )}
-          {step === 1 && showBackupStep && (
-            <BackupStep
-              value={createBackup}
-              onChange={setCreateBackup}
-              onNext={handleNext}
-              onBack={handleBack}
             />
           )}
           {step === totalSteps && (

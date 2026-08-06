@@ -471,9 +471,9 @@ function ServerCard({ server }: ServerCardProps) {
     );
   };
 
-  const handleDestroy = (createBackup: boolean) => {
+  const handleDestroy = () => {
     deleteMutation.mutate(
-      { id: server.id, createBackup },
+      { id: server.id },
       {
         onSuccess: () => {
           queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
@@ -671,10 +671,9 @@ function ServerCard({ server }: ServerCardProps) {
       <DestroyModal
         open={showDestroy}
         serverName={server.config.name}
-        serverState={currentStatus?.serverState}
         onClose={() => setShowDestroy(false)}
-        onConfirm={(createBackup) => {
-          handleDestroy(createBackup);
+        onConfirm={() => {
+          handleDestroy();
           setShowDestroy(false);
         }}
         isPending={deleteMutation.isPending}
