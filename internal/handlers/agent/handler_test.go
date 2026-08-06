@@ -280,6 +280,25 @@ func TestHandleGetWhitelistConfig(t *testing.T) {
 	mockDB.AssertExpectations(t)
 }
 
+func TestHandleGetWhitelistConfig_NotFound(t *testing.T) {
+	mockDB, router := setupHandlerTest(t)
+	token, _ := MintToken("test-instance")
+
+	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{}, db.ErrNotFound)
+
+	req := httptest.NewRequest("GET", "/agent/test-instance/whitelist/config", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp db.WhitelistConfig
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.False(t, resp.Enabled)
+	mockDB.AssertExpectations(t)
+}
+
 func TestHandleSetWhitelistConfig(t *testing.T) {
 	mockDB, router := setupHandlerTest(t)
 	token, _ := MintToken("test-instance")

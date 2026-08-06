@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -9,8 +10,6 @@ import (
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/nbyl/metio/internal/db"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // stopInstanceFn and startInstanceFn are function variables for testability.
@@ -74,7 +73,7 @@ func NewBackupCoordinator(dbConn db.DB) *BackupCoordinator {
 func (b *BackupCoordinator) TriggerWorldSave(ctx context.Context, instanceName string) error {
 	statusEntry, err := b.dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			log.Printf("No status document for instance %s — was never started, skipping backup", instanceName)
 			return nil
 		}
@@ -102,7 +101,7 @@ func (b *BackupCoordinator) WaitForCommandAck(ctx context.Context, instanceName 
 
 		statusEntry, err := b.dbConn.GetStatus(ctx, instanceName)
 		if err != nil {
-			if status.Code(err) == codes.NotFound {
+			if errors.Is(err, db.ErrNotFound) {
 				log.Printf("Status document vanished for instance %s — was never started, skipping backup ack", instanceName)
 				return "", nil
 			}

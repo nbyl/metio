@@ -9,8 +9,6 @@ import (
 	"github.com/nbyl/metio/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestBackupCoordinator_TriggerWorldSave(t *testing.T) {
@@ -41,7 +39,7 @@ func TestBackupCoordinator_TriggerWorldSave_NoStatusDocument(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	bc := NewBackupCoordinator(mockDB)
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, status.Error(codes.NotFound, "not found"))
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, db.ErrNotFound)
 
 	err := bc.TriggerWorldSave(context.Background(), "test-instance")
 	assert.NoError(t, err)
@@ -95,7 +93,7 @@ func TestBackupCoordinator_WaitForCommandAck_NoStatusDocument(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	bc := NewBackupCoordinator(mockDB)
 
-	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, status.Error(codes.NotFound, "not found")).Once()
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, db.ErrNotFound).Once()
 
 	result, err := bc.WaitForCommandAck(context.Background(), "test-instance", 5*time.Second)
 	assert.NoError(t, err)

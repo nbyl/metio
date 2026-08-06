@@ -70,8 +70,7 @@ func TestDaprDB_GetStatus_NotFound(t *testing.T) {
 	mc.On("Get", ctx, "statestore", "status:test-instance").Return(nil, nil)
 
 	_, err := db.GetStatus(ctx, "test-instance")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.ErrorIs(t, err, ErrNotFound)
 	mc.AssertExpectations(t)
 }
 
@@ -107,7 +106,7 @@ func TestDaprDB_GetWhitelistConfig_NotFound(t *testing.T) {
 	mc.On("Get", ctx, "statestore", "whitelistcfg:test-instance").Return(nil, nil)
 
 	_, err := db.GetWhitelistConfig(ctx, "test-instance")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
 	mc.AssertExpectations(t)
 }
 
@@ -256,7 +255,7 @@ func TestDaprDB_GetProvisioningStatus_NotFound(t *testing.T) {
 	mc.On("Get", ctx, "statestore", "provisioning:srv-1").Return(nil, nil)
 
 	_, err := db.GetProvisioningStatus(ctx, "srv-1")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
 	mc.AssertExpectations(t)
 }
 
@@ -350,7 +349,7 @@ func TestDaprDB_GetServerConfig_NotFound(t *testing.T) {
 	mc.On("Get", ctx, "statestore", "serverconfig:srv-1").Return(nil, nil)
 
 	_, err := db.GetServerConfig(ctx, "srv-1")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
 	mc.AssertExpectations(t)
 }
 
@@ -485,7 +484,7 @@ func TestDaprDB_GetConfigSnapshot_NotFound(t *testing.T) {
 	mc.On("Get", ctx, "statestore", "configsnapshot:srv-1").Return(nil, nil)
 
 	_, err := db.GetConfigSnapshot(ctx, "srv-1")
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
 	mc.AssertExpectations(t)
 }
 

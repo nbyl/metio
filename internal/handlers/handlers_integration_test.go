@@ -1221,6 +1221,28 @@ func TestStatusByID_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestStatusByID_StatusNotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, db.ErrNotFound)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.StatusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, string(db.ServerStateStopped), response.ServerState)
+	assert.Equal(t, "unknown:25565", response.InstanceIP)
+}
+
 func TestStatusByID_GetStatusError(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)
@@ -1321,6 +1343,29 @@ func TestGetWhitelistByID_Success(t *testing.T) {
 	assert.True(t, response.Enabled)
 	assert.Len(t, response.Players, 1)
 	assert.Equal(t, "Steve", response.Players[0].Username)
+}
+
+func TestGetWhitelistByID_NoConfig(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetWhitelistConfig", mock.Anything, "test-instance").Return(db.WhitelistConfig{}, db.ErrNotFound)
+	mockDB.On("GetWhitelistEntries", mock.Anything, "test-instance").Return([]db.WhitelistEntry{}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/whitelist", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.GetWhitelistByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.WhitelistResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.False(t, response.Enabled)
+	assert.Empty(t, response.Players)
 }
 
 func TestGetWhitelistByID_NotFound(t *testing.T) {

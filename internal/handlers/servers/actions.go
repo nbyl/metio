@@ -2,6 +2,7 @@ package servers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,8 +15,6 @@ import (
 	"github.com/nbyl/metio/internal/pulumi/programs"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func HandleUpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +301,7 @@ func StatusByID(w http.ResponseWriter, r *http.Request) {
 
 	playerStatus, err := dbConn.GetStatus(ctx, serverConfig.Name)
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			span.SetAttributes(attribute.String("status", "not_found_treated_as_stopped"))
 			playerStatus = db.Status{
 				Players:     db.Players{Current: 0, Max: 20},
