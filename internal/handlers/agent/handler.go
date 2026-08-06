@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -93,6 +94,10 @@ func HandleGetWhitelistConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	config, err := dbConn.GetWhitelistConfig(r.Context(), instance)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeJSON(w, http.StatusOK, db.WhitelistConfig{Enabled: false})
+			return
+		}
 		log.Printf("[agent] GetWhitelistConfig(%s) failed: %v", instance, err)
 		writeError(w, "failed to get whitelist config", http.StatusInternalServerError)
 		return

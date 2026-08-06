@@ -2,6 +2,7 @@ package servers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,8 +13,6 @@ import (
 	"github.com/nbyl/metio/internal/services"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func GetWhitelistByID(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +46,7 @@ func GetWhitelistByID(w http.ResponseWriter, r *http.Request) {
 
 	whitelistConfig, err := dbConn.GetWhitelistConfig(ctx, serverConfig.Name)
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
+		if errors.Is(err, db.ErrNotFound) {
 			whitelistConfig = db.WhitelistConfig{Enabled: false}
 		} else {
 			span.SetAttributes(attribute.String("error", "get_config_failed"))

@@ -164,7 +164,7 @@ func (d *DaprDB) GetStatus(ctx context.Context, instanceName string) (Status, er
 		return Status{}, err
 	}
 	if item == nil || item.Value == nil {
-		return Status{}, fmt.Errorf("status not found for %q", instanceName)
+		return Status{}, fmt.Errorf("%w: status not found for %q", ErrNotFound, instanceName)
 	}
 	var status Status
 	if err := json.Unmarshal(item.Value, &status); err != nil {
@@ -180,7 +180,7 @@ func (d *DaprDB) GetWhitelistConfig(ctx context.Context, instanceName string) (W
 		return WhitelistConfig{}, err
 	}
 	if item == nil || item.Value == nil {
-		return WhitelistConfig{}, fmt.Errorf("whitelist config not found for %q", instanceName)
+		return WhitelistConfig{}, fmt.Errorf("%w: whitelist config not found for %q", ErrNotFound, instanceName)
 	}
 	var config WhitelistConfig
 	if err := json.Unmarshal(item.Value, &config); err != nil {
@@ -326,7 +326,7 @@ func (d *DaprDB) GetProvisioningStatus(ctx context.Context, serverID string) (*P
 		return nil, err
 	}
 	if item == nil || item.Value == nil {
-		return nil, fmt.Errorf("provisioning status not found for %q", serverID)
+		return nil, fmt.Errorf("%w: provisioning status not found for %q", ErrNotFound, serverID)
 	}
 	var status ProvisioningStatus
 	if err := json.Unmarshal(item.Value, &status); err != nil {
@@ -410,7 +410,7 @@ func (d *DaprDB) GetServerConfig(ctx context.Context, serverID string) (*ServerC
 		return nil, err
 	}
 	if item == nil || item.Value == nil {
-		return nil, fmt.Errorf("server config not found for %q", serverID)
+		return nil, fmt.Errorf("%w: server config not found for %q", ErrNotFound, serverID)
 	}
 	var config ServerConfig
 	if err := json.Unmarshal(item.Value, &config); err != nil {
@@ -505,7 +505,7 @@ func (d *DaprDB) GetConfigSnapshot(ctx context.Context, serverID string) (*Serve
 		return nil, err
 	}
 	if item == nil || item.Value == nil {
-		return nil, fmt.Errorf("config snapshot not found for %q", serverID)
+		return nil, fmt.Errorf("%w: config snapshot not found for %q", ErrNotFound, serverID)
 	}
 	var config ServerConfig
 	if err := json.Unmarshal(item.Value, &config); err != nil {
