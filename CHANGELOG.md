@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.2](https://github.com/nbyl/metio/compare/v1.6.1...v1.6.2) (2026-08-10)
+
+
+### Bug Fixes
+
+* provider settings screwed by the AI ([c8d7d64](https://github.com/nbyl/metio/commit/c8d7d64c55f211d0a0916df37ea6b1950fe6ea38))
+* provider settings screwed by the AI ([4c64d3a](https://github.com/nbyl/metio/commit/4c64d3afb1cb3c454aa3782a0344b185e41514ff))
+
 ## [1.6.1](https://github.com/nbyl/metio/compare/v1.6.0...v1.6.1) (2026-08-10)
 
 
