@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 	pulumiSdk "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/mock"
 )
@@ -44,11 +43,6 @@ func (m *MockWorkspaceManager) RefreshStack(ctx context.Context, name string) er
 
 func (m *MockWorkspaceManager) SetConfig(ctx context.Context, stack *auto.Stack, key, value string, secret bool) error {
 	args := m.Called(ctx, stack, key, value, secret)
-	return args.Error(0)
-}
-
-func (m *MockWorkspaceManager) ImportResources(ctx context.Context, stack *auto.Stack, resources []*optimport.ImportResource) error {
-	args := m.Called(ctx, stack, resources)
 	return args.Error(0)
 }
 

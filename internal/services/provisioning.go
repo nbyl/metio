@@ -12,7 +12,6 @@ import (
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"github.com/pulumi/pulumi/sdk/v3/go/auto/optimport"
 )
 
 const (
@@ -95,31 +94,18 @@ func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.Provis
 	}
 	s.updateStatus(opCtx, serverID, status)
 
-	stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(config))
+	// Adopt a pre-existing address on create only. Updates must never re-import
+	// an address that is already managed by the stack.
+	createConfig := *config
+	createConfig.ImportExistingAddress = config.ExistingAddress != ""
+
+	stack, err := s.workspaceManager.UpsertStack(opCtx, serverID, programs.ServerProgram(&createConfig))
 	if err != nil {
 		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
 	}
 
 	if err := s.workspaceManager.SetConfig(opCtx, stack, "gcp:project", s.workspaceManager.ProjectID(), false); err != nil {
 		return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
-	}
-
-	if config.ExistingAddress != "" {
-		importID := fmt.Sprintf("projects/%s/regions/%s/addresses/%s", config.GCPProject, config.Region, config.ExistingAddress)
-		resources := []*optimport.ImportResource{
-			{
-				Type: "gcp:compute/address:Address",
-				Name: fmt.Sprintf("%s-address", config.Name),
-				ID:   importID,
-			},
-		}
-		if err := s.workspaceManager.ImportResources(opCtx, stack, resources); err != nil {
-			return s.handleError(status, opCtx, serverID, stepUpsertStack, err)
-		}
-
-		if err := s.workspaceManager.RefreshStack(opCtx, serverID); err != nil {
-			log.Printf("[%s] Failed to refresh stack after import (non-fatal): %v", serverID, err)
-		}
 	}
 
 	s.completeStep(opCtx, status, serverID, stepUpsertStack)
