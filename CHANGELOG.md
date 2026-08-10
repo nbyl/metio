@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.1](https://github.com/nbyl/metio/compare/v1.6.0...v1.6.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **deploy:** drop write-only attributes for OpenTofu &lt;1.11 compatibility ([ddbf4e9](https://github.com/nbyl/metio/commit/ddbf4e97a29c4e56bd57844c9d39ae31de29467b))
+* **deploy:** drop write-only attributes for OpenTofu &lt;1.11 compatibility ([4851d51](https://github.com/nbyl/metio/commit/4851d518e370a421516b12b66c19106684931b0f)), closes [#351](https://github.com/nbyl/metio/issues/351)
+
 ## [1.6.0](https://github.com/nbyl/metio/compare/v1.5.0...v1.6.0) (2026-08-06)
 
 
