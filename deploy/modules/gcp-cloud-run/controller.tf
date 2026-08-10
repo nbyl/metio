@@ -115,9 +115,14 @@ resource "google_secret_manager_secret" "client_id" {
 }
 
 resource "google_secret_manager_secret_version" "client_id_dummy" {
-  secret                 = google_secret_manager_secret.client_id.id
-  secret_data_wo_version = 0
-  secret_data_wo         = "dummy"
+  secret      = google_secret_manager_secret.client_id.id
+  secret_data = "dummy"
+
+  # Seeded once so Cloud Run can mount the secret; the real value is added
+  # later as a new version (see docs/DEPLOYMENT.md). Never re-manage it.
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 resource "google_secret_manager_secret" "client_secret" {
@@ -129,9 +134,14 @@ resource "google_secret_manager_secret" "client_secret" {
 }
 
 resource "google_secret_manager_secret_version" "client_secret_dummy" {
-  secret                 = google_secret_manager_secret.client_secret.id
-  secret_data_wo_version = 0
-  secret_data_wo         = "dummy"
+  secret      = google_secret_manager_secret.client_secret.id
+  secret_data = "dummy"
+
+  # Seeded once so Cloud Run can mount the secret; the real value is added
+  # later as a new version (see docs/DEPLOYMENT.md). Never re-manage it.
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 resource "google_secret_manager_secret" "base_url" {
@@ -143,9 +153,14 @@ resource "google_secret_manager_secret" "base_url" {
 }
 
 resource "google_secret_manager_secret_version" "base_url_dummy" {
-  secret                 = google_secret_manager_secret.base_url.id
-  secret_data_wo_version = 0
-  secret_data_wo         = "http://dummy:3000"
+  secret      = google_secret_manager_secret.base_url.id
+  secret_data = "http://dummy:3000"
+
+  # Seeded once so Cloud Run can mount the secret; the real value is added
+  # later as a new version (see docs/DEPLOYMENT.md). Never re-manage it.
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 locals {
@@ -412,9 +427,8 @@ resource "google_secret_manager_secret" "agent_jwt_secret" {
 }
 
 resource "google_secret_manager_secret_version" "agent_jwt_secret_value" {
-  secret                 = google_secret_manager_secret.agent_jwt_secret.id
-  secret_data_wo_version = 0
-  secret_data_wo         = random_password.agent_jwt_secret.result
+  secret      = google_secret_manager_secret.agent_jwt_secret.id
+  secret_data = random_password.agent_jwt_secret.result
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-agent_jwt_secret" {
@@ -433,9 +447,14 @@ resource "google_secret_manager_secret" "firebase_api_key" {
 }
 
 resource "google_secret_manager_secret_version" "firebase_api_key_dummy" {
-  secret                 = google_secret_manager_secret.firebase_api_key.id
-  secret_data_wo_version = 0
-  secret_data_wo         = "dummy"
+  secret      = google_secret_manager_secret.firebase_api_key.id
+  secret_data = "dummy"
+
+  # Seeded once so Cloud Run can mount the secret; the real value is added
+  # later as a new version (see docs/DEPLOYMENT.md). Never re-manage it.
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
 }
 
 resource "google_secret_manager_secret_iam_member" "secret-access-firebase_api_key" {
