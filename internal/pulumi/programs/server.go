@@ -28,6 +28,24 @@ type ServerConfig struct {
 	ExistingAddress   string
 	ControllerURL     string
 	AgentToken        string
+
+	// ImportExistingAddress adopts the pre-existing GCP address named by
+	// ExistingAddress into the stack instead of creating a new one. It is only
+	// set on the initial create; updates must leave it false so that an
+	// already-managed address is never re-imported.
+	ImportExistingAddress bool
+}
+
+// existingAddressImportID returns the Pulumi import ID for a pre-existing GCP
+// address, or "" when no address should be adopted. Adoption only happens on
+// the initial create; on updates the address is already managed by the stack
+// and must not be re-imported.
+func existingAddressImportID(config *ServerConfig) string {
+	if !config.ImportExistingAddress || config.ExistingAddress == "" {
+		return ""
+	}
+	return fmt.Sprintf("projects/%s/regions/%s/addresses/%s",
+		config.GCPProject, config.Region, config.ExistingAddress)
 }
 
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
@@ -138,10 +156,15 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			addressGCPName = config.ExistingAddress
 		}
 
+		addressOpts := []pulumi.ResourceOption{}
+		if importID := existingAddressImportID(config); importID != "" {
+			addressOpts = append(addressOpts, pulumi.Import(pulumi.ID(importID)))
+		}
+
 		address, err := compute.NewAddress(ctx, fmt.Sprintf("%s-address", config.Name), &compute.AddressArgs{
 			Name:   pulumi.String(addressGCPName),
 			Region: pulumi.String(config.Region),
-		})
+		}, addressOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to create address: %w", err)
 		}
