@@ -352,6 +352,7 @@ func TestCreateServer_DBError(t *testing.T) {
 	defer cleanup()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(assert.AnError)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
 
 	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name:             "test-server",
@@ -377,6 +378,7 @@ func TestCreateServer_NoProvisioningService(t *testing.T) {
 	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
 
 	body, _ := json.Marshal(servers.CreateServerRequest{
 		Name:             "test-server",
@@ -427,6 +429,7 @@ func TestUpdateServer_Success(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
@@ -441,7 +444,79 @@ func TestUpdateServer_Success(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
 
+func TestUpdateServer_RenameToExistingName(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+
+	existing := &db.ServerConfig{
+		ID: "srv1", Name: "old", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	}
+	other := &db.ServerConfig{
+		ID: "srv2", Name: "taken", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	}
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing, other}, nil)
+
+	name := "taken"
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Contains(t, w.Body.String(), "a server named \\\"taken\\\" already exists")
+	// The rename must not be persisted.
+	mockDB.AssertNotCalled(t, "UpdateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+	mockPS.AssertNotCalled(t, "UpdateServer", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUpdateServer_RenameToSelfSucceeds(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+
+	existing := &db.ServerConfig{
+		ID: "srv1", Name: "same-name", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	}
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	// Submitting the server's own current name is not a conflict. Because the
+	// name is unchanged, no ListServerConfigs lookup is performed at all.
+	name := "same-name"
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	mockDB.AssertNotCalled(t, "ListServerConfigs", mock.Anything)
+}
+
 func TestUpdateServer_EmptyID(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
 	req := httptest.NewRequest("PUT", "/api/servers/", bytes.NewReader([]byte("{}")))
 	req = mux.SetURLVars(req, map[string]string{"id": ""})
 	w := httptest.NewRecorder()
@@ -467,6 +542,7 @@ func TestUpdateServer_UpdateDBError(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(assert.AnError)
 
@@ -493,6 +569,7 @@ func TestUpdateServer_NoProvisioningService(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
@@ -521,6 +598,7 @@ func TestUpdateServer_ProvisioningConflict(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing}, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(
@@ -551,6 +629,7 @@ func TestUpdateServer_ProvisioningError(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing}, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(
@@ -577,6 +656,7 @@ func TestUpdateServer_ValidationError(t *testing.T) {
 		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
 	}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existing, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{existing}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 
 	emptyName := ""
@@ -628,6 +708,7 @@ func TestUpdateServer_SnapshotIsOriginalConfig(t *testing.T) {
 	}).Return(nil)
 	mockDB.On("GetStatus", mock.Anything, "srv1").Return(db.Status{ServerState: "RUNNING"}, nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
 
 	mockPS := new(testutil.MockProvisioningService)
 	oldPS := servers.ProvisioningService
@@ -751,6 +832,7 @@ func TestCreateServer_Success(t *testing.T) {
 	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
 	mockPS.On("CreateServer", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*programs.ServerConfig")).Return(nil)
 
 	body, _ := json.Marshal(servers.CreateServerRequest{
@@ -775,6 +857,7 @@ func TestCreateServer_ProvisioningGenericError(t *testing.T) {
 	defer func() { servers.ProvisioningService = oldPS }()
 
 	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
 	mockPS.On("CreateServer", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*programs.ServerConfig")).Return(
 		fmt.Errorf("some error"))
 
@@ -787,6 +870,63 @@ func TestCreateServer_ProvisioningGenericError(t *testing.T) {
 	servers.CreateServer(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestCreateServer_DuplicateName(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+
+	// First server exists with name "existing-server"
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{
+		{ID: "srv1", Name: "existing-server", Region: "us-central1", Zone: "us-central1-a"},
+	}, nil)
+
+	body, _ := json.Marshal(servers.CreateServerRequest{
+		Name: "existing-server", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	})
+	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	servers.CreateServer(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Contains(t, w.Body.String(), "a server named \\\"existing-server\\\" already exists")
+	// Nothing should be persisted or provisioned
+	mockDB.AssertNotCalled(t, "CreateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+	mockPS.AssertNotCalled(t, "CreateServer", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestCreateServer_ReuseDeletedName(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+
+	// No existing servers (simulating deleted server)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
+
+	mockDB.On("CreateServerConfig", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("CreateServer", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*programs.ServerConfig")).Return(nil)
+
+	body, _ := json.Marshal(servers.CreateServerRequest{
+		Name: "deleted-server", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	})
+	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	servers.CreateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
 }
 
 // --- servers.GetServerProvisioningStatus tests ---
