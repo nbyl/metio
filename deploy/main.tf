@@ -2,7 +2,7 @@ terraform {
   required_providers {
     google = {
       source  = "opentffoundation/google"
-      version = "6.39.0"
+      version = "7.22.0"
     }
   }
 }

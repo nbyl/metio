@@ -175,3 +175,50 @@ func TestServerID_BelongsInLabelsNotTags(t *testing.T) {
 	assert.True(t, labelRe.MatchString(serverID),
 		"ServerID UUID must be valid as a GCP label value")
 }
+
+func TestExistingAddressImportID(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *ServerConfig
+		expected string
+	}{
+		{
+			name: "create with existing address imports it",
+			config: &ServerConfig{
+				Name:                  "test-server",
+				GCPProject:            "my-project",
+				Region:                "europe-west3",
+				ExistingAddress:       "my-addr",
+				ImportExistingAddress: true,
+			},
+			expected: "projects/my-project/regions/europe-west3/addresses/my-addr",
+		},
+		{
+			name: "update never re-imports an already managed address",
+			config: &ServerConfig{
+				Name:                  "test-server",
+				GCPProject:            "my-project",
+				Region:                "europe-west3",
+				ExistingAddress:       "my-addr",
+				ImportExistingAddress: false,
+			},
+			expected: "",
+		},
+		{
+			name: "no existing address means no import",
+			config: &ServerConfig{
+				Name:                  "test-server",
+				GCPProject:            "my-project",
+				Region:                "europe-west3",
+				ImportExistingAddress: true,
+			},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, existingAddressImportID(tt.config))
+		})
+	}
+}
