@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServerDashboard } from './ServerDashboard';
 import type { ServerResponse, StatusResponse } from '../../types/server';
@@ -11,8 +12,10 @@ vi.mock('sonner', () => ({
   },
 }));
 
+const mockNavigate = vi.hoisted(() => vi.fn());
+
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('../../hooks/useServers', () => ({
@@ -229,5 +232,78 @@ describe('ServerDashboard stats', () => {
     expect(screen.getByText('5/20')).toBeInTheDocument();
     expect(screen.getByText('Uptime')).toBeInTheDocument();
     expect(screen.getByText('3h 45m')).toBeInTheDocument();
+  });
+});
+
+describe('ServerDashboard create server button', () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryClient = createQueryClient();
+
+    vi.mocked(useServerStatus).mockReturnValue({ data: undefined } as never);
+    vi.mocked(useServerProvisioning).mockReturnValue({ data: undefined } as never);
+    vi.mocked(useStartServer).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useStopServer).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useUpdateServer).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useUpdateAgent).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useDeleteServer).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useWhitelist).mockReturnValue({ data: undefined } as never);
+    vi.mocked(useAddPlayer).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useRemovePlayer).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useToggleWhitelist).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useScheduleShutdown).mockReturnValue(mockMutationHook() as never);
+    vi.mocked(useCancelScheduledShutdown).mockReturnValue(mockMutationHook() as never);
+  });
+
+  function renderDashboard() {
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <ServerDashboard />
+      </QueryClientProvider>
+    );
+  }
+
+  it('shows the Create Server button when servers already exist', () => {
+    vi.mocked(useServers).mockReturnValue({
+      data: [mockServerResponse(stoppedStatus)],
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as never);
+
+    renderDashboard();
+
+    expect(screen.getByRole('button', { name: /create server/i })).toBeInTheDocument();
+  });
+
+  it('navigates to the setup wizard when the Create Server button is clicked', async () => {
+    vi.mocked(useServers).mockReturnValue({
+      data: [mockServerResponse(stoppedStatus)],
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as never);
+
+    renderDashboard();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /create server/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/servers/new');
+  });
+
+  it('shows exactly one Create Server button in the empty state', () => {
+    vi.mocked(useServers).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as never);
+
+    renderDashboard();
+
+    expect(screen.getAllByRole('button', { name: /create server/i })).toHaveLength(1);
   });
 });

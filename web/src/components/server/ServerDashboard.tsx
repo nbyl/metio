@@ -13,6 +13,7 @@ import {
   Server,
   Settings,
   Trash2,
+  Plus,
 } from 'lucide-react';
 import { useServers } from '../../hooks/useServers';
 import { useServerStatus } from '../../hooks/useServerStatus';
@@ -722,6 +723,12 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
 
   return (
     <div className={cn('space-y-6', className)}>
+      <div className="flex justify-end">
+        <Button variant="primary" onClick={() => navigate('/servers/new')}>
+          <Plus className="h-4 w-4" />
+          Create Server
+        </Button>
+      </div>
       {servers.map((server) => (
         <ServerCard key={server.id} server={server} />
       ))}
