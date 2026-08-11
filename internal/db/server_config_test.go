@@ -235,28 +235,6 @@ func TestShutdownScheduleIsValid(t *testing.T) {
 	})
 }
 
-func TestIsValidMinecraftVersion(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  bool
-	}{
-		{"valid 1.21.1", "1.21.1", true},
-		{"valid 1.20.4", "1.20.4", true},
-		{"valid 1.7.10", "1.7.10", true},
-		{"invalid version", "2.0.0", false},
-		{"invalid format", "latest", false},
-		{"empty", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := IsValidMinecraftVersion(tt.input)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestMachineTypes(t *testing.T) {
 	t.Run("e2-small exists", func(t *testing.T) {
 		spec, ok := MachineTypes["e2-small"]

@@ -15,6 +15,14 @@ var ProvisioningService ProvisioningServiceInterface
 
 var LookupMinecraftUser func(ctx context.Context, username string) (*services.MojangProfile, error)
 
+// ListMinecraftVersions returns the Minecraft versions offered to users. It
+// defaults to the built-in list so tests and any caller that has not wired the
+// live service still get a usable set; base.go overrides it with the
+// Mojang-backed service in production.
+var ListMinecraftVersions = func(ctx context.Context) []string {
+	return db.MinecraftVersions
+}
+
 var GetUserEmail func(r *http.Request) string
 
 var WriteJSONError func(w http.ResponseWriter, message string, statusCode int)

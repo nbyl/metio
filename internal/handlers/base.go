@@ -44,6 +44,7 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	servers.ProvisioningService = ps
 	servers.GetDBConnection = getDBConnection
 	servers.LookupMinecraftUser = services.LookupMinecraftUser
+	servers.ListMinecraftVersions = services.ListMinecraftVersions
 	servers.GetUserEmail = getUserEmail
 	servers.WriteJSONError = WriteJSONError
 	if cfg != nil {
