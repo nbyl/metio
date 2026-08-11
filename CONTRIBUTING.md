@@ -431,8 +431,27 @@ refactor: extract status polling into custom hook
      --body "Closes <TICKET-ID>\n\n<summary of changes>"
    ```
 2. **Move the issue to "In Review"** on the Kanban board after creating the PR
-3. **Enable auto-merge** (`gh pr merge --auto --squash`) or wait for manual merge
+3. **Squash merge** the PR (`gh pr merge --auto --squash`) — squash is the only merge method enabled
 4. **Enable delete branch** in the PR to ensure the branch is deleted on merge
+
+### Merge Strategy
+
+**All pull requests must be squash merged.** Merge commits and rebase merges are disabled at the repository level:
+
+| Setting | Value |
+|---------|-------|
+| `allow_squash_merge` | `true` |
+| `allow_merge_commit` | `false` |
+| `allow_rebase_merge` | `false` |
+| `squash_merge_commit_title` | `PR_TITLE` |
+| `squash_merge_commit_message` | `PR_BODY` |
+
+**Why:** release-please builds the changelog by parsing commit messages. With merge commits enabled, GitHub wrote the conventional PR title into the merge commit's body, so release-please counted both the merge commit *and* the original branch commit — producing two changelog entries for every change. Release-please has no option to ignore merge commits, so squash merging is what prevents this. Squashing guarantees exactly one commit on `main` per pull request, and therefore exactly one changelog entry.
+
+Two consequences follow from the settings above:
+
+- **The PR title becomes the commit subject**, so it must be a valid Conventional Commit. This is enforced by the `semantic-pr.yml` workflow — that check is load-bearing, not advisory.
+- **The PR body becomes the commit message body**, so `Closes #NNN` belongs in the PR description for the changelog to render its issue link. For the same reason, do not include a line starting with `BREAKING CHANGE:` in a PR body unless a major version bump is genuinely intended — release-please will act on it.
 
 ### Before Submitting
 
