@@ -1230,6 +1230,58 @@ func TestStatusByID_StatusNotFound(t *testing.T) {
 		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
 	}, nil)
 	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, db.ErrNotFound)
+	mockDB.On("GetProvisioningStatus", mock.Anything, "srv1").Return(nil, db.ErrNotFound)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.StatusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, string(db.ServerStateStarting), response.ServerState)
+	assert.Equal(t, "unknown:25565", response.InstanceIP)
+}
+
+func TestStatusByID_StatusNotFound_ProvisioningInProgress(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, db.ErrNotFound)
+	mockDB.On("GetProvisioningStatus", mock.Anything, "srv1").Return(&db.ProvisioningStatus{
+		Operation: db.ProvisioningOperationCreate,
+		State:     db.ProvisioningStateInProgress,
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.StatusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, string(db.ServerStateStarting), response.ServerState)
+}
+
+func TestStatusByID_StatusNotFound_ProvisioningFailed(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{}, db.ErrNotFound)
+	mockDB.On("GetProvisioningStatus", mock.Anything, "srv1").Return(&db.ProvisioningStatus{
+		Operation: db.ProvisioningOperationCreate,
+		State:     db.ProvisioningStateFailed,
+	}, nil)
 
 	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -1240,7 +1292,6 @@ func TestStatusByID_StatusNotFound(t *testing.T) {
 	var response servers.StatusResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, string(db.ServerStateStopped), response.ServerState)
-	assert.Equal(t, "unknown:25565", response.InstanceIP)
 }
 
 func TestStatusByID_GetStatusError(t *testing.T) {

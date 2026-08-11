@@ -302,12 +302,25 @@ func StatusByID(w http.ResponseWriter, r *http.Request) {
 	playerStatus, err := dbConn.GetStatus(ctx, serverConfig.Name)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			span.SetAttributes(attribute.String("status", "not_found_treated_as_stopped"))
+			// No status document means the agent has never reported for this
+			// server, so it is still coming up: report STARTING rather than
+			// STOPPED. The exception is a provisioning run that already failed,
+			// which would otherwise sit at "starting" forever.
+			state := db.ServerStateStarting
+			if provisioning, provErr := dbConn.GetProvisioningStatus(ctx, serverID); provErr == nil &&
+				provisioning != nil && provisioning.State == db.ProvisioningStateFailed {
+				state = db.ServerStateStopped
+			}
+
+			span.SetAttributes(
+				attribute.String("status", "not_found_synthesized"),
+				attribute.String("status.synthesized_state", string(state)),
+			)
 			playerStatus = db.Status{
 				Players:     db.Players{Current: 0, Max: 20},
 				Timestamp:   time.Now(),
 				Uptime:      "",
-				ServerState: db.ServerStateStopped,
+				ServerState: state,
 				InstanceIP:  "",
 			}
 		} else {
