@@ -371,8 +371,6 @@ func TestCreateServer_WithExistingAddress(t *testing.T) {
 	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
 	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
 	mockWM.On("ProjectID").Return("")
-	mockWM.On("ImportResources", mock.Anything, stack, mock.Anything).Return(nil)
-	mockWM.On("RefreshStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{
 		Outputs: auto.OutputMap{},
 	}, nil)
@@ -384,34 +382,11 @@ func TestCreateServer_WithExistingAddress(t *testing.T) {
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
-	mockWM.AssertCalled(t, "ImportResources", mock.Anything, stack, mock.Anything)
-	mockWM.AssertCalled(t, "RefreshStack", mock.Anything, "srv1")
-}
-
-func TestCreateServer_WithExistingAddress_ImportError(t *testing.T) {
-	svc, mockWM, mockDB := newTestService()
-
-	stack := &auto.Stack{}
-	config := &programs.ServerConfig{
-		Name:            "test",
-		ExistingAddress: "my-existing-addr",
-		Region:          "europe-west3",
-		GCPProject:      "my-project",
-	}
-
-	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
-	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
-	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
-	mockWM.On("ProjectID").Return("")
-	mockWM.On("ImportResources", mock.Anything, stack, mock.Anything).Return(errors.New("import failed"))
-	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
-
-	err := svc.CreateServer(context.Background(), "srv1", config)
-	assert.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
-	mockWM.AssertCalled(t, "ImportResources", mock.Anything, stack, mock.Anything)
-	mockWM.AssertNotCalled(t, "UpStack", mock.Anything, stack)
+	// The address is adopted via the pulumi.Import resource option inside the
+	// inline program, not via a separate `pulumi import` CLI invocation.
+	mockWM.AssertCalled(t, "UpStack", mock.Anything, stack)
+	// The caller's config must not be mutated by the create path.
+	assert.False(t, config.ImportExistingAddress)
 }
 
 func TestCreateServer_UpsertError(t *testing.T) {

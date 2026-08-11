@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.6.0"
+
   required_providers {
     google = {
-      source = "opentffoundation/google"
+      source  = "opentffoundation/google"
+      version = "~> 7.22"
     }
   }
 }
