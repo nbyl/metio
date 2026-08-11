@@ -1,6 +1,7 @@
 package servers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,6 +14,22 @@ import (
 	"github.com/nbyl/metio/internal/handlers/agent"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 )
+
+// isServerNameTaken checks if a server with the given name already exists.
+// If excludeServerID is provided, that server ID is excluded from the check
+// (used for rename operations where a server can keep its own name).
+func isServerNameTaken(ctx context.Context, dbConn db.DB, name, excludeServerID string) (bool, error) {
+	configs, err := dbConn.ListServerConfigs(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range configs {
+		if c.Name == name && c.ID != excludeServerID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func CreateServer(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -46,6 +63,16 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
 		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
+		return
+	}
+
+	// Check for duplicate server name before any state is written
+	if taken, err := isServerNameTaken(ctx, dbConn, serverConfig.Name, ""); err != nil {
+		log.Printf("Error checking for duplicate server name: %v", err)
+		writeJSONError(w, "failed to check existing servers", http.StatusInternalServerError)
+		return
+	} else if taken {
+		writeJSONError(w, fmt.Sprintf("a server named %q already exists", serverConfig.Name), http.StatusConflict)
 		return
 	}
 
@@ -242,6 +269,19 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	if req.Name != nil {
 		existingConfig.Name = *req.Name
 	}
+
+	// Check for duplicate server name on rename
+	if req.Name != nil && *req.Name != originalConfig.Name {
+		if taken, err := isServerNameTaken(ctx, dbConn, *req.Name, serverID); err != nil {
+			log.Printf("Error checking for duplicate server name: %v", err)
+			writeJSONError(w, "failed to check existing servers", http.StatusInternalServerError)
+			return
+		} else if taken {
+			writeJSONError(w, fmt.Sprintf("a server named %q already exists", *req.Name), http.StatusConflict)
+			return
+		}
+	}
+
 	if req.MachineType != nil {
 		existingConfig.MachineType = *req.MachineType
 	}
