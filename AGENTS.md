@@ -74,3 +74,4 @@
 - **Testing:** Before committing, deploy the full system at least once using `make deploy`. Check the controller website and ssh into the machine using `gcloud compute ssh --zone "<zone>" <instance-name> --project "<project-id>"`.
 - **Commit Messages:** Follow the Conventional Commits specification. (e.g., `feat: add user profile page`)
 - **Pull Requests:** Create a pull request on GitHub and set the Linear issue to "in review" if applicable.
+- **Merging:** Pull requests are always squash merged (`gh pr merge --squash`); merge commits and rebase merges are disabled. The PR title becomes the commit subject, so it must be a valid Conventional Commit, and the PR body becomes the commit body — keep `Closes #NNN` there. See the Merge Strategy section in `CONTRIBUTING.md` for why.
