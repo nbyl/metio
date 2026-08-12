@@ -2019,6 +2019,9 @@ func TestUpdateServer_UnavailableVersionUnchangedStillSucceeds(t *testing.T) {
 		ID: "srv1", Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
 		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.7.10",
 	}, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{
+		{ID: "srv1", Name: "test-instance"},
+	}, nil)
 	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)

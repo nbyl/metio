@@ -112,13 +112,14 @@ func (s *MinecraftVersionService) List(ctx context.Context) []string {
 	versions, err := s.fetch(ctx)
 	if err != nil {
 		if stale, _ := s.cache.get(); len(stale) > 0 {
-			log.Printf("Failed to refresh Minecraft versions from Mojang, serving cached list: %v", err)
+			log.Printf("Failed to refresh Minecraft versions from Mojang (%s), serving cached list: %v", s.manifestURL, err)
 			return stale
 		}
-		log.Printf("Failed to fetch Minecraft versions from Mojang, using fallback list: %v", err)
+		log.Printf("Failed to fetch Minecraft versions from Mojang (%s), using fallback list: %v", s.manifestURL, err)
 		return s.fallback
 	}
 
+	log.Printf("Fetched %d Minecraft versions from Mojang", len(versions))
 	s.cache.set(versions)
 	return versions
 }
@@ -128,22 +129,22 @@ func (s *MinecraftVersionService) List(ctx context.Context) []string {
 func (s *MinecraftVersionService) fetch(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.manifestURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request for %s: %w", s.manifestURL, err)
 	}
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("failed to make request to %s: %w", s.manifestURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code from Mojang manifest: %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected status code from Mojang manifest: %d (url %s)", resp.StatusCode, s.manifestURL)
 	}
 
 	var manifest versionManifest
 	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
-		return nil, fmt.Errorf("failed to decode manifest: %w", err)
+		return nil, fmt.Errorf("failed to decode manifest from %s: %w", s.manifestURL, err)
 	}
 
 	versions := make([]string, 0, len(manifest.Versions))
