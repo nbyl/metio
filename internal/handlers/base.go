@@ -48,6 +48,9 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	servers.GetUserEmail = getUserEmail
 	servers.WriteJSONError = WriteJSONError
 	if cfg != nil {
+		servers.ListGCPRegions = func(ctx context.Context) []servers.RegionOption {
+			return servers.LocationsToRegionOptions(services.ListGCPLocations(ctx, cfg.ProjectID))
+		}
 		servers.ControllerVersion = cfg.ControllerVersion
 	}
 

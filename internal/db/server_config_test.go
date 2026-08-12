@@ -49,8 +49,8 @@ func TestValidateRegion(t *testing.T) {
 		{"valid us-central1", "us-central1", false},
 		{"valid asia-east1", "asia-east1", false},
 		{"empty", "", true},
-		{"invalid region", "invalid-region", true},
-		{"invalid zone used as region", "europe-west3-a", true},
+		{"uppercase", "US-Central1", true},
+		{"spaces", "us central1", true},
 	}
 
 	for _, tt := range tests {
@@ -75,8 +75,8 @@ func TestValidateZone(t *testing.T) {
 		{"valid zone b", "us-central1-b", false},
 		{"empty", "", true},
 		{"region only", "europe-west3", true},
-		{"invalid zone", "europe-west3-x", true},
-		{"invalid zone for region", "us-east1-a", true},
+		{"uppercase", "Europe-West3-A", true},
+		{"spaces", "europe west3 a", true},
 	}
 
 	for _, tt := range tests {

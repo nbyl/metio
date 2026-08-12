@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/services"
 )
 
 type MachineTypeOption struct {
@@ -43,14 +44,7 @@ func ListOptions(w http.ResponseWriter, r *http.Request) {
 		return machineTypes[i].ID < machineTypes[j].ID
 	})
 
-	regionIDs := db.ListRegions()
-	sort.Strings(regionIDs)
-	regions := make([]RegionOption, 0, len(regionIDs))
-	for _, regionID := range regionIDs {
-		zones := db.ListZonesByRegion(regionID)
-		sort.Strings(zones)
-		regions = append(regions, RegionOption{ID: regionID, Zones: zones})
-	}
+	regions := ListGCPRegions(ctx)
 
 	available := ListMinecraftVersions(ctx)
 	versions := make([]string, len(available))
@@ -74,6 +68,50 @@ func isMinecraftVersionAvailable(ctx context.Context, version string) bool {
 	for _, v := range ListMinecraftVersions(ctx) {
 		if v == version {
 			return true
+		}
+	}
+	return false
+}
+
+// LocationsToRegionOptions converts GCP region locations into the sorted API
+// response shape. The service already returns sorted regions and zones; the
+// sort here keeps the shape stable regardless of the source.
+func LocationsToRegionOptions(locations []services.GCPLocation) []RegionOption {
+	regions := make([]RegionOption, 0, len(locations))
+	for _, loc := range locations {
+		zones := make([]string, len(loc.Zones))
+		copy(zones, loc.Zones)
+		sort.Strings(zones)
+		regions = append(regions, RegionOption{ID: loc.ID, Zones: zones})
+	}
+	sort.Slice(regions, func(i, j int) bool {
+		return regions[i].ID < regions[j].ID
+	})
+	return regions
+}
+
+// isRegionAvailable reports whether the given region is offered. It resolves
+// the list through ListGCPRegions, the same source GET /api/options serves.
+func isRegionAvailable(ctx context.Context, region string) bool {
+	for _, r := range ListGCPRegions(ctx) {
+		if r.ID == region {
+			return true
+		}
+	}
+	return false
+}
+
+// isZoneAvailable reports whether the given zone is offered within region,
+// resolved from the same source GET /api/options serves.
+func isZoneAvailable(ctx context.Context, region, zone string) bool {
+	for _, r := range ListGCPRegions(ctx) {
+		if r.ID == region {
+			for _, z := range r.Zones {
+				if z == zone {
+					return true
+				}
+			}
+			return false
 		}
 	}
 	return false

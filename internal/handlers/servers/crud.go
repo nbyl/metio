@@ -64,6 +64,15 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !isRegionAvailable(ctx, serverConfig.Region) {
+		writeJSONError(w, fmt.Sprintf("validation error: region %q is not available", serverConfig.Region), http.StatusBadRequest)
+		return
+	}
+	if !isZoneAvailable(ctx, serverConfig.Region, serverConfig.Zone) {
+		writeJSONError(w, fmt.Sprintf("validation error: zone %q is not available in region %q", serverConfig.Zone, serverConfig.Region), http.StatusBadRequest)
+		return
+	}
+
 	dbConn, cfg, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
