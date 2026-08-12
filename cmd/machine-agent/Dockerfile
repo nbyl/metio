@@ -13,7 +13,7 @@ ARG VERSION=local
 RUN go build -ldflags "-X main.Version=${VERSION}" -o build/machine-agent ./cmd/machine-agent
 
 # Runtime stage
-FROM debian:11-slim
+FROM debian:13-slim
 WORKDIR /app
 RUN addgroup --gid 65532 nonroot && \
     addgroup --gid 412 docker && \
