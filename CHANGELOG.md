@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.0](https://github.com/nbyl/metio/compare/v1.6.2...v1.7.0) (2026-08-12)
+
+
+### Features
+
+* load GCP machine types dynamically ([#370](https://github.com/nbyl/metio/issues/370)) ([#376](https://github.com/nbyl/metio/issues/376)) ([7c63eef](https://github.com/nbyl/metio/commit/7c63eef0a24d491387fde6665c291505e40257ff))
+* load GCP zones and regions dynamically ([#374](https://github.com/nbyl/metio/issues/374)) ([7fe92b4](https://github.com/nbyl/metio/commit/7fe92b4753dd8d05ee6d4994bd1377b58d2ae200))
+* load Minecraft version list from Mojang ([#371](https://github.com/nbyl/metio/issues/371)) ([f757092](https://github.com/nbyl/metio/commit/f7570928498002ef93e2c8269c1dca83e1016fcf))
+* show controller version in web UI ([#377](https://github.com/nbyl/metio/issues/377)) ([9832d56](https://github.com/nbyl/metio/commit/9832d5648e3ca35ccf445f9f0b03c6024b055d5c)), closes [#366](https://github.com/nbyl/metio/issues/366)
+
+
+### Bug Fixes
+
+* import existing address via pulumi.Import instead of the CLI ([fadf8db](https://github.com/nbyl/metio/commit/fadf8dbb90a814ea7aaaa8ecb4dc89f33700d276))
+* import existing address via pulumi.Import instead of the CLI ([e7c7fcb](https://github.com/nbyl/metio/commit/e7c7fcb276707eb7cd492c1eb5904038eb5c4865)), closes [#356](https://github.com/nbyl/metio/issues/356)
+* reject duplicate server names on create and rename ([#372](https://github.com/nbyl/metio/issues/372)) ([dc68245](https://github.com/nbyl/metio/commit/dc68245020e407d1b3a18f1505e033f829ac9b01))
+* show new servers as starting until the agent reports ([26eeb1d](https://github.com/nbyl/metio/commit/26eeb1dfe9e3c814d37bdbf4c68a2560c1e4eb24))
+* show new servers as starting until the agent reports ([a5b7da6](https://github.com/nbyl/metio/commit/a5b7da66de8fa66340687aab589f5b59e96d3f67)), closes [#348](https://github.com/nbyl/metio/issues/348)
+* **ui:** show Create Server button when servers exist ([095b0a7](https://github.com/nbyl/metio/commit/095b0a73ecfea3316f647d69c496b9beb874f918))
+* **ui:** show Create Server button when servers exist ([da5058a](https://github.com/nbyl/metio/commit/da5058a7710c362d8f4b1e82d34759aca820fcb5)), closes [#359](https://github.com/nbyl/metio/issues/359)
+
 ## [1.6.2](https://github.com/nbyl/metio/compare/v1.6.1...v1.6.2) (2026-08-10)
 
 
