@@ -31,7 +31,7 @@ ARG VERSION=local
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.Version=${VERSION}" -o build/controller ./cmd/controller
 
 # Stage 3: Runtime
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates && \
     adduser -D -u 65532 nonroot
 EXPOSE 8080
