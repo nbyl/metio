@@ -6,15 +6,13 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/services"
 )
 
 type MachineTypeOption struct {
-	ID          string  `json:"id"`
-	VCPUs       int     `json:"vcpus"`
-	MemoryGB    int     `json:"memoryGB"`
-	MonthlyCost float64 `json:"monthlyCost"`
+	ID       string `json:"id"`
+	VCPUs    int    `json:"vcpus"`
+	MemoryGB int    `json:"memoryGB"`
 }
 
 type RegionOption struct {
@@ -31,18 +29,7 @@ type OptionsResponse struct {
 func ListOptions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	machineTypes := make([]MachineTypeOption, 0, len(db.MachineTypes))
-	for id, spec := range db.MachineTypes {
-		machineTypes = append(machineTypes, MachineTypeOption{
-			ID:          id,
-			VCPUs:       spec.VCPUs,
-			MemoryGB:    spec.MemoryGB,
-			MonthlyCost: spec.MonthlyCost,
-		})
-	}
-	sort.Slice(machineTypes, func(i, j int) bool {
-		return machineTypes[i].ID < machineTypes[j].ID
-	})
+	machineTypes := ListGCPMachineTypes(ctx)
 
 	regions := ListGCPRegions(ctx)
 
@@ -67,6 +54,32 @@ func ListOptions(w http.ResponseWriter, r *http.Request) {
 func isMinecraftVersionAvailable(ctx context.Context, version string) bool {
 	for _, v := range ListMinecraftVersions(ctx) {
 		if v == version {
+			return true
+		}
+	}
+	return false
+}
+
+// MachineTypesToOptions converts GCP machine types into the sorted API
+// response shape. The service already returns sorted types; the sort here
+// keeps the shape stable regardless of the source.
+func MachineTypesToOptions(types []services.GCPMachineType) []MachineTypeOption {
+	options := make([]MachineTypeOption, 0, len(types))
+	for _, t := range types {
+		options = append(options, MachineTypeOption{ID: t.ID, VCPUs: t.VCPUs, MemoryGB: t.MemoryGB})
+	}
+	sort.Slice(options, func(i, j int) bool {
+		return options[i].ID < options[j].ID
+	})
+	return options
+}
+
+// isMachineTypeAvailable reports whether the given machine type is offered.
+// It resolves the list through ListGCPMachineTypes, the same source GET
+// /api/options serves, so the dropdown and this validation can never disagree.
+func isMachineTypeAvailable(ctx context.Context, machineType string) bool {
+	for _, mt := range ListGCPMachineTypes(ctx) {
+		if mt.ID == machineType {
 			return true
 		}
 	}

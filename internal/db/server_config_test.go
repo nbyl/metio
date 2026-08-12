@@ -101,9 +101,11 @@ func TestValidateMachineType(t *testing.T) {
 		{"valid e2-medium", "e2-medium", false},
 		{"valid n2-standard-2", "n2-standard-2", false},
 		{"valid n2-highmem-4", "n2-highmem-4", false},
+		{"valid any family", "x2-mega", false},
 		{"empty", "", true},
-		{"invalid type", "invalid-type", true},
-		{"invalid prefix", "x2-small", true},
+		{"uppercase", "E2-small", true},
+		{"space", "e2 small", true},
+		{"leading dash", "-e2-small", true},
 	}
 
 	for _, tt := range tests {

@@ -51,6 +51,9 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 		servers.ListGCPRegions = func(ctx context.Context) []servers.RegionOption {
 			return servers.LocationsToRegionOptions(services.ListGCPLocations(ctx, cfg.ProjectID))
 		}
+		servers.ListGCPMachineTypes = func(ctx context.Context) []servers.MachineTypeOption {
+			return servers.MachineTypesToOptions(services.ListGCPMachineTypes(ctx, cfg.ProjectID))
+		}
 		servers.ControllerVersion = cfg.ControllerVersion
 	}
 

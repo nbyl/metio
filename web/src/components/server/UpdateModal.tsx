@@ -40,6 +40,18 @@ export function UpdateModal({
     ? availableVersions
     : [config.minecraftVersion, ...availableVersions];
 
+  // Same for machine types: keep the current type selectable even if the
+  // dynamic list no longer offers it.
+  const availableMachineTypes = options?.machineTypes ?? [];
+  const machineTypeOptions = (() => {
+    const withSpecs = availableMachineTypes.map((mt) => ({
+      id: mt.id,
+      label: `${mt.id} (${mt.vcpus} vCPU · ${mt.memoryGB} GB RAM)`,
+    }));
+    if (withSpecs.some((mt) => mt.id === config.machineType)) return withSpecs;
+    return [{ id: config.machineType, label: config.machineType }, ...withSpecs];
+  })();
+
   if (!open) return null;
 
   const hasChanges =
@@ -112,13 +124,18 @@ export function UpdateModal({
             <label className="text-sm text-slate-300 block">
               Machine Type
             </label>
-            <input
-              type="text"
+            <select
               value={machineType}
               onChange={(e) => setMachineType(e.target.value)}
-              placeholder="e.g. e2-standard-2"
-              className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+              disabled={optionsLoading}
+              className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+            >
+              {machineTypeOptions.map((mt) => (
+                <option key={mt.id} value={mt.id}>
+                  {mt.label}
+                </option>
+              ))}
+            </select>
             <p className="text-xs text-slate-500">
               Changing the machine type will stop and restart the server.
             </p>
