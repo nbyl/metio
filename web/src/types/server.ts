@@ -106,7 +106,6 @@ export interface MachineTypeOption {
   id: string;
   vcpus: number;
   memoryGB: number;
-  monthlyCost: number;
 }
 
 export interface RegionOption {

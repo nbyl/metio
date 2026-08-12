@@ -3,6 +3,7 @@ package servers
 import (
 	"context"
 	"net/http"
+	"sort"
 
 	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
@@ -34,6 +35,24 @@ var ListGCPRegions = func(ctx context.Context) []RegionOption {
 		locations = append(locations, services.GCPLocation{ID: regionID, Zones: db.ListZonesByRegion(regionID)})
 	}
 	return LocationsToRegionOptions(locations)
+}
+
+// ListGCPMachineTypes returns the machine types offered to users. It defaults
+// to the built-in list so tests and any caller that has not wired the live
+// service still get a usable set; base.go overrides it with the
+// Compute-backed service in production.
+var ListGCPMachineTypes = func(ctx context.Context) []MachineTypeOption {
+	ids := make([]string, 0, len(db.MachineTypes))
+	for id := range db.MachineTypes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	options := make([]MachineTypeOption, 0, len(ids))
+	for _, id := range ids {
+		spec := db.MachineTypes[id]
+		options = append(options, MachineTypeOption{ID: id, VCPUs: spec.VCPUs, MemoryGB: spec.MemoryGB})
+	}
+	return options
 }
 
 var GetUserEmail func(r *http.Request) string

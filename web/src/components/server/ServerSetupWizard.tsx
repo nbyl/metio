@@ -7,6 +7,7 @@ import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Switch } from '../ui/Switch';
 import { cn } from '../../lib/utils';
+import type { MachineTypeOption } from '../../types/server';
 
 export interface ServerSetupWizardProps {
   className?: string;
@@ -116,10 +117,6 @@ function hasErrors(errors: FormErrors): boolean {
   return Object.keys(errors).length > 0;
 }
 
-function formatCost(cost: number): string {
-  return `$${cost.toFixed(2)}`;
-}
-
 interface BasicInfoStepProps {
   form: WizardForm;
   errors: FormErrors;
@@ -209,12 +206,25 @@ function BasicInfoStep({ form, errors, regions, onChange }: BasicInfoStepProps) 
 interface SpecsStepProps {
   form: WizardForm;
   errors: FormErrors;
-  machineTypes: { id: string; vcpus: number; memoryGB: number; monthlyCost: number }[];
+  machineTypes: MachineTypeOption[];
   minecraftVersions: string[];
   onChange: (updates: Partial<WizardForm>) => void;
 }
 
+// Machine type families shown by default so the grid stays focused; the rest
+// are revealed on demand with "Show all machine types".
+const DEFAULT_FAMILIES = ['e2-', 'n2-'];
+
 function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: SpecsStepProps) {
+  const [showAllMachineTypes, setShowAllMachineTypes] = useState(false);
+  const isDefaultFamily = (id: string) => DEFAULT_FAMILIES.some((family) => id.startsWith(family));
+  const visibleMachineTypes =
+    showAllMachineTypes
+      ? machineTypes
+      : machineTypes.filter((mt) => isDefaultFamily(mt.id) || mt.id === form.machineType);
+  const hiddenCount = machineTypes.length - visibleMachineTypes.length;
+  const showToggle = hiddenCount > 0 || showAllMachineTypes;
+
   return (
     <div className="space-y-8">
       <div>
@@ -222,7 +232,7 @@ function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: 
           Machine Type
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {machineTypes.map((mt) => {
+          {visibleMachineTypes.map((mt) => {
             const selected = form.machineType === mt.id;
             return (
               <button
@@ -240,13 +250,23 @@ function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: 
                 <div className="mt-1 text-sm text-slate-400">
                   {mt.vcpus} vCPU · {mt.memoryGB} GB RAM
                 </div>
-                <div className="mt-1 text-sm text-slate-400">
-                  {formatCost(mt.monthlyCost)}/mo
-                </div>
               </button>
             );
           })}
         </div>
+{showToggle && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAllMachineTypes((prev) => !prev)}
+          className="mt-4"
+        >
+          {showAllMachineTypes
+            ? 'Show fewer machine types'
+            : `Show all machine types (${hiddenCount} more)`}
+        </Button>
+        )}
         {errors.machineType && (
           <p className="mt-2 text-sm text-red-400">{errors.machineType}</p>
         )}
@@ -364,7 +384,7 @@ function OptionsStep({ form, onChange }: OptionsStepProps) {
 
 interface ReviewStepProps {
   form: WizardForm;
-  machineTypes: { id: string; vcpus: number; memoryGB: number; monthlyCost: number }[];
+  machineTypes: MachineTypeOption[];
 }
 
 function ReviewStep({ form, machineTypes }: ReviewStepProps) {
@@ -412,24 +432,6 @@ function ReviewStep({ form, machineTypes }: ReviewStepProps) {
           </span>
         </div>
       </div>
-
-      {selectedMachine && (
-        <Card>
-          <CardContent>
-            <div className="text-center py-4">
-              <div className="text-sm text-slate-400 mb-1">
-                Estimated Monthly Cost
-              </div>
-              <div className="text-3xl font-bold text-white">
-                {formatCost(selectedMachine.monthlyCost)}
-              </div>
-              <div className="text-sm text-slate-500 mt-1">
-                Server must be stopped when not in use to reduce costs
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
@@ -529,10 +531,6 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
       </div>
     );
   }
-
-  const selectedMachine = options.machineTypes.find((mt) => mt.id === form.machineType);
-
-  const estimatedCost = selectedMachine?.monthlyCost;
 
   return (
     <div className={cn('max-w-4xl mx-auto py-8 px-4', className)}>
@@ -638,7 +636,7 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
               loading={isSubmitting}
               disabled={isSubmitting}
             >
-              Create Server{estimatedCost != null ? ` · ${formatCost(estimatedCost)}/mo` : ''}
+              Create Server
             </Button>
           )}
         </div>

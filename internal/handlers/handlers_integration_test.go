@@ -2136,3 +2136,111 @@ func TestUpdateServer_UnavailableRegionUnchangedStillSucceeds(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	mockDB.AssertCalled(t, "UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig"))
 }
+
+// stubGCPMachineTypes overrides the machine type list handlers validate
+// against, returning a function that restores the previous value.
+func stubGCPMachineTypes(types []servers.MachineTypeOption) func() {
+	orig := servers.ListGCPMachineTypes
+	servers.ListGCPMachineTypes = func(ctx context.Context) []servers.MachineTypeOption { return types }
+	return func() { servers.ListGCPMachineTypes = orig }
+}
+
+func TestListOptions_UsesDynamicMachineTypes(t *testing.T) {
+	restore := stubGCPMachineTypes([]servers.MachineTypeOption{{ID: "c3-highcpu-8", VCPUs: 8, MemoryGB: 16}})
+	defer restore()
+
+	req := httptest.NewRequest("GET", "/api/options", nil)
+	w := httptest.NewRecorder()
+	servers.ListOptions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.OptionsResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, []servers.MachineTypeOption{{ID: "c3-highcpu-8", VCPUs: 8, MemoryGB: 16}}, response.MachineTypes)
+	assert.NotEmpty(t, response.Regions)
+}
+
+func TestCreateServer_UnavailableMachineType(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	restore := stubGCPMachineTypes([]servers.MachineTypeOption{{ID: "e2-small", VCPUs: 2, MemoryGB: 2}})
+	defer restore()
+
+	body, _ := json.Marshal(servers.CreateServerRequest{
+		Name: "test-server", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "n2-standard-4", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	})
+	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	servers.CreateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "not available")
+	// Nothing may be persisted for a rejected create.
+	mockDB.AssertNotCalled(t, "CreateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUpdateServer_UnavailableMachineType(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	restore := stubGCPMachineTypes([]servers.MachineTypeOption{{ID: "e2-small", VCPUs: 2, MemoryGB: 2}})
+	defer restore()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{
+		{ID: "srv1", Name: "test-instance"},
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	mt := "n2-standard-4"
+	body, _ := json.Marshal(servers.UpdateServerRequest{MachineType: &mt})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "not available")
+	mockDB.AssertNotCalled(t, "UpdateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// A server running a machine type the dynamic list no longer offers must stay
+// editable for its other settings; the machine type is only validated when it
+// actually changes.
+func TestUpdateServer_UnavailableMachineTypeUnchangedStillSucceeds(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	mockPS := new(testutil.MockProvisioningService)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+	restore := stubGCPMachineTypes([]servers.MachineTypeOption{{ID: "e2-small", VCPUs: 2, MemoryGB: 2}})
+	defer restore()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "n2-standard-80", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{
+		{ID: "srv1", Name: "test-instance"},
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	name := "renamed-server"
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	mockDB.AssertCalled(t, "UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig"))
+}

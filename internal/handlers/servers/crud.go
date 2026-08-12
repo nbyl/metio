@@ -64,6 +64,11 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !isMachineTypeAvailable(ctx, serverConfig.MachineType) {
+		writeJSONError(w, fmt.Sprintf("validation error: machine type %q is not available", serverConfig.MachineType), http.StatusBadRequest)
+		return
+	}
+
 	if !isRegionAvailable(ctx, serverConfig.Region) {
 		writeJSONError(w, fmt.Sprintf("validation error: region %q is not available", serverConfig.Region), http.StatusBadRequest)
 		return
@@ -321,6 +326,13 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	// other settings.
 	if req.MinecraftVersion != nil && !isMinecraftVersionAvailable(ctx, *req.MinecraftVersion) {
 		writeJSONError(w, fmt.Sprintf("validation error: minecraft version %q is not available", *req.MinecraftVersion), http.StatusBadRequest)
+		return
+	}
+
+	// Same for machine type: only validate when changed, so a server running
+	// a type GCP no longer lists stays editable for its other settings.
+	if req.MachineType != nil && !isMachineTypeAvailable(ctx, *req.MachineType) {
+		writeJSONError(w, fmt.Sprintf("validation error: machine type %q is not available", *req.MachineType), http.StatusBadRequest)
 		return
 	}
 

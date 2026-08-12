@@ -6,11 +6,12 @@ import (
 )
 
 var (
-	nameRegex       = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$`)
-	timeRegex       = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):[0-5][0-9]$`)
-	regionRegex     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	zoneRegex       = regexp.MustCompile(`^[a-z][a-z0-9-]*?-[a-z]$`)
-	validGCPRegions = map[string]bool{
+	nameRegex        = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$`)
+	timeRegex        = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):[0-5][0-9]$`)
+	regionRegex      = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	zoneRegex        = regexp.MustCompile(`^[a-z][a-z0-9-]*?-[a-z]$`)
+	machineTypeRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	validGCPRegions  = map[string]bool{
 		"us-central1":             true,
 		"us-east1":                true,
 		"us-east4":                true,
@@ -219,12 +220,16 @@ func ValidateZone(zone string) error {
 	return nil
 }
 
+// ValidateMachineType checks the machine type's format only. Membership
+// against the currently offered set is enforced at the handler layer against
+// the same dynamic source /api/options serves, so this validator stays stable
+// while the offered set changes over time.
 func ValidateMachineType(machineType string) error {
 	if machineType == "" {
 		return fmt.Errorf("machine type is required")
 	}
-	if _, ok := MachineTypes[machineType]; !ok {
-		return fmt.Errorf("invalid machine type: %s", machineType)
+	if !machineTypeRegex.MatchString(machineType) {
+		return fmt.Errorf("invalid machine type format: %s", machineType)
 	}
 	return nil
 }
@@ -245,14 +250,6 @@ func ListZonesByRegion(region string) []string {
 	result := make([]string, 0, len(zones))
 	for z := range zones {
 		result = append(result, z)
-	}
-	return result
-}
-
-func ListMachineTypes() map[string]MachineTypeSpec {
-	result := make(map[string]MachineTypeSpec, len(MachineTypes))
-	for k, v := range MachineTypes {
-		result[k] = v
 	}
 	return result
 }
