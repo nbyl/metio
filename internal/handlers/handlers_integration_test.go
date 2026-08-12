@@ -297,7 +297,7 @@ func TestUpdateServer_MinecraftVersionChange(t *testing.T) {
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
-	v := "1.21.4"
+	v := "1.21.3"
 	body, _ := json.Marshal(servers.UpdateServerRequest{MinecraftVersion: &v})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
@@ -1930,4 +1930,108 @@ func TestHandleInstancePreempted_UpdateError(t *testing.T) {
 	assert.NotPanics(t, func() {
 		handleInstancePreempted(context.Background(), auditLog)
 	})
+}
+
+// stubMinecraftVersions overrides the version list handlers validate against,
+// returning a function that restores the previous value.
+func stubMinecraftVersions(versions []string) func() {
+	orig := servers.ListMinecraftVersions
+	servers.ListMinecraftVersions = func(ctx context.Context) []string { return versions }
+	return func() { servers.ListMinecraftVersions = orig }
+}
+
+func TestListOptions_UsesDynamicVersionList(t *testing.T) {
+	restore := stubMinecraftVersions([]string{"26.2", "1.21.11"})
+	defer restore()
+
+	req := httptest.NewRequest("GET", "/api/options", nil)
+	w := httptest.NewRecorder()
+	servers.ListOptions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.OptionsResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, []string{"26.2", "1.21.11"}, response.MinecraftVersion)
+	assert.NotEmpty(t, response.MachineTypes)
+	assert.NotEmpty(t, response.Regions)
+}
+
+func TestCreateServer_UnavailableMinecraftVersion(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	restore := stubMinecraftVersions([]string{"1.21.11"})
+	defer restore()
+
+	body, _ := json.Marshal(servers.CreateServerRequest{
+		Name: "test-server", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	})
+	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	servers.CreateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "not available")
+	// Nothing may be persisted for a rejected create.
+	mockDB.AssertNotCalled(t, "CreateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUpdateServer_UnavailableMinecraftVersion(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	restore := stubMinecraftVersions([]string{"1.21.11"})
+	defer restore()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	v := "1.21.1"
+	body, _ := json.Marshal(servers.UpdateServerRequest{MinecraftVersion: &v})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "not available")
+	mockDB.AssertNotCalled(t, "UpdateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// A server pinned to a version Mojang no longer offers must stay editable for
+// its other settings; the version is only validated when it actually changes.
+func TestUpdateServer_UnavailableVersionUnchangedStillSucceeds(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	mockPS := new(testutil.MockProvisioningService)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+	restore := stubMinecraftVersions([]string{"1.21.11"})
+	defer restore()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.7.10",
+	}, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{
+		{ID: "srv1", Name: "test-instance"},
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	name := "renamed-server"
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
 }

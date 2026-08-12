@@ -59,6 +59,11 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !isMinecraftVersionAvailable(ctx, serverConfig.MinecraftVersion) {
+		writeJSONError(w, fmt.Sprintf("validation error: minecraft version %q is not available", serverConfig.MinecraftVersion), http.StatusBadRequest)
+		return
+	}
+
 	dbConn, cfg, err := GetDBConnection(ctx)
 	if err != nil {
 		log.Printf("Error creating db connection: %v", err)
@@ -299,6 +304,14 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 
 	if err := db.ValidateServerConfig(existingConfig); err != nil {
 		writeJSONError(w, fmt.Sprintf("validation error: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	// Only validate the version when the request actually changes it. A server
+	// pinned to a version Mojang no longer lists must stay editable for its
+	// other settings.
+	if req.MinecraftVersion != nil && !isMinecraftVersionAvailable(ctx, *req.MinecraftVersion) {
+		writeJSONError(w, fmt.Sprintf("validation error: minecraft version %q is not available", *req.MinecraftVersion), http.StatusBadRequest)
 		return
 	}
 

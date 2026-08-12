@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { ServerConfig, UpdateServerRequest } from '../../types/server';
 import { Button } from '../ui/Button';
+import { useServerOptions } from '../../hooks/useServerOptions';
 import { cn } from '../../lib/utils';
 
 export interface UpdateModalProps {
@@ -29,6 +30,15 @@ export function UpdateModal({
   const [minecraftVersion, setMinecraftVersion] = useState(
     config.minecraftVersion
   );
+  const { data: options, isLoading: optionsLoading } = useServerOptions();
+
+  // Always offer the server's current version, even if Mojang no longer lists
+  // it, so opening the modal cannot silently switch the server to another
+  // version.
+  const availableVersions = options?.minecraftVersions ?? [];
+  const versionOptions = availableVersions.includes(config.minecraftVersion)
+    ? availableVersions
+    : [config.minecraftVersion, ...availableVersions];
 
   if (!open) return null;
 
@@ -131,13 +141,18 @@ export function UpdateModal({
             <label className="text-sm text-slate-300 block">
               Minecraft Version
             </label>
-            <input
-              type="text"
+            <select
               value={minecraftVersion}
               onChange={(e) => setMinecraftVersion(e.target.value)}
-              placeholder="e.g. 1.20.4"
-              className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+              disabled={optionsLoading}
+              className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+            >
+              {versionOptions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

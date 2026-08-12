@@ -39,6 +39,9 @@ var MachineTypes = map[string]MachineTypeSpec{
 	"n2-highcpu-80":  {80, 80, 2415.96},
 }
 
+// MinecraftVersions is the fallback list of Minecraft versions, used only when
+// Mojang's version manifest cannot be reached and nothing has been cached yet.
+// The live list is served by services.ListMinecraftVersions.
 var MinecraftVersions = []string{
 	"1.7.10",
 	"1.8.9",
@@ -58,13 +61,4 @@ var MinecraftVersions = []string{
 	"1.21.1",
 	"1.21.3",
 	"1.21.10",
-}
-
-func IsValidMinecraftVersion(version string) bool {
-	for _, v := range MinecraftVersions {
-		if v == version {
-			return true
-		}
-	}
-	return false
 }
