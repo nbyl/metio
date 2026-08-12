@@ -117,6 +117,7 @@ export interface SetupOptions {
   machineTypes: MachineTypeOption[];
   regions: RegionOption[];
   minecraftVersions: string[];
+  controllerVersion?: string;
 }
 
 export interface ProvisioningStep {

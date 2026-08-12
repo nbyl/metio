@@ -21,9 +21,10 @@ type RegionOption struct {
 }
 
 type OptionsResponse struct {
-	MachineTypes     []MachineTypeOption `json:"machineTypes"`
-	Regions          []RegionOption      `json:"regions"`
-	MinecraftVersion []string            `json:"minecraftVersions"`
+	MachineTypes      []MachineTypeOption `json:"machineTypes"`
+	Regions           []RegionOption      `json:"regions"`
+	MinecraftVersion  []string            `json:"minecraftVersions"`
+	ControllerVersion string              `json:"controllerVersion,omitempty"`
 }
 
 func ListOptions(w http.ResponseWriter, r *http.Request) {
@@ -38,9 +39,10 @@ func ListOptions(w http.ResponseWriter, r *http.Request) {
 	copy(versions, available)
 
 	resp := OptionsResponse{
-		MachineTypes:     machineTypes,
-		Regions:          regions,
-		MinecraftVersion: versions,
+		MachineTypes:      machineTypes,
+		Regions:           regions,
+		MinecraftVersion:  versions,
+		ControllerVersion: ControllerVersion,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

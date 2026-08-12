@@ -1956,6 +1956,21 @@ func TestListOptions_UsesDynamicVersionList(t *testing.T) {
 	assert.NotEmpty(t, response.Regions)
 }
 
+func TestListOptions_IncludesControllerVersion(t *testing.T) {
+	oldVersion := servers.ControllerVersion
+	servers.ControllerVersion = "v1.7.0"
+	defer func() { servers.ControllerVersion = oldVersion }()
+
+	req := httptest.NewRequest("GET", "/api/options", nil)
+	w := httptest.NewRecorder()
+	servers.ListOptions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.OptionsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.Equal(t, "v1.7.0", response.ControllerVersion)
+}
+
 func TestCreateServer_UnavailableMinecraftVersion(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)

@@ -1,8 +1,30 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Header } from './Header';
 
+vi.mock('../../hooks/useServerOptions', () => ({
+  useServerOptions: vi.fn(() => ({ data: undefined })),
+}));
+
+import { useServerOptions } from '../../hooks/useServerOptions';
+
 describe('Header', () => {
+  beforeEach(() => {
+    vi.mocked(useServerOptions).mockReturnValue({ data: undefined } as never);
+  });
+
+  it('renders the controller version when available', () => {
+    vi.mocked(useServerOptions).mockReturnValue({
+      data: { controllerVersion: 'v1.7.0' },
+    } as never);
+    render(<Header />);
+    expect(screen.getByText('Version v1.7.0')).toBeInTheDocument();
+  });
+
+  it('hides the controller version when unavailable', () => {
+    render(<Header />);
+    expect(screen.queryByText(/Version/)).not.toBeInTheDocument();
+  });
   it('renders title "Metio"', () => {
     render(<Header />);
     expect(screen.getByRole('heading', { name: /Metio/i })).toBeInTheDocument();

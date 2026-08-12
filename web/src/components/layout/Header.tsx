@@ -1,4 +1,5 @@
 import { Gamepad2 } from 'lucide-react';
+import { useServerOptions } from '../../hooks/useServerOptions';
 
 export interface HeaderProps {
   /** User email to display */
@@ -20,6 +21,8 @@ export interface HeaderProps {
  * ```
  */
 export function Header({ email, showUser = false }: HeaderProps) {
+  const { data: options } = useServerOptions();
+
   return (
     <div className="page-header">
       <div>
@@ -28,6 +31,9 @@ export function Header({ email, showUser = false }: HeaderProps) {
           Metio
         </h1>
         <p className="subtitle">Minecraft Server Controller</p>
+        {options?.controllerVersion && (
+          <p className="text-xs text-slate-500">Version {options.controllerVersion}</p>
+        )}
       </div>
       {showUser && email && (
         <div className="header-user">
