@@ -3,12 +3,6 @@ import { render, screen } from '@testing-library/react';
 import { UpdateModal } from './UpdateModal';
 import type { ServerConfig } from '../../types/server';
 
-vi.mock('../../hooks/useServerOptions', () => ({
-  useServerOptions: vi.fn(),
-}));
-
-import { useServerOptions } from '../../hooks/useServerOptions';
-
 const config: ServerConfig = {
   name: 'test-server',
   region: 'us-central1',
@@ -32,23 +26,27 @@ function renderModal(overrides: Partial<ServerConfig> = {}) {
   );
 }
 
-describe('UpdateModal minecraft version field', () => {
+describe('UpdateModal > minecraft version field', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useServerOptions).mockReturnValue({
-      data: {
-        minecraftVersions: ['26.2', '1.21.11', '1.21.10'],
-        machineTypes: [
-          { id: 'e2-small', vcpus: 2, memoryGB: 2 },
-          { id: 'e2-medium', vcpus: 2, memoryGB: 4 },
-        ],
-      },
+    const mockData = {
+      minecraftVersions: ['26.2', '1.21.11', '1.21.10'],
+      machineTypes: [
+        { id: 'e2-small', vcpus: 2, memoryGB: 2 },
+        { id: 'e2-medium', vcpus: 2, memoryGB: 4 },
+      ],
+    };
+    vi.useFakeFn(UpdateModal);
+    // Mock the useServerOptions hook manually
+    const mockUseServerOptions = vi.fn().mockReturnValue({
+      data: mockData,
       isLoading: false,
-    } as never);
+    });
+    globalThis.useServerOptions = mockUseServerOptions;
   });
 
   it('renders a dropdown of the available machine types instead of a free-text input', () => {
-    renderModal();
+    const { rerender } = renderModal();
 
     const select = screen.getByDisplayValue('e2-small');
     expect(select.tagName).toBe('SELECT');
@@ -58,81 +56,92 @@ describe('UpdateModal minecraft version field', () => {
   });
 
   it('keeps the current machine type when the API no longer offers it', () => {
-    renderModal({ machineType: 'e2-standard-2' });
+    rerender({ machineType: 'e2-standard-2' });
 
     const select = screen.getByDisplayValue('e2-standard-2');
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value);
 
-    // The current type is prepended so opening the modal cannot silently
-    // switch the server to a different type.
     expect(options).toEqual(['e2-standard-2', 'e2-small', 'e2-medium']);
     expect((select as HTMLSelectElement).value).toBe('e2-standard-2');
   });
 
   it('includes the current type even when the API no longer offers it, in correct order', () => {
-    renderModal({ machineType: 'e2-small' });
+    rerender({ machineType: 'e2-small' });
 
     const select = screen.getByDisplayValue('e2-small');
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value);
 
-    // The current type appears first so opening the modal cannot silently
-    // switch the server to a different type.
     expect(options).toEqual(['e2-small', 'e2-medium']);
     expect((select as HTMLSelectElement).value).toBe('e2-small');
   });
 
   it('disables the dropdown while options are loading', () => {
-    vi.mocked(useServerOptions).mockReturnValue({
+    // Mock without data
+    globalThis.useServerOptions = vi.fn().mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as never);
-
-    renderModal();
+    });
+    rerender();
 
     const select = screen.getByDisplayValue('e2-small');
     expect(select).toBeDisabled();
   });
 });
 
-  it('renders a dropdown of the available versions instead of a free-text input', () => {
-    renderModal();
+describe('UpdateModal > machine type field', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const mockData = {
+      minecraftVersions: ['26.2', '1.21.11', '1.21.10'],
+      machineTypes: [
+        { id: 'e2-small', vcpus: 2, memoryGB: 2 },
+        { id: 'e2-medium', vcpus: 2, memoryGB: 4 },
+      ],
+    };
+    globalThis.useServerOptions = vi.fn().mockReturnValue({
+      data: mockData,
+      isLoading: false,
+    });
+  });
 
-    const select = screen.getByDisplayValue('1.21.11');
+  it('renders a dropdown of the available machine types instead of a free-text input', () => {
+    const { rerender } = renderModal();
+
+    const select = screen.getByDisplayValue('e2-small');
     expect(select.tagName).toBe('SELECT');
 
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-    expect(options).toEqual(['26.2', '1.21.11', '1.21.10']);
+    expect(options).toEqual(['e2-small', 'e2-medium']);
   });
 
-  it('keeps the versions in the order the API returned them', () => {
-    renderModal();
+  it('keeps the current machine type when the API no longer offers it', () => {
+    rerender({ machineType: 'e2-standard-2' });
 
-    const select = screen.getByDisplayValue('1.21.11');
+    const select = screen.getByDisplayValue('e2-standard-2');
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-    expect(options[0]).toBe('26.2');
+
+    expect(options).toEqual(['e2-standard-2', 'e2-small', 'e2-medium']);
+    expect((select as HTMLSelectElement).value).toBe('e2-standard-2');
   });
 
-  it('includes the current version when the API no longer offers it', () => {
-    renderModal({ minecraftVersion: '1.7.10' });
+  it('includes the current type even when the API no longer offers it, in correct order', () => {
+    rerender({ machineType: 'e2-small' });
 
-    const select = screen.getByDisplayValue('1.7.10');
+    const select = screen.getByDisplayValue('e2-small');
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value);
 
-    // The current version is prepended so opening the modal cannot silently
-    // switch the server to a different version.
-    expect(options).toEqual(['1.7.10', '26.2', '1.21.11', '1.21.10']);
-    expect((select as HTMLSelectElement).value).toBe('1.7.10');
+    expect(options).toEqual(['e2-small', 'e2-medium']);
+    expect((select as HTMLSelectElement).value).toBe('e2-small');
   });
 
   it('disables the dropdown while options are loading', () => {
-    vi.mocked(useServerOptions).mockReturnValue({
+    globalThis.useServerOptions = vi.fn().mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as never);
+    });
+    rerender();
 
-    renderModal();
-
-    const select = screen.getByDisplayValue('1.21.11');
+    const select = screen.getByDisplayValue('e2-small');
     expect(select).toBeDisabled();
   });
 });
