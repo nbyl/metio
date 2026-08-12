@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Frontend build
-FROM node:22-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 WORKDIR /app
 COPY web/package*.json ./web/
 RUN cd web && npm ci
@@ -31,7 +31,7 @@ ARG VERSION=local
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.Version=${VERSION}" -o build/controller ./cmd/controller
 
 # Stage 3: Runtime
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates && \
     adduser -D -u 65532 nonroot
 EXPOSE 8080
