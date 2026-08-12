@@ -2035,3 +2035,104 @@ func TestUpdateServer_UnavailableVersionUnchangedStillSucceeds(t *testing.T) {
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 }
+
+// stubGCPRegions overrides the region list handlers validate against,
+// returning a function that restores the previous value.
+func stubGCPRegions(regions []servers.RegionOption) func() {
+	orig := servers.ListGCPRegions
+	servers.ListGCPRegions = func(ctx context.Context) []servers.RegionOption { return regions }
+	return func() { servers.ListGCPRegions = orig }
+}
+
+func TestListOptions_UsesDynamicRegions(t *testing.T) {
+	restore := stubGCPRegions([]servers.RegionOption{{ID: "us-central1", Zones: []string{"us-central1-a", "us-central1-b"}}})
+	defer restore()
+
+	req := httptest.NewRequest("GET", "/api/options", nil)
+	w := httptest.NewRecorder()
+	servers.ListOptions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.OptionsResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, []servers.RegionOption{{ID: "us-central1", Zones: []string{"us-central1-a", "us-central1-b"}}}, response.Regions)
+	assert.NotEmpty(t, response.MachineTypes)
+}
+
+func TestCreateServer_UnavailableRegion(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	restore := stubGCPRegions([]servers.RegionOption{{ID: "europe-west1", Zones: []string{"europe-west1-b"}}})
+	defer restore()
+
+	body, _ := json.Marshal(servers.CreateServerRequest{
+		Name: "test-server", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	})
+	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	servers.CreateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "not available")
+	// Nothing may be persisted for a rejected create.
+	mockDB.AssertNotCalled(t, "CreateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestCreateServer_UnavailableZone(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	// The region is offered, but the requested zone is not.
+	restore := stubGCPRegions([]servers.RegionOption{{ID: "us-central1", Zones: []string{"us-central1-b"}}})
+	defer restore()
+
+	body, _ := json.Marshal(servers.CreateServerRequest{
+		Name: "test-server", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", MinecraftVersion: "1.21.1", DiskSizeGB: 50,
+	})
+	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	servers.CreateServer(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "not available")
+	mockDB.AssertNotCalled(t, "CreateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// A server located in a region/zone the dynamic list no longer offers must
+// stay editable for its other settings; location is immutable on update, so
+// it is only validated at create time.
+func TestUpdateServer_UnavailableRegionUnchangedStillSucceeds(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	mockPS := new(testutil.MockProvisioningService)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+	restore := stubGCPRegions([]servers.RegionOption{{ID: "europe-west1", Zones: []string{"europe-west1-b"}}})
+	defer restore()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+		MachineType: "e2-small", DiskSizeGB: 50, MinecraftVersion: "1.21.1",
+	}, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{
+		{ID: "srv1", Name: "test-instance"},
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	name := "renamed-server"
+	body, _ := json.Marshal(servers.UpdateServerRequest{Name: &name})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateServer(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	mockDB.AssertCalled(t, "UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig"))
+}

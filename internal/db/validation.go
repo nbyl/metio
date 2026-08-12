@@ -8,6 +8,8 @@ import (
 var (
 	nameRegex       = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$`)
 	timeRegex       = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):[0-5][0-9]$`)
+	regionRegex     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	zoneRegex       = regexp.MustCompile(`^[a-z][a-z0-9-]*?-[a-z]$`)
 	validGCPRegions = map[string]bool{
 		"us-central1":             true,
 		"us-east1":                true,
@@ -190,41 +192,31 @@ func ValidateServerName(name string) error {
 	return nil
 }
 
+// ValidateRegion checks the region's format only. Membership against the
+// currently offered set is enforced at the handler layer against the same
+// dynamic source /api/options serves, so this validator stays stable while
+// the offered set changes over time.
 func ValidateRegion(region string) error {
 	if region == "" {
 		return fmt.Errorf("region is required")
 	}
-	if !validGCPRegions[region] {
-		return fmt.Errorf("invalid GCP region: %s", region)
+	if !regionRegex.MatchString(region) {
+		return fmt.Errorf("invalid GCP region format: %s", region)
 	}
 	return nil
 }
 
+// ValidateZone checks the zone's format only. Membership against the
+// currently offered set is enforced at the handler layer against the same
+// dynamic source /api/options serves.
 func ValidateZone(zone string) error {
 	if zone == "" {
 		return fmt.Errorf("zone is required")
 	}
-	region := extractRegion(zone)
-	if region == "" {
-		return fmt.Errorf("invalid zone format: %s", zone)
-	}
-	zones, ok := validGCPTZonesByRegion[region]
-	if !ok {
-		return fmt.Errorf("invalid zone: %s", zone)
-	}
-	if !zones[zone] {
-		return fmt.Errorf("invalid zone %s for region %s", zone, region)
+	if !zoneRegex.MatchString(zone) {
+		return fmt.Errorf("invalid GCP zone format: %s", zone)
 	}
 	return nil
-}
-
-func extractRegion(zone string) string {
-	for region, zones := range validGCPTZonesByRegion {
-		if zones[zone] {
-			return region
-		}
-	}
-	return ""
 }
 
 func ValidateMachineType(machineType string) error {
