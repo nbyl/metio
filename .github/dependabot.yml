@@ -4,46 +4,116 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 4
     labels:
       - dependencies
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 4
     labels:
       - dependencies
+    groups:
+      go-modules:
+        applies-to: version-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 4
     labels:
       - dependencies
+    ignore:
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+    groups:
+      npm-production:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      npm-development:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      npm-production-major:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - major
+      npm-development-major:
+        applies-to: version-updates
+        dependency-type: development
+        update-types:
+          - major
 
   - package-ecosystem: docker
     directory: /cmd/controller
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 4
     labels:
       - dependencies
+    groups:
+      controller-images:
+        applies-to: version-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /cmd/machine-agent
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 4
     labels:
       - dependencies
+    groups:
+      machine-agent-images:
+        applies-to: version-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /deploy/daprd
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: UTC
+    open-pull-requests-limit: 4
     labels:
       - dependencies
+    groups:
+      daprd-images:
+        applies-to: version-updates
+        patterns:
+          - "*"

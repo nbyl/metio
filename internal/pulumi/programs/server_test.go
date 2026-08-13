@@ -1,13 +1,11 @@
 package programs
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"regexp"
 	"testing"
 
-	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
 )
@@ -83,20 +81,6 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	return e.Field + ": " + e.Message
-}
-
-type MockContext struct {
-	context.Context
-	resources map[string]*resource.State
-	exports   map[string]interface{}
-}
-
-func NewMockContext() *MockContext {
-	return &MockContext{
-		Context:   context.Background(),
-		resources: make(map[string]*resource.State),
-		exports:   make(map[string]interface{}),
-	}
 }
 
 type MockResourceRegistry struct {
