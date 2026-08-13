@@ -72,16 +72,16 @@ func TestDaprDB_Integration_WhitelistCRUD(t *testing.T) {
 	assert.True(t, gotConfig.Enabled)
 
 	entry1 := WhitelistEntry{
-		Username:  "player1",
-		UUID:      uuid.NewString(),
-		AddedAt:   time.Now(),
-		AddedBy:   "integration-test",
+		Username: "player1",
+		UUID:     uuid.NewString(),
+		AddedAt:  time.Now(),
+		AddedBy:  "integration-test",
 	}
 	entry2 := WhitelistEntry{
-		Username:  "player2",
-		UUID:      uuid.NewString(),
-		AddedAt:   time.Now(),
-		AddedBy:   "integration-test",
+		Username: "player2",
+		UUID:     uuid.NewString(),
+		AddedAt:  time.Now(),
+		AddedBy:  "integration-test",
 	}
 
 	err = db.AddWhitelistEntry(ctx, instance, entry1)
@@ -167,11 +167,11 @@ func TestDaprDB_Integration_ServerConfigCRUD(t *testing.T) {
 	serverID := fmt.Sprintf("test-config-%s", id)
 
 	config := &ServerConfig{
-		Name:       "integration-test-server",
-		Region:     "us-central1",
-		Zone:       "us-central1-a",
+		Name:        "integration-test-server",
+		Region:      "us-central1",
+		Zone:        "us-central1-a",
 		MachineType: "e2-small",
-		DiskSizeGB: 20,
+		DiskSizeGB:  20,
 	}
 	err := db.CreateServerConfig(ctx, serverID, config)
 	require.NoError(t, err)
