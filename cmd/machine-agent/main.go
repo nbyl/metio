@@ -43,7 +43,7 @@ var handlePendingCommandFunc = func(ctx context.Context, client agentclient.Agen
 type WarningState int
 
 const (
-	WarningStateNone    WarningState = iota
+	WarningStateNone WarningState = iota
 	WarningStateFiveMin
 	WarningStateOneMin
 )
