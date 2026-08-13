@@ -319,7 +319,9 @@ func TestRunStatusUpdate_VersionError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 5, 20, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "", "", fmt.Errorf("version error") }
-	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return false, nil
+	}
 	getInstanceIPFunc = func() (string, error) { return "1.2.3.4:25565", nil }
 	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
@@ -350,7 +352,9 @@ func TestRunStatusUpdate_IPError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 5, 20, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return false, nil
+	}
 	getInstanceIPFunc = func() (string, error) { return "", fmt.Errorf("metadata error") }
 	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
@@ -1275,7 +1279,9 @@ func TestRunStatusUpdate_FullSuccess(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return true, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return true, nil
+	}
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
 	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
@@ -1307,7 +1313,9 @@ func TestRunStatusUpdate_CheckShutdownError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return false, nil
+	}
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
 	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
 		return fmt.Errorf("shutdown check error")
@@ -1375,7 +1383,9 @@ func TestRunStatusUpdate_UpdateStatusError(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
-	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return false, nil
+	}
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
 	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
@@ -1407,7 +1417,9 @@ func TestRunStatusUpdate_VersionWithRawOutput(t *testing.T) {
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 3, 10, nil }
 	getUptimeFunc = func() (string, error) { return "1:00", nil }
 	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "raw output here", nil }
-	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) { return false, nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return false, nil
+	}
 	getInstanceIPFunc = func() (string, error) { return "10.0.0.1:25565", nil }
 	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
 	defer func() {
