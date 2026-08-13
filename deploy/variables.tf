@@ -66,3 +66,14 @@ variable "postgres_connection_string_secret_id" {
     error_message = "postgres_connection_string_secret_id must be set when postgres_mode is \"byo\"."
   }
 }
+
+variable "backup_deleted_server_retention_days" {
+  description = "How long backups are kept after a server is deleted (ADR-0004). Defaults to 30 days."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.backup_deleted_server_retention_days > 0
+    error_message = "backup_deleted_server_retention_days must be a positive number of days."
+  }
+}

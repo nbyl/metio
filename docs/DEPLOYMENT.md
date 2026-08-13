@@ -349,9 +349,59 @@ curl -X POST https://<controller-url>/api/servers/<server-id>/stop
 
 ### Backup Management
 
-Backups are managed through the Pulumi stack for each server. The backup bucket is created automatically with `ForceDestroy: true` and versioning enabled. Backups run before destructive operations (e.g., machine type changes).
+Since [ADR-0004](./adr/0004-centralized-backup-catalog-and-restore.md), backups no longer live in a
+per-server bucket. A single deployment-wide bucket holds every server's Restic repository under a
+per-server prefix:
 
-To manually trigger a world save from the dashboard, use the **Save World** button.
+```text
+{project_id}-{environment}-backups            # central bucket (provisioned by OpenTofu)
+servers/{server-id}/restic/                   # a server's Restic repository prefix
+```
+
+The central bucket and infrastructure are created during `tofu apply`:
+
+- `google_storage_bucket.backups` — the central bucket (`{project_id}-{environment}-backups`). It is
+  deliberately **not** `force_destroy`; deleting a server does not delete its backups.
+- Secret Manager secret `{environment}-backup-restic-password` — the deployment-wide Restic password
+  (randomly generated, not the RCON password). The controller reads it to configure each server's
+  `mc-backup` container.
+- Bucket IAM: the controller service account gets `roles/storage.objectAdmin` on the central bucket;
+  each server VM service account gets object access **scoped to its own prefix** (created by the
+  Pulumi server program).
+
+Retention:
+
+- **Active servers**: Restic `--keep-within ${backupRetentionDays}d` (default **90 days**) on each
+  server's repository.
+- **Deleted servers**: backups are kept for `BACKUP_DELETED_SERVER_RETENTION_DAYS` (default
+  **30 days**) after deletion, controlled by the controller. Configure it at deploy time via
+  `backup_deleted_server_retention_days` in `deploy/metio.auto.tfvars`.
+
+Backups run on the standard hourly schedule from `mc-backup`. A manual world save can be triggered
+from the dashboard with the **Save World** button.
+
+#### Manual Restic access
+
+Operators can inspect a server's repository from a workstation:
+
+```bash
+export GCP_PROJECT="<project-id>"
+export ENVIRONMENT="<environment>"
+export SERVER_ID="<server-id>"
+
+export RESTIC_REPOSITORY="gs:${GCP_PROJECT}-${ENVIRONMENT}-backups:/servers/${SERVER_ID}/restic"
+export RESTIC_PASSWORD="$(gcloud secrets versions access latest \
+  --secret=${ENVIRONMENT}-backup-restic-password)"
+
+restic snapshots
+restic stats --mode raw-data
+```
+
+> **Warning**: the deployment-wide password grants access to **every** server repository. Do not run
+> `restic forget`/`restic prune` against a repository unless you intend to remove snapshots there.
+
+See [ADR-0004](./adr/0004-centralized-backup-catalog-and-restore.md) for the full design, including
+restore/clone flows that build on this infrastructure.
 
 ### Updating Infrastructure
 
@@ -400,7 +450,7 @@ Builds both images and applies all OpenTofu infrastructure.
 | State store unreachable | Dapr sidecar failed to start | Check the controller's `daprd` container logs and the `postgres-connection-string` secret / Postgres connectivity |
 | Pulumi state locked | Concurrent operation | Wait for the operation to complete or use `pulumi cancel` manually |
 | "Instance not found" | VM was manually deleted | Destroy and recreate the server from the dashboard |
-| Backup bucket deletion fails | Objects exist in the bucket | Destroy individual servers first (this cleans up their resources) |
+| Server backups stop working | Restic password secret missing or stale | Confirm the `{environment}-backup-restic-password` secret has a current version; rotate by adding a new version |
 
 ### GitHub Actions CI/CD (Optional)
 

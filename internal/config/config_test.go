@@ -115,3 +115,60 @@ func TestLoadWithMetadata_FailsOutsideGCE(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get project ID from metadata")
 }
+
+func TestLoad_BackupDeletedServerRetentionDaysDefault(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	os.Unsetenv("BACKUP_DELETED_SERVER_RETENTION_DAYS")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, DefaultBackupDeletedServerRetentionDays, cfg.BackupDeletedServerRetentionDays)
+}
+
+func TestLoad_BackupDeletedServerRetentionDaysCustom(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	t.Setenv("BACKUP_DELETED_SERVER_RETENTION_DAYS", "60")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, 60, cfg.BackupDeletedServerRetentionDays)
+}
+
+func TestLoad_BackupDeletedServerRetentionDaysInvalid(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+
+	for _, raw := range []string{"0", "-5", "abc"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("BACKUP_DELETED_SERVER_RETENTION_DAYS", raw)
+
+			_, err := Load()
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "BACKUP_DELETED_SERVER_RETENTION_DAYS")
+		})
+	}
+}
+
+func TestLoad_BackupResticPassword(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	t.Setenv("BACKUP_RESTIC_PASSWORD", "super-secret-password")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, "super-secret-password", cfg.BackupResticPassword)
+}

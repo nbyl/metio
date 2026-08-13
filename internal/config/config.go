@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/nbyl/metio/internal/db"
@@ -15,23 +16,26 @@ import (
 
 // Config holds the configuration needed for database connections and service identification.
 type Config struct {
-	Environment              string
-	Region                   string
-	ProjectID                string
-	MachineAgentImage        string
-	OperationMode            string
-	BaseURL                  string
-	CloudTasksQueue          string
-	CloudTasksRegion         string
-	ControllerServiceAccount string
-	ControllerVersion        string
-	DaprStateStoreName       string
+	Environment                      string
+	Region                           string
+	ProjectID                        string
+	MachineAgentImage                string
+	OperationMode                    string
+	BaseURL                          string
+	CloudTasksQueue                  string
+	CloudTasksRegion                 string
+	ControllerServiceAccount         string
+	ControllerVersion                string
+	DaprStateStoreName               string
+	BackupResticPassword             string
+	BackupDeletedServerRetentionDays int
 }
 
 // Default values for configuration
 const (
-	DefaultEnvironment = "development"
-	DefaultRegion      = "us-central1"
+	DefaultEnvironment                      = "development"
+	DefaultRegion                           = "us-central1"
+	DefaultBackupDeletedServerRetentionDays = 30
 )
 
 // Load reads configuration from environment variables via viper.
@@ -57,6 +61,7 @@ func Load() (Config, error) {
 		CloudTasksQueue:          viper.GetString("CLOUD_TASKS_QUEUE"),
 		CloudTasksRegion:         viper.GetString("CLOUD_TASKS_REGION"),
 		ControllerServiceAccount: viper.GetString("CONTROLLER_SERVICE_ACCOUNT"),
+		BackupResticPassword:     viper.GetString("BACKUP_RESTIC_PASSWORD"),
 	}
 
 	daprStateStoreName := viper.GetString("DAPR_STATE_STORE_NAME")
@@ -64,6 +69,16 @@ func Load() (Config, error) {
 		daprStateStoreName = "statestore"
 	}
 	cfg.DaprStateStoreName = daprStateStoreName
+
+	backupDeletedServerRetentionDays := DefaultBackupDeletedServerRetentionDays
+	if raw := viper.GetString("BACKUP_DELETED_SERVER_RETENTION_DAYS"); raw != "" {
+		days, err := strconv.Atoi(raw)
+		if err != nil || days <= 0 {
+			return Config{}, fmt.Errorf("BACKUP_DELETED_SERVER_RETENTION_DAYS must be a positive integer, got %q", raw)
+		}
+		backupDeletedServerRetentionDays = days
+	}
+	cfg.BackupDeletedServerRetentionDays = backupDeletedServerRetentionDays
 
 	if cfg.MachineAgentImage == "" {
 		log.Print("MACHINE_AGENT_IMAGE is not set")

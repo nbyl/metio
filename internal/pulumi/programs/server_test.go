@@ -160,6 +160,35 @@ func TestServerID_BelongsInLabelsNotTags(t *testing.T) {
 		"ServerID UUID must be valid as a GCP label value")
 }
 
+func TestCentralBackupBucketName(t *testing.T) {
+	assert.Equal(t, "my-project-development-backups", centralBackupBucketName("my-project", "development"))
+	assert.Equal(t, "proj-123-prod-backups", centralBackupBucketName("proj-123", "prod"))
+}
+
+func TestServerBackupPrefix(t *testing.T) {
+	assert.Equal(t, "servers/abc-123/restic", serverBackupPrefix("abc-123"))
+}
+
+func TestBackupPrefixCondition(t *testing.T) {
+	cond := backupPrefixCondition("my-project-development-backups", "abc-123")
+	assert.Equal(t,
+		`resource.name.startsWith("projects/_/buckets/my-project-development-backups/objects/servers/abc-123/restic/")`,
+		cond)
+}
+
+func TestServerConfigDefaults_CentralBackup(t *testing.T) {
+	config := &ServerConfig{
+		Name:        "test-server",
+		ServerID:    "srv-1",
+		GCPProject:  "my-project",
+		Environment: "development",
+	}
+
+	assert.Equal(t, "my-project-development-backups", centralBackupBucketName(config.GCPProject, config.Environment))
+	assert.Equal(t, "servers/srv-1/restic", serverBackupPrefix(config.ServerID))
+	assert.Equal(t, 0, config.BackupRetentionDays, "zero means the program default (90) applies")
+}
+
 func TestExistingAddressImportID(t *testing.T) {
 	tests := []struct {
 		name     string

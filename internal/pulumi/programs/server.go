@@ -29,11 +29,52 @@ type ServerConfig struct {
 	ControllerURL     string
 	AgentToken        string
 
+	// BackupBucket is the deployment-wide central backup bucket (ADR-0004).
+	// When empty it is derived from GCPProject and Environment as
+	// "{project}-{environment}-backups", matching what the deployment
+	// infrastructure provisions.
+	BackupBucket string
+
+	// BackupRetentionDays controls how long Restic keeps snapshots on an active
+	// server (PRUNE_RESTIC_RETENTION). Defaults to 90 days when unset.
+	BackupRetentionDays int
+
+	// BackupResticPassword is the deployment-wide Restic password stored in
+	// Secret Manager. It must not reuse the RCON password. When empty it falls
+	// back to RCONPassword for local development only.
+	BackupResticPassword string
+
+	// RetainLegacyBackupBucket adopts the pre-existing per-server backup bucket
+	// with retain-on-delete during the ADR-0004 rollout so the bucket and its
+	// snapshots are never destroyed. New stacks must leave it false so no
+	// server-owned bucket is created.
+	RetainLegacyBackupBucket bool
+
 	// ImportExistingAddress adopts the pre-existing GCP address named by
 	// ExistingAddress into the stack instead of creating a new one. It is only
 	// set on the initial create; updates must leave it false so that an
 	// already-managed address is never re-imported.
 	ImportExistingAddress bool
+}
+
+// centralBackupBucketName returns the deployment-wide central backup bucket
+// name for a project and environment (ADR-0004).
+func centralBackupBucketName(projectID, environment string) string {
+	return fmt.Sprintf("%s-%s-backups", projectID, environment)
+}
+
+// serverBackupPrefix returns the object prefix under which a server's Restic
+// repository lives inside the central backup bucket.
+func serverBackupPrefix(serverID string) string {
+	return fmt.Sprintf("servers/%s/restic", serverID)
+}
+
+// backupPrefixCondition returns the IAM condition expression that scopes a
+// principal's object access to a single server's Restic prefix inside the
+// central bucket (least privilege).
+func backupPrefixCondition(bucket, serverID string) string {
+	return fmt.Sprintf("resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\")",
+		bucket, serverBackupPrefix(serverID))
 }
 
 // existingAddressImportID returns the Pulumi import ID for a pre-existing GCP
@@ -71,20 +112,31 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		if config.RCONPassword == "" {
 			config.RCONPassword = "minecraft2025"
 		}
-
-		backupBucketName := fmt.Sprintf("%s-%s-backups", config.GCPProject, config.Name)
+		if config.BackupBucket == "" {
+			config.BackupBucket = centralBackupBucketName(config.GCPProject, config.Environment)
+		}
+		if config.BackupRetentionDays == 0 {
+			config.BackupRetentionDays = 90
+		}
+		resticPassword := config.BackupResticPassword
+		if resticPassword == "" {
+			resticPassword = config.RCONPassword
+		}
 
 		userData, err := RenderCloudConfig(&TemplateConfig{
-			Region:            config.Region,
-			GCPProject:        config.GCPProject,
-			Environment:       config.Environment,
-			InstanceName:      config.Name,
-			BackupBucket:      backupBucketName,
-			MachineAgentImage: config.MachineAgentImage,
-			MinecraftVersion:  config.MinecraftVersion,
-			RCONPassword:      config.RCONPassword,
-			ControllerURL:     config.ControllerURL,
-			AgentToken:        config.AgentToken,
+			Region:              config.Region,
+			GCPProject:          config.GCPProject,
+			Environment:         config.Environment,
+			InstanceName:        config.Name,
+			BackupBucket:        config.BackupBucket,
+			ServerID:            config.ServerID,
+			BackupRetentionDays: config.BackupRetentionDays,
+			ResticPassword:      resticPassword,
+			MachineAgentImage:   config.MachineAgentImage,
+			MinecraftVersion:    config.MinecraftVersion,
+			RCONPassword:        config.RCONPassword,
+			ControllerURL:       config.ControllerURL,
+			AgentToken:          config.AgentToken,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
@@ -122,20 +174,34 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			}
 		}
 
-		backupBucket, err := storage.NewBucket(ctx, fmt.Sprintf("%s-backup-bucket", config.Name), &storage.BucketArgs{
-			Name:                     pulumi.String(backupBucketName),
-			Location:                 pulumi.String(config.Region),
-			UniformBucketLevelAccess: pulumi.Bool(true),
-			ForceDestroy:             pulumi.Bool(true),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create backup bucket: %w", err)
+		if config.RetainLegacyBackupBucket {
+			// ADR-0004 migration: adopt the pre-existing per-server bucket with
+			// retain-on-delete so the first central-backup rollout never
+			// destroys existing snapshots. The bucket is kept managed but
+			// retained; a later cleanup step can drop this resource safely.
+			legacyBucketName := fmt.Sprintf("%s-%s-backups", config.GCPProject, config.Name)
+			_, err = storage.NewBucket(ctx, fmt.Sprintf("%s-backup-bucket", config.Name), &storage.BucketArgs{
+				Name:                     pulumi.String(legacyBucketName),
+				Location:                 pulumi.String(config.Region),
+				UniformBucketLevelAccess: pulumi.Bool(true),
+				ForceDestroy:             pulumi.Bool(true),
+			}, pulumi.RetainOnDelete(true))
+			if err != nil {
+				return fmt.Errorf("failed to retain legacy backup bucket: %w", err)
+			}
 		}
 
+		// Grant the VM service account object access scoped to this server's
+		// Restic prefix inside the central bucket (least privilege).
 		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-admin", config.Name), &storage.BucketIAMMemberArgs{
-			Bucket: backupBucket.Name,
+			Bucket: pulumi.String(config.BackupBucket),
 			Role:   pulumi.String("roles/storage.objectAdmin"),
 			Member: pulumi.Sprintf("serviceAccount:%s", sa.Email),
+			Condition: &storage.BucketIAMMemberConditionArgs{
+				Title:       pulumi.String("server-backup-prefix"),
+				Description: pulumi.String("Limit access to this server's Restic repository prefix"),
+				Expression:  pulumi.String(backupPrefixCondition(config.BackupBucket, config.ServerID)),
+			},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to grant backup bucket access: %w", err)
@@ -288,7 +354,8 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		ctx.Export("zone", pulumi.String(config.Zone))
 		ctx.Export("diskName", disk.Name)
 		ctx.Export("serviceAccount", sa.Email)
-		ctx.Export("backupBucket", pulumi.String(backupBucketName))
+		ctx.Export("backupBucket", pulumi.String(config.BackupBucket))
+		ctx.Export("backupPrefix", pulumi.String(serverBackupPrefix(config.ServerID)))
 
 		return nil
 	}
