@@ -1,6 +1,6 @@
 # ADR-0004: Centralized Backup Catalog and Restore
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-13
 - **Deciders:** Metio maintainers
 
