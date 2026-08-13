@@ -56,19 +56,21 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	programConfig := &programs.ServerConfig{
-		Name:              serverConfig.Name,
-		ServerID:          serverID,
-		Region:            serverConfig.Region,
-		Zone:              serverConfig.Zone,
-		MachineType:       serverConfig.MachineType,
-		MinecraftVersion:  serverConfig.MinecraftVersion,
-		DiskSizeGB:        serverConfig.DiskSizeGB,
-		Environment:       cfg.Environment,
-		MachineAgentImage: cfg.MachineAgentImage,
-		GCPProject:        cfg.ProjectID,
-		ExistingAddress:   serverConfig.ExistingAddress,
-		ControllerURL:     cfg.BaseURL,
-		AgentToken:        token,
+		Name:                     serverConfig.Name,
+		ServerID:                 serverID,
+		Region:                   serverConfig.Region,
+		Zone:                     serverConfig.Zone,
+		MachineType:              serverConfig.MachineType,
+		MinecraftVersion:         serverConfig.MinecraftVersion,
+		DiskSizeGB:               serverConfig.DiskSizeGB,
+		Environment:              cfg.Environment,
+		MachineAgentImage:        cfg.MachineAgentImage,
+		GCPProject:               cfg.ProjectID,
+		ExistingAddress:          serverConfig.ExistingAddress,
+		ControllerURL:            cfg.BaseURL,
+		AgentToken:               token,
+		BackupResticPassword:     cfg.BackupResticPassword,
+		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
 	}
 
 	log.Printf("[tasks] Executing provisioning for server %s", serverID)

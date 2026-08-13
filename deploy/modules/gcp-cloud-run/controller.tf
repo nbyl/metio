@@ -332,6 +332,19 @@ resource "google_cloud_run_v2_service" "controller" {
         name  = "DAPR_GRPC_PORT"
         value = "50001"
       }
+      env {
+        name  = "BACKUP_DELETED_SERVER_RETENTION_DAYS"
+        value = tostring(var.backup_deleted_server_retention_days)
+      }
+      env {
+        name = "BACKUP_RESTIC_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.backup_restic_password.secret_id
+            version = "latest"
+          }
+        }
+      }
 
     }
     containers {

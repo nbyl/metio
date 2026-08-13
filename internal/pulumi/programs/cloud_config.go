@@ -2,6 +2,7 @@ package programs
 
 import (
 	_ "embed"
+	"strconv"
 	"strings"
 )
 
@@ -9,16 +10,19 @@ import (
 var cloudConfigTemplate string
 
 type TemplateConfig struct {
-	Region            string
-	GCPProject        string
-	Environment       string
-	InstanceName      string
-	BackupBucket      string
-	MachineAgentImage string
-	MinecraftVersion  string
-	RCONPassword      string
-	ControllerURL     string
-	AgentToken        string
+	Region              string
+	GCPProject          string
+	Environment         string
+	InstanceName        string
+	BackupBucket        string
+	ServerID            string
+	BackupRetentionDays int
+	ResticPassword      string
+	MachineAgentImage   string
+	MinecraftVersion    string
+	RCONPassword        string
+	ControllerURL       string
+	AgentToken          string
 }
 
 func imageRegistryHost(image string, fallbackRegion string) string {
@@ -33,17 +37,20 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 	imageHost := imageRegistryHost(config.MachineAgentImage, config.Region)
 
 	replacements := map[string]string{
-		"${region}":            config.Region,
-		"${gcpProject}":        config.GCPProject,
-		"${environment}":       config.Environment,
-		"${instanceName}":      config.InstanceName,
-		"${backupBucket}":      config.BackupBucket,
-		"${machineAgentImage}": config.MachineAgentImage,
-		"${minecraftVersion}":  config.MinecraftVersion,
-		"${rconPassword}":      config.RCONPassword,
-		"${controllerUrl}":     config.ControllerURL,
-		"${agentToken}":        config.AgentToken,
-		"${imageRegistryHost}": imageHost,
+		"${region}":              config.Region,
+		"${gcpProject}":          config.GCPProject,
+		"${environment}":         config.Environment,
+		"${instanceName}":        config.InstanceName,
+		"${backupBucket}":        config.BackupBucket,
+		"${serverId}":            config.ServerID,
+		"${backupRetentionDays}": strconv.Itoa(config.BackupRetentionDays),
+		"${resticPassword}":      config.ResticPassword,
+		"${machineAgentImage}":   config.MachineAgentImage,
+		"${minecraftVersion}":    config.MinecraftVersion,
+		"${rconPassword}":        config.RCONPassword,
+		"${controllerUrl}":       config.ControllerURL,
+		"${agentToken}":          config.AgentToken,
+		"${imageRegistryHost}":   imageHost,
 	}
 
 	result := cloudConfigTemplate

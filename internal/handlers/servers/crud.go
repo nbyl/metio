@@ -118,19 +118,21 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	programConfig := &programs.ServerConfig{
-		Name:              req.Name,
-		ServerID:          serverID,
-		Region:            req.Region,
-		Zone:              req.Zone,
-		MachineType:       req.MachineType,
-		MinecraftVersion:  req.MinecraftVersion,
-		DiskSizeGB:        req.DiskSizeGB,
-		Environment:       cfg.Environment,
-		MachineAgentImage: cfg.MachineAgentImage,
-		GCPProject:        cfg.ProjectID,
-		ExistingAddress:   req.ExistingAddress,
-		ControllerURL:     cfg.BaseURL,
-		AgentToken:        token,
+		Name:                     req.Name,
+		ServerID:                 serverID,
+		Region:                   req.Region,
+		Zone:                     req.Zone,
+		MachineType:              req.MachineType,
+		MinecraftVersion:         req.MinecraftVersion,
+		DiskSizeGB:               req.DiskSizeGB,
+		Environment:              cfg.Environment,
+		MachineAgentImage:        cfg.MachineAgentImage,
+		GCPProject:               cfg.ProjectID,
+		ExistingAddress:          req.ExistingAddress,
+		ControllerURL:            cfg.BaseURL,
+		AgentToken:               token,
+		BackupResticPassword:     cfg.BackupResticPassword,
+		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
 	}
 
 	if err := ProvisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
@@ -365,19 +367,21 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	programConfig := &programs.ServerConfig{
-		Name:              existingConfig.Name,
-		ServerID:          serverID,
-		Region:            existingConfig.Region,
-		Zone:              existingConfig.Zone,
-		MachineType:       existingConfig.MachineType,
-		MinecraftVersion:  existingConfig.MinecraftVersion,
-		DiskSizeGB:        existingConfig.DiskSizeGB,
-		Environment:       cfg.Environment,
-		MachineAgentImage: cfg.MachineAgentImage,
-		GCPProject:        cfg.ProjectID,
-		ExistingAddress:   existingConfig.ExistingAddress,
-		ControllerURL:     cfg.BaseURL,
-		AgentToken:        token,
+		Name:                     existingConfig.Name,
+		ServerID:                 serverID,
+		Region:                   existingConfig.Region,
+		Zone:                     existingConfig.Zone,
+		MachineType:              existingConfig.MachineType,
+		MinecraftVersion:         existingConfig.MinecraftVersion,
+		DiskSizeGB:               existingConfig.DiskSizeGB,
+		Environment:              cfg.Environment,
+		MachineAgentImage:        cfg.MachineAgentImage,
+		GCPProject:               cfg.ProjectID,
+		ExistingAddress:          existingConfig.ExistingAddress,
+		ControllerURL:            cfg.BaseURL,
+		AgentToken:               token,
+		BackupResticPassword:     cfg.BackupResticPassword,
+		RetainLegacyBackupBucket: existingConfig.InfraVersion > 0 && existingConfig.InfraVersion < programs.CurrentInfraVersion,
 	}
 
 	if err := ProvisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {

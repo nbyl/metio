@@ -19,6 +19,17 @@ jobs:
       - run: make verify-backend test-backend
       - run: make build-web test-web lint-web
 
+  tofu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: '1.12.5'
+      - run: tofu -chdir=deploy fmt -check -recursive
+      - run: tofu -chdir=deploy init -backend=false
+      - run: tofu -chdir=deploy validate
+
   docker:
     needs: test
     runs-on: ubuntu-latest

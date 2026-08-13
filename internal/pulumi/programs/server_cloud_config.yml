@@ -64,9 +64,9 @@ write_files:
         --network host \
         -e BACKUP_METHOD=restic \
         -e BACKUP_INTERVAL=1h \
-        -e PRUNE_RESTIC_RETENTION="--keep-within 3m" \
-        -e RESTIC_REPOSITORY=gs:${backupBucket}:/ \
-        -e RESTIC_PASSWORD=${rconPassword} \
+        -e PRUNE_RESTIC_RETENTION="--keep-within ${backupRetentionDays}d" \
+        -e RESTIC_REPOSITORY=gs:${backupBucket}:/servers/${serverId}/restic \
+        -e RESTIC_PASSWORD=${resticPassword} \
         -e RCON_HOST=127.0.0.1 \
         -e RCON_PASSWORD=${rconPassword} \
         -v /mnt/disks/minecraft/data:/data \
