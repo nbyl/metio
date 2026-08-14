@@ -1,6 +1,6 @@
 # ADR-0005: Frontend Component Library
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-14
 - **Deciders:** Metio maintainers
 

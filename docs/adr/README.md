@@ -19,4 +19,4 @@ This directory records significant architecture decisions for Metio using a ligh
 | [0002](0002-dapr-state-store-key-schema-and-topology.md) | Dapr state store key schema and Cloud Run sidecar topology | Accepted |
 | [0003](0003-postgresql-state-backend.md) | PostgreSQL state backend (Cloud SQL or BYO) | Accepted |
 | [0004](0004-centralized-backup-catalog-and-restore.md) | Centralized backup catalog and restore | Accepted |
-| [0005](0005-frontend-component-library.md) | Frontend component library | Proposed |
+| [0005](0005-frontend-component-library.md) | Frontend component library | Accepted |
