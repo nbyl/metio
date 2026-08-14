@@ -366,8 +366,13 @@ The central bucket and infrastructure are created during `tofu apply`:
   (randomly generated, not the RCON password). The controller reads it to configure each server's
   `mc-backup` container.
 - Bucket IAM: the controller service account gets `roles/storage.objectAdmin` on the central bucket;
-  each server VM service account gets object access **scoped to its own prefix** (created by the
-  Pulumi server program).
+   each server VM service account gets object get/create/delete access **scoped to its own prefix**
+   (created by the Pulumi server program). Because GCS grants `storage.objects.list` at the bucket
+   level and IAM conditions cannot scope it (Restic lists on every `init`/`snapshots`/`prune`), each
+   server service account additionally gets a bucket-wide **list-only** custom role
+   (`{environment}_backup_object_list`, see `deploy/modules/gcp-cloud-run/backups.tf`) that contains
+   just `storage.objects.list` — it can enumerate object names/metadata but not read or modify other
+   servers' repositories.
 
 Retention:
 

@@ -82,6 +82,15 @@ func backupPrefixCondition(bucket, serverID string) string {
 		bucket, serverBackupPrefix(serverID))
 }
 
+// backupObjectListRoleID returns the project-scoped custom role that grants
+// only storage.objects.list. GCS grants list at the bucket level and IAM
+// conditions cannot scope it, so per-server service accounts get this
+// bucket-wide role in addition to their prefix-scoped object access. The name
+// must match the tofu resource in deploy/modules/gcp-cloud-run/backups.tf.
+func backupObjectListRoleID(environment string) string {
+	return strings.ReplaceAll(environment, "-", "_") + "_backup_object_list"
+}
+
 // existingAddressImportID returns the Pulumi import ID for a pre-existing GCP
 // address, or "" when no address should be adopted. Adoption only happens on
 // the initial create; on updates the address is already managed by the stack
@@ -274,6 +283,20 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		})
 		if err != nil {
 			return fmt.Errorf("failed to grant backup bucket access: %w", err)
+		}
+
+		// GCS grants storage.objects.list at the bucket level and IAM conditions
+		// cannot scope it, so Restic's list calls (init/snapshots/prune) need a
+		// separate bucket-wide grant. Scope it to the deployment's list-only
+		// custom role so object get/create/delete stay restricted to this
+		// server's prefix by the conditional binding above.
+		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-list", config.Name), &storage.BucketIAMMemberArgs{
+			Bucket: pulumi.String(config.BackupBucket),
+			Role:   pulumi.Sprintf("projects/%s/roles/%s", config.GCPProject, backupObjectListRoleID(config.Environment)),
+			Member: pulumi.Sprintf("serviceAccount:%s", sa.Email),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to grant backup bucket list access: %w", err)
 		}
 
 		disk, err := compute.NewDisk(ctx, fmt.Sprintf("%s-disk", config.Name), &compute.DiskArgs{

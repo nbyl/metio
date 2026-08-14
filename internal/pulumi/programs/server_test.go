@@ -147,6 +147,23 @@ func TestBackupPrefixCondition(t *testing.T) {
 		cond)
 }
 
+func TestBackupObjectListRoleID(t *testing.T) {
+	tests := []struct {
+		environment string
+		want        string
+	}{
+		{"development", "development_backup_object_list"},
+		{"development2", "development2_backup_object_list"},
+		{"my-env-1", "my_env_1_backup_object_list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.environment, func(t *testing.T) {
+			assert.Equal(t, tt.want, backupObjectListRoleID(tt.environment))
+		})
+	}
+}
+
 func TestServerConfigDefaults_CentralBackup(t *testing.T) {
 	config := &ServerConfig{
 		Name:        "test-server",

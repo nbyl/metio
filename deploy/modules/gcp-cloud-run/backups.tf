@@ -57,6 +57,23 @@ resource "google_storage_bucket_iam_member" "controller_backup_admin" {
   member = "serviceAccount:${google_service_account.controller_service_account.email}"
 }
 
+# GCS grants storage.objects.list at the bucket level; IAM conditions cannot
+# scope it to a prefix (for list calls resource.name resolves to the bucket,
+# and storage.googleapis.com/objectListPrefix is only supported in Credential
+# Access Boundaries). Restic needs list on every init/snapshots/prune, so each
+# server VM service account gets this bucket-wide list-only custom role while
+# object get/create/delete stay scoped to its own prefix by the conditional
+# binding in the Pulumi server program. Role name must match
+# backupObjectListRoleID() in internal/pulumi/programs/server.go.
+resource "google_project_iam_custom_role" "backup-object-list" {
+  role_id     = "${replace(var.environment, "-", "_")}_backup_object_list"
+  title       = "List backup objects for ${var.environment}"
+  description = "Grants only storage.objects.list on the central backup bucket so Restic can enumerate a per-server repository. Bucket-wide because GCS list cannot be prefix-scoped by IAM conditions."
+  permissions = [
+    "storage.objects.list",
+  ]
+}
+
 # Per-server VM service accounts get prefix-scoped object access to the central
 # bucket from the Pulumi server program (least privilege), not here, because
 # those service accounts are created per server.

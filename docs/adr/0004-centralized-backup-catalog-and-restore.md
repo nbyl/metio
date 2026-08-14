@@ -103,6 +103,16 @@ Per-prefix repositories keep `mc-backup`'s pruning (`forget`/`prune`) isolated t
 server while all storage shares one bucket. The bucket is provisioned by the controller
 infrastructure and is **not** destroyed when an individual server is deleted.
 
+Per-server access follows least privilege: each server VM service account gets object
+get/create/delete scoped to its own prefix via an IAM condition. GCS grants
+`storage.objects.list` at the bucket level, and IAM conditions cannot scope it (for list
+calls `resource.name` resolves to the bucket, and the `storage.googleapis.com/objectListPrefix`
+attribute is only available in Credential Access Boundaries). Restic lists on every
+`init`/`snapshots`/`prune`, so each server service account also receives a bucket-wide
+**list-only** custom role (`{environment}_backup_object_list`, containing just
+`storage.objects.list`). It can enumerate object names/metadata but cannot read or modify
+other servers' repositories.
+
 ### Backup configuration and retention
 
 - Add `backupRetentionDays` to the server configuration (default **90 days**). The
