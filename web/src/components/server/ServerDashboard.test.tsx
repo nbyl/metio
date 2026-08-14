@@ -390,21 +390,21 @@ describe('ServerDashboard backup settings', () => {
     )
   }
 
-  it('shows the backup section with the enabled badge', async () => {
-    vi.mocked(useBackupSettings).mockReturnValue({
-      data: { enabled: true },
-      isLoading: false,
-    } as never)
-
+  it('shows the backup settings inside the settings modal', async () => {
     renderDashboard()
 
-    expect(
-      screen.getAllByRole('button', { name: /backup/i }).length
-    ).toBeGreaterThan(0)
-    expect(screen.getAllByText('Enabled').length).toBeGreaterThan(0)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /update/i }))
+    await user.click(screen.getByRole('tab', { name: 'Backup' }))
+
+    expect(screen.getByRole('tab', { name: 'Backup' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(screen.getByText('Scheduled backups enabled')).toBeInTheDocument()
   })
 
-  it('preloads current settings into the form when expanded', async () => {
+  it('preloads current settings into the backup form', async () => {
     vi.mocked(useBackupSettings).mockReturnValue({
       data: { enabled: true, backupSchedule: '6h', keepDaily: 3 },
       isLoading: false,
@@ -412,7 +412,8 @@ describe('ServerDashboard backup settings', () => {
 
     renderDashboard()
     const user = userEvent.setup()
-    await user.click(screen.getAllByRole('button', { name: /backup/i })[0])
+    await user.click(screen.getByRole('button', { name: /update/i }))
+    await user.click(screen.getByRole('tab', { name: 'Backup' }))
 
     expect(screen.getByLabelText('Backup interval')).toHaveValue('6h')
     expect(screen.getByLabelText('Keep daily')).toHaveValue(3)
@@ -434,7 +435,8 @@ describe('ServerDashboard backup settings', () => {
 
     renderDashboard()
     const user = userEvent.setup()
-    await user.click(screen.getAllByRole('button', { name: /backup/i })[0])
+    await user.click(screen.getByRole('button', { name: /update/i }))
+    await user.click(screen.getByRole('tab', { name: 'Backup' }))
     await user.click(screen.getByRole('button', { name: /save/i }))
 
     expect(mockMutate).toHaveBeenCalledWith(
