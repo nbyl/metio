@@ -1,8 +1,6 @@
 package programs
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -218,15 +216,6 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
 		}
 
-		// Compute a hash of the cloud-config to detect changes that require VM recreation.
-		h := sha256.New()
-		// The digest is a change-detection fingerprint for the cloud_config_hash
-		// label (ReplaceOnChanges); no credential is hashed for storage or
-		// authentication, so SHA-256 (a fast hash) is appropriate here.
-		// codeql[go/weak-sensitive-data-hashing]
-		h.Write([]byte(userData))
-		cloudConfigHash := hex.EncodeToString(h.Sum(nil))[:16] // first 16 hex chars
-
 		sa, err := serviceaccount.NewAccount(ctx, fmt.Sprintf("%s-sa", config.Name), &serviceaccount.AccountArgs{
 			AccountId:   pulumi.String(fmt.Sprintf("%s-sa", config.Name)),
 			DisplayName: pulumi.String(fmt.Sprintf("VM service account for %s", config.Name)),
@@ -382,14 +371,13 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 				},
 			},
 			Labels: pulumi.StringMap{
-				"cloud_config_hash": pulumi.String(cloudConfigHash),
-				"infra_version":     pulumi.String(fmt.Sprintf("%d", CurrentInfraVersion)),
-				"server_id":         pulumi.String(config.ServerID),
+				"infra_version": pulumi.String(fmt.Sprintf("%d", CurrentInfraVersion)),
+				"server_id":     pulumi.String(config.ServerID),
 			},
 			Metadata: pulumi.StringMap{
 				"user-data": pulumi.String(userData),
 			},
-		}, pulumi.ReplaceOnChanges([]string{"labels.cloud_config_hash"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{firewall}))
+		}, pulumi.ReplaceOnChanges([]string{"metadata.user-data"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{firewall}))
 		if err != nil {
 			return fmt.Errorf("failed to create instance: %w", err)
 		}
