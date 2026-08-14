@@ -219,6 +219,10 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		// Compute a hash of the cloud-config to detect changes that require VM recreation.
+		// The digest is a change-detection fingerprint for the cloud_config_hash
+		// label (ReplaceOnChanges); no credential is hashed for storage or
+		// authentication, so SHA-256 (a fast hash) is appropriate here.
+		// codeql[go/weak-sensitive-data-hashing]
 		h := sha256.New()
 		h.Write([]byte(userData))
 		cloudConfigHash := hex.EncodeToString(h.Sum(nil))[:16] // first 16 hex chars
