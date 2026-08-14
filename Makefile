@@ -379,24 +379,24 @@ deploy-machine-agent: build-machine-agent-image
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
-	ARGS="-var=\"machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}\"" ;\
+	set -- -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" ;\
 	if [ -f "build/controller-image.txt" ]; then \
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
-		ARGS="$${ARGS} -var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\"" ;\
+		set -- "$$@" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" ;\
 	fi ;\
 	if [ -f "build/daprd-image.txt" ]; then \
 		DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
-		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+		set -- "$$@" -var="daprd_image=$${DAPRD_IMAGE_TAG}" ;\
 		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
 	fi ;\
 	if [ -f "build/mc-backup-image.txt" ]; then \
 		MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
-		ARGS="$${ARGS} -var=\"backup_image=$${MC_BACKUP_IMAGE_TAG}\"" ;\
+		set -- "$$@" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" ;\
 		echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
 	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply $${ARGS} -auto-approve
+	tofu -chdir=deploy apply "$$@" -auto-approve
 
 # Deploy controller only: build controller and daprd images and update Cloud Run service
 deploy-controller: controller-image daprd-image
@@ -410,13 +410,13 @@ deploy-controller: controller-image daprd-image
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
-	ARGS="-var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\" -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+	set -- -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" ;\
 	if [ -f "build/mc-backup-image.txt" ]; then \
 		MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
-		ARGS="$${ARGS} -var=\"backup_image=$${MC_BACKUP_IMAGE_TAG}\"" ;\
+		set -- "$$@" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" ;\
 		echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
 	fi ;\
-	tofu -chdir=deploy apply $${ARGS} -auto-approve
+	tofu -chdir=deploy apply "$$@" -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:
