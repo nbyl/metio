@@ -23,6 +23,7 @@ module "gcp_cloud_run" {
   admin_users                          = var.admin_users
   controller_image                     = var.controller_image
   machine_agent_image                  = var.machine_agent_image
+  backup_image                         = var.backup_image
   daprd_image                          = var.daprd_image
   postgres_mode                        = var.postgres_mode
   postgres_connection_string_secret_id = var.postgres_connection_string_secret_id

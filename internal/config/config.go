@@ -20,6 +20,7 @@ type Config struct {
 	Region                           string
 	ProjectID                        string
 	MachineAgentImage                string
+	BackupImage                      string
 	OperationMode                    string
 	BaseURL                          string
 	CloudTasksQueue                  string
@@ -56,6 +57,7 @@ func Load() (Config, error) {
 		Region:                   region,
 		ProjectID:                viper.GetString("GCP_PROJECT"),
 		MachineAgentImage:        viper.GetString("MACHINE_AGENT_IMAGE"),
+		BackupImage:              viper.GetString("BACKUP_IMAGE"),
 		OperationMode:            viper.GetString("OPERATION_MODE"),
 		BaseURL:                  viper.GetString("BASE_URL"),
 		CloudTasksQueue:          viper.GetString("CLOUD_TASKS_QUEUE"),

@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   Copy,
   Check,
@@ -14,41 +14,56 @@ import {
   Settings,
   Trash2,
   Plus,
-} from 'lucide-react';
-import { useServers } from '../../hooks/useServers';
-import { useServerStatus } from '../../hooks/useServerStatus';
-import { useServerProvisioning } from '../../hooks/useServerProvisioning';
-import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
-import { useUpdateServer, useUpdateAgent, useDeleteServer } from '../../hooks/useServerMutations';
+  Archive,
+} from 'lucide-react'
+import { useServers } from '../../hooks/useServers'
+import { useServerStatus } from '../../hooks/useServerStatus'
+import { useServerProvisioning } from '../../hooks/useServerProvisioning'
+import { useStartServer, useStopServer } from '../../hooks/useServerMutations'
+import {
+  useUpdateServer,
+  useUpdateAgent,
+  useDeleteServer,
+} from '../../hooks/useServerMutations'
 import {
   useWhitelist,
   useAddPlayer,
   useRemovePlayer,
   useToggleWhitelist,
-} from '../../hooks/useWhitelist';
+} from '../../hooks/useWhitelist'
 import {
   useScheduleShutdown,
   useCancelScheduledShutdown,
-} from '../../hooks/useScheduledShutdown';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { Separator } from '../ui/Separator';
-import { Skeleton } from '../ui/Skeleton';
-import { Tooltip } from '../ui/Tooltip';
-import { Switch } from '../ui/Switch';
-import { StatsGrid, type StatItem } from '../layout/StatsGrid';
-import { ServerConfigPanel } from './ServerConfigPanel';
-import { UpdateModal } from './UpdateModal';
-import { DestroyModal } from './DestroyModal';
-import { EmptyState } from './EmptyState';
-import type { ServerState, UpdateServerRequest, ServerConfig, StatusResponse } from '../../types/server';
-import type { WhitelistPlayer } from '../../types/whitelist';
-import { cn } from '../../lib/utils';
+} from '../../hooks/useScheduledShutdown'
+import {
+  useBackupSettings,
+  useUpdateBackupSettings,
+} from '../../hooks/useBackupSettings'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card'
+import { Button } from '../ui/Button'
+import { Badge } from '../ui/Badge'
+import { Separator } from '../ui/Separator'
+import { Skeleton } from '../ui/Skeleton'
+import { Tooltip } from '../ui/Tooltip'
+import { Switch } from '../ui/Switch'
+import { StatsGrid, type StatItem } from '../layout/StatsGrid'
+import { ServerConfigPanel } from './ServerConfigPanel'
+import { UpdateModal } from './UpdateModal'
+import { DestroyModal } from './DestroyModal'
+import { EmptyState } from './EmptyState'
+import type {
+  ServerState,
+  UpdateServerRequest,
+  ServerConfig,
+  StatusResponse,
+  BackupSettings,
+} from '../../types/server'
+import type { WhitelistPlayer } from '../../types/whitelist'
+import { cn } from '../../lib/utils'
 
 export interface ServerDashboardProps {
-  className?: string;
+  className?: string
 }
 
 function getStatusBadgeVariant(
@@ -56,29 +71,29 @@ function getStatusBadgeVariant(
 ): 'online' | 'offline' | 'transitioning' {
   switch (state) {
     case 'RUNNING':
-      return 'online';
+      return 'online'
     case 'STOPPED':
-      return 'offline';
+      return 'offline'
     case 'STARTING':
     case 'STOPPING':
-      return 'transitioning';
+      return 'transitioning'
     default:
-      return 'offline';
+      return 'offline'
   }
 }
 
 function getStatusLabel(state: ServerState): string {
   switch (state) {
     case 'RUNNING':
-      return 'Online';
+      return 'Online'
     case 'STOPPED':
-      return 'Offline';
+      return 'Offline'
     case 'STARTING':
-      return 'Starting...';
+      return 'Starting...'
     case 'STOPPING':
-      return 'Stopping...';
+      return 'Stopping...'
     default:
-      return 'Unknown';
+      return 'Unknown'
   }
 }
 
@@ -111,46 +126,46 @@ function ServerListSkeleton({ className }: { className?: string }) {
         </Card>
       ))}
     </div>
-  );
+  )
 }
 
 interface WhitelistSectionProps {
-  serverId: string;
-  isRunning: boolean;
+  serverId: string
+  isRunning: boolean
 }
 
 function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
 
-  const { data: whitelist, isLoading } = useWhitelist(serverId);
-  const addPlayerMutation = useAddPlayer(serverId);
-  const removePlayerMutation = useRemovePlayer(serverId);
-  const toggleWhitelistMutation = useToggleWhitelist(serverId);
+  const { data: whitelist, isLoading } = useWhitelist(serverId)
+  const addPlayerMutation = useAddPlayer(serverId)
+  const removePlayerMutation = useRemovePlayer(serverId)
+  const toggleWhitelistMutation = useToggleWhitelist(serverId)
 
   if (!isRunning) {
-    return null;
+    return null
   }
 
   const handleAddPlayer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUsername.trim()) return;
+    e.preventDefault()
+    if (!newUsername.trim()) return
 
     addPlayerMutation.mutate(newUsername.trim(), {
       onSuccess: () => setNewUsername(''),
-    });
-  };
+    })
+  }
 
   const handleToggle = (enabled: boolean) => {
-    toggleWhitelistMutation.mutate(enabled);
-  };
+    toggleWhitelistMutation.mutate(enabled)
+  }
 
   const handleRemovePlayer = (player: WhitelistPlayer) => {
-    removePlayerMutation.mutate(player.uuid);
-  };
+    removePlayerMutation.mutate(player.uuid)
+  }
 
-  const isToggling = toggleWhitelistMutation.isPending;
-  const isAdding = addPlayerMutation.isPending;
+  const isToggling = toggleWhitelistMutation.isPending
+  const isAdding = addPlayerMutation.isPending
 
   return (
     <div className="whitelist-section">
@@ -241,13 +256,13 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 interface ScheduledShutdownSectionProps {
-  serverId: string;
-  isRunning: boolean;
-  scheduledShutdown?: string;
+  serverId: string
+  isRunning: boolean
+  scheduledShutdown?: string
 }
 
 function ScheduledShutdownSection({
@@ -255,24 +270,24 @@ function ScheduledShutdownSection({
   isRunning,
   scheduledShutdown,
 }: ScheduledShutdownSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [shutdownTime, setShutdownTime] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [shutdownTime, setShutdownTime] = useState('')
 
-  const scheduleShutdownMutation = useScheduleShutdown(serverId);
-  const cancelShutdownMutation = useCancelScheduledShutdown(serverId);
+  const scheduleShutdownMutation = useScheduleShutdown(serverId)
+  const cancelShutdownMutation = useCancelScheduledShutdown(serverId)
 
   if (!isRunning) {
-    return null;
+    return null
   }
 
-  const hasScheduledShutdown = !!scheduledShutdown;
+  const hasScheduledShutdown = !!scheduledShutdown
 
   const handleScheduleShutdown = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shutdownTime) return;
+    e.preventDefault()
+    if (!shutdownTime) return
 
-    const today = new Date();
-    const [hours, minutes] = shutdownTime.split(':').map(Number);
+    const today = new Date()
+    const [hours, minutes] = shutdownTime.split(':').map(Number)
     const scheduledDate = new Date(
       today.getFullYear(),
       today.getMonth(),
@@ -281,41 +296,41 @@ function ScheduledShutdownSection({
       minutes,
       0,
       0
-    );
+    )
 
     scheduleShutdownMutation.mutate(scheduledDate.toISOString(), {
       onSuccess: () => setShutdownTime(''),
-    });
-  };
+    })
+  }
 
   const handleCancelShutdown = () => {
-    cancelShutdownMutation.mutate();
-  };
+    cancelShutdownMutation.mutate()
+  }
 
   const formatScheduledTime = (isoString: string): string => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+    const date = new Date(isoString)
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
 
   const getTimeUntilShutdown = (isoString: string): string => {
-    const shutdownDate = new Date(isoString);
-    const now = new Date();
-    const diffMs = shutdownDate.getTime() - now.getTime();
+    const shutdownDate = new Date(isoString)
+    const now = new Date()
+    const diffMs = shutdownDate.getTime() - now.getTime()
 
-    if (diffMs <= 0) return 'imminent';
+    if (diffMs <= 0) return 'imminent'
 
-    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffMinutes = Math.floor(diffMs / 60000)
     if (diffMinutes < 60) {
-      return `${diffMinutes} min`;
+      return `${diffMinutes} min`
     }
 
-    const diffHours = Math.floor(diffMinutes / 60);
-    const remainingMinutes = diffMinutes % 60;
-    return `${diffHours}h ${remainingMinutes}m`;
-  };
+    const diffHours = Math.floor(diffMinutes / 60)
+    const remainingMinutes = diffMinutes % 60
+    return `${diffHours}h ${remainingMinutes}m`
+  }
 
-  const isScheduling = scheduleShutdownMutation.isPending;
-  const isCancelling = cancelShutdownMutation.isPending;
+  const isScheduling = scheduleShutdownMutation.isPending
+  const isCancelling = cancelShutdownMutation.isPending
 
   return (
     <div className="whitelist-section">
@@ -385,53 +400,276 @@ function ScheduledShutdownSection({
         </div>
       )}
     </div>
-  );
+  )
+}
+
+interface BackupSettingsSectionProps {
+  serverId: string
+  serverName: string
+}
+
+type BackupSettingsFormState = {
+  enabled: boolean
+  backupSchedule: string
+  keepLast: number
+  keepHourly: number
+  keepDaily: number
+  keepWeekly: number
+  keepMonthly: number
+  keepYearly: number
+}
+
+type RetentionKey = Exclude<
+  keyof BackupSettingsFormState,
+  'enabled' | 'backupSchedule'
+>
+
+const RETENTION_FIELDS: Array<{
+  key: RetentionKey
+  label: string
+  hint: string
+}> = [
+  { key: 'keepLast', label: 'Keep last', hint: 'Always kept' },
+  { key: 'keepHourly', label: 'Keep hourly', hint: 'Last N hours' },
+  { key: 'keepDaily', label: 'Keep daily', hint: 'Last N days' },
+  { key: 'keepWeekly', label: 'Keep weekly', hint: 'Last N weeks' },
+  { key: 'keepMonthly', label: 'Keep monthly', hint: 'Last N months' },
+  { key: 'keepYearly', label: 'Keep yearly', hint: 'Last N years' },
+]
+
+function toBackupFormState(settings: BackupSettings): BackupSettingsFormState {
+  return {
+    enabled: settings.enabled,
+    backupSchedule: settings.backupSchedule ?? '',
+    keepLast: settings.keepLast ?? 0,
+    keepHourly: settings.keepHourly ?? 0,
+    keepDaily: settings.keepDaily ?? 0,
+    keepWeekly: settings.keepWeekly ?? 0,
+    keepMonthly: settings.keepMonthly ?? 0,
+    keepYearly: settings.keepYearly ?? 0,
+  }
+}
+
+interface BackupSettingsFormProps {
+  serverId: string
+  serverName: string
+  initial: BackupSettings
+}
+
+function BackupSettingsForm({
+  serverId,
+  serverName,
+  initial,
+}: BackupSettingsFormProps) {
+  const navigate = useNavigate()
+  const [form, setForm] = useState<BackupSettingsFormState>(() =>
+    toBackupFormState(initial)
+  )
+  const updateMutation = useUpdateBackupSettings(serverId)
+
+  const handleSetNumber = (key: RetentionKey, raw: string) => {
+    if (raw === '') {
+      setForm((prev) => ({ ...prev, [key]: 0 }))
+      return
+    }
+    const value = Number(raw)
+    if (Number.isNaN(value) || value < 0) return
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (updateMutation.isPending) return
+
+    const settings: BackupSettings = {
+      enabled: form.enabled,
+      backupSchedule: form.backupSchedule.trim() || undefined,
+      keepLast: form.keepLast,
+      keepHourly: form.keepHourly,
+      keepDaily: form.keepDaily,
+      keepWeekly: form.keepWeekly,
+      keepMonthly: form.keepMonthly,
+      keepYearly: form.keepYearly,
+    }
+
+    updateMutation.mutate(settings, {
+      onSuccess: () => {
+        navigate(`/servers/${serverId}/provisioning`, {
+          state: { serverName },
+        })
+      },
+    })
+  }
+
+  return (
+    <form onSubmit={handleSave}>
+      <div className="flex items-center justify-between mb-3">
+        <Switch
+          checked={form.enabled}
+          onChange={(enabled) => setForm((prev) => ({ ...prev, enabled }))}
+          disabled={updateMutation.isPending}
+          aria-label="Toggle backups"
+        />
+        <span className="text-xs text-slate-400">
+          {form.enabled ? 'Scheduled backups enabled' : 'Backups disabled'}
+        </span>
+      </div>
+
+      <div className="backup-field mb-3">
+        <label htmlFor="backup-schedule" className="backup-field-label">
+          Backup interval
+        </label>
+        <input
+          id="backup-schedule"
+          type="text"
+          value={form.backupSchedule}
+          onChange={(e) =>
+            setForm((prev) => ({
+              ...prev,
+              backupSchedule: e.target.value,
+            }))
+          }
+          placeholder="e.g. 1h, 6h, 1d (default 1h)"
+          className="whitelist-input"
+          disabled={updateMutation.isPending || !form.enabled}
+        />
+      </div>
+
+      <div className="backup-grid">
+        {RETENTION_FIELDS.map(({ key, label, hint }) => (
+          <div key={key} className="backup-field">
+            <label htmlFor={`backup-${key}`} className="backup-field-label">
+              {label}
+            </label>
+            <input
+              id={`backup-${key}`}
+              type="number"
+              min={0}
+              value={form[key] === 0 ? '' : form[key]}
+              onChange={(e) => handleSetNumber(key, e.target.value)}
+              placeholder="default"
+              className="backup-number-input"
+              disabled={updateMutation.isPending || !form.enabled}
+            />
+            <span className="backup-field-hint">{hint}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs text-slate-500 mb-3">
+        Zero values use the deployment defaults. Saving re-provisions the server
+        to apply the backup service changes.
+      </p>
+
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={updateMutation.isPending}
+        loading={updateMutation.isPending}
+        className="btn-sm"
+      >
+        Save
+      </Button>
+    </form>
+  )
+}
+
+function BackupSettingsSection({
+  serverId,
+  serverName,
+}: BackupSettingsSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const { data, isLoading } = useBackupSettings(serverId)
+
+  return (
+    <div className="whitelist-section">
+      <div className="whitelist-header">
+        <button
+          type="button"
+          className="whitelist-title"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          <Archive className="h-4 w-4" />
+          Backup
+        </button>
+        {!isLoading && data && (
+          <Badge variant={data.enabled ? 'online' : 'offline'}>
+            {data.enabled ? 'Enabled' : 'Disabled'}
+          </Badge>
+        )}
+      </div>
+
+      {isExpanded && (
+        <div>
+          {isLoading || !data ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <BackupSettingsForm
+              serverId={serverId}
+              serverName={serverName}
+              initial={data}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface ServerCardProps {
   server: {
-    id: string;
-    config: ServerConfig;
-    status?: StatusResponse;
-    currentInfraVersion: number;
-    outdated: boolean;
-    outdatedMachineAgent?: boolean;
-  };
+    id: string
+    config: ServerConfig
+    status?: StatusResponse
+    currentInfraVersion: number
+    outdated: boolean
+    outdatedMachineAgent?: boolean
+  }
 }
 
 function ServerCard({ server }: ServerCardProps) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { data: status } = useServerStatus(server.id);
-  const { data: provisioning } = useServerProvisioning(server.id);
-  const startMutation = useStartServer(server.id);
-  const stopMutation = useStopServer(server.id);
-  const updateMutation = useUpdateServer();
-  const deleteMutation = useDeleteServer();
-  const updateAgentMutation = useUpdateAgent(server.id);
-  const { copy, copied } = useCopyToClipboard();
-  const [showUpdate, setShowUpdate] = useState(false);
-  const [showDestroy, setShowDestroy] = useState(false);
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { data: status } = useServerStatus(server.id)
+  const { data: provisioning } = useServerProvisioning(server.id)
+  const startMutation = useStartServer(server.id)
+  const stopMutation = useStopServer(server.id)
+  const updateMutation = useUpdateServer()
+  const deleteMutation = useDeleteServer()
+  const updateAgentMutation = useUpdateAgent(server.id)
+  const { copy, copied } = useCopyToClipboard()
+  const [showUpdate, setShowUpdate] = useState(false)
+  const [showDestroy, setShowDestroy] = useState(false)
 
-  const isMutating = startMutation.isPending || stopMutation.isPending;
-  const isProvisioning = provisioning && provisioning.state !== 'COMPLETED' && provisioning.state !== 'FAILED';
+  const isMutating = startMutation.isPending || stopMutation.isPending
+  const isProvisioning =
+    provisioning &&
+    provisioning.state !== 'COMPLETED' &&
+    provisioning.state !== 'FAILED'
 
   const handleCopyIP = async (ip: string) => {
-    const success = await copy(ip);
+    const success = await copy(ip)
     if (success) {
-      toast.success('IP copied to clipboard!');
+      toast.success('IP copied to clipboard!')
     } else {
-      toast.error('Failed to copy IP');
+      toast.error('Failed to copy IP')
     }
-  };
+  }
 
-  const currentStatus = (status ?? server.status) as StatusResponse | undefined;
+  const currentStatus = (status ?? server.status) as StatusResponse | undefined
 
-  const isRunning = currentStatus?.serverState === 'RUNNING';
-  const isStopped = currentStatus?.serverState === 'STOPPED';
+  const isRunning = currentStatus?.serverState === 'RUNNING'
+  const isStopped = currentStatus?.serverState === 'STOPPED'
   const isTransitioning =
     currentStatus?.serverState === 'STARTING' ||
-    currentStatus?.serverState === 'STOPPING';
+    currentStatus?.serverState === 'STOPPING'
 
   const stats: StatItem[] = [
     {
@@ -456,35 +694,39 @@ function ServerCard({ server }: ServerCardProps) {
       label: 'IP',
       value: currentStatus?.instanceIP || '-',
     },
-  ];
+  ]
 
   const handleUpdate = (data: UpdateServerRequest) => {
     updateMutation.mutate(
       { id: server.id, data },
       {
         onSuccess: () => {
-          queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
+          queryClient.removeQueries({
+            queryKey: ['serverProvisioning', server.id],
+          })
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
-          });
+          })
         },
       }
-    );
-  };
+    )
+  }
 
   const handleDestroy = () => {
     deleteMutation.mutate(
       { id: server.id },
       {
         onSuccess: () => {
-          queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
+          queryClient.removeQueries({
+            queryKey: ['serverProvisioning', server.id],
+          })
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
-          });
+          })
         },
       }
-    );
-  };
+    )
+  }
 
   return (
     <Card>
@@ -494,10 +736,14 @@ function ServerCard({ server }: ServerCardProps) {
             <Server className="h-4 w-4" />
             Server: {server.config.name}
             {server.outdated && (
-              <span className="ml-2 text-xs text-yellow-400 font-normal">Update Available</span>
+              <span className="ml-2 text-xs text-yellow-400 font-normal">
+                Update Available
+              </span>
             )}
             {server.outdatedMachineAgent && (
-              <span className="text-xs text-orange-400 font-normal">Agent: outdated</span>
+              <span className="text-xs text-orange-400 font-normal">
+                Agent: outdated
+              </span>
             )}
           </span>
           <span className="flex items-center gap-2">
@@ -613,7 +859,7 @@ function ServerCard({ server }: ServerCardProps) {
             </Button>
           )}
           <Button
-            variant={server.outdated ? "primary" : "outline"}
+            variant={server.outdated ? 'primary' : 'outline'}
             disabled={isProvisioning}
             onClick={() => setShowUpdate(true)}
           >
@@ -628,12 +874,14 @@ function ServerCard({ server }: ServerCardProps) {
               onClick={() => {
                 updateAgentMutation.mutate(undefined, {
                   onSuccess: () => {
-                    queryClient.removeQueries({ queryKey: ['serverProvisioning', server.id] });
+                    queryClient.removeQueries({
+                      queryKey: ['serverProvisioning', server.id],
+                    })
                     navigate(`/servers/${server.id}/provisioning`, {
                       state: { serverName: server.config.name },
-                    });
+                    })
                   },
-                });
+                })
               }}
             >
               Update Agent
@@ -655,6 +903,10 @@ function ServerCard({ server }: ServerCardProps) {
           isRunning={isRunning}
           scheduledShutdown={currentStatus?.scheduledShutdown}
         />
+        <BackupSettingsSection
+          serverId={server.id}
+          serverName={server.config.name}
+        />
       </CardContent>
 
       <UpdateModal
@@ -664,8 +916,8 @@ function ServerCard({ server }: ServerCardProps) {
         outdated={server.outdated}
         onClose={() => setShowUpdate(false)}
         onUpdate={(data) => {
-          handleUpdate(data);
-          setShowUpdate(false);
+          handleUpdate(data)
+          setShowUpdate(false)
         }}
         isPending={updateMutation.isPending}
       />
@@ -674,27 +926,22 @@ function ServerCard({ server }: ServerCardProps) {
         serverName={server.config.name}
         onClose={() => setShowDestroy(false)}
         onConfirm={() => {
-          handleDestroy();
-          setShowDestroy(false);
+          handleDestroy()
+          setShowDestroy(false)
         }}
         isPending={deleteMutation.isPending}
       />
     </Card>
-  );
+  )
 }
 
 export function ServerDashboard({ className }: ServerDashboardProps) {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
-  const {
-    data: servers,
-    isLoading,
-    error,
-    refetch,
-  } = useServers();
+  const { data: servers, isLoading, error, refetch } = useServers()
 
   if (isLoading) {
-    return <ServerListSkeleton className={className} />;
+    return <ServerListSkeleton className={className} />
   }
 
   if (error) {
@@ -709,7 +956,7 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
           </div>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   if (!servers || servers.length === 0) {
@@ -718,7 +965,7 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
         className={className}
         onCreateServer={() => navigate('/servers/new')}
       />
-    );
+    )
   }
 
   return (
@@ -733,5 +980,5 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
         <ServerCard key={server.id} server={server} />
       ))}
     </div>
-  );
+  )
 }

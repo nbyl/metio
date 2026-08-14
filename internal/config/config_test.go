@@ -42,6 +42,27 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "test-image:latest", cfg.MachineAgentImage)
 }
 
+func TestLoad_BackupImage(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+
+	t.Run("empty falls back to empty (program defaults to upstream mc-backup)", func(t *testing.T) {
+		os.Unsetenv("BACKUP_IMAGE")
+		cfg, err := Load()
+		assert.NoError(t, err)
+		assert.Equal(t, "", cfg.BackupImage)
+	})
+
+	t.Run("set is read", func(t *testing.T) {
+		t.Setenv("BACKUP_IMAGE", "europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:1.0.0")
+		cfg, err := Load()
+		assert.NoError(t, err)
+		assert.Equal(t, "europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:1.0.0", cfg.BackupImage)
+	})
+}
+
 func TestLoad_WithEnvVars(t *testing.T) {
 	viper.Reset()
 	viper.AutomaticEnv()

@@ -8,6 +8,7 @@ import (
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
+	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 )
@@ -45,6 +46,96 @@ type UpdateServerRequest struct {
 	MinecraftVersion *string                `json:"minecraftVersion,omitempty"`
 	DiskSizeGB       *int                   `json:"diskSizeGB,omitempty"`
 	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
+}
+
+// BackupSettings is the wire representation of a server's backup override.
+// Empty/zero values mean "use the deployment default" for that dimension, and
+// a response with only Enabled=true (all values defaulted) is what is served
+// for servers that were never customized.
+type BackupSettings struct {
+	Enabled        bool   `json:"enabled"`
+	BackupSchedule string `json:"backupSchedule,omitempty"`
+	KeepLast       int    `json:"keepLast,omitempty"`
+	KeepHourly     int    `json:"keepHourly,omitempty"`
+	KeepDaily      int    `json:"keepDaily,omitempty"`
+	KeepWeekly     int    `json:"keepWeekly,omitempty"`
+	KeepMonthly    int    `json:"keepMonthly,omitempty"`
+	KeepYearly     int    `json:"keepYearly,omitempty"`
+}
+
+func backupSettingsFromDB(c *db.BackupConfig) *BackupSettings {
+	if c == nil {
+		// Never customized: deployment defaults apply (backups enabled).
+		return &BackupSettings{Enabled: true}
+	}
+	return &BackupSettings{
+		Enabled:        c.Enabled,
+		BackupSchedule: c.BackupSchedule,
+		KeepLast:       c.KeepLast,
+		KeepHourly:     c.KeepHourly,
+		KeepDaily:      c.KeepDaily,
+		KeepWeekly:     c.KeepWeekly,
+		KeepMonthly:    c.KeepMonthly,
+		KeepYearly:     c.KeepYearly,
+	}
+}
+
+func backupSettingsToDB(s *BackupSettings) *db.BackupConfig {
+	if s == nil {
+		return nil
+	}
+	return &db.BackupConfig{
+		Enabled:        s.Enabled,
+		BackupSchedule: s.BackupSchedule,
+		KeepLast:       s.KeepLast,
+		KeepHourly:     s.KeepHourly,
+		KeepDaily:      s.KeepDaily,
+		KeepWeekly:     s.KeepWeekly,
+		KeepMonthly:    s.KeepMonthly,
+		KeepYearly:     s.KeepYearly,
+	}
+}
+
+func dbBackupToProgramBackup(c *db.BackupConfig) *programs.BackupConfig {
+	if c == nil {
+		return nil
+	}
+	return &programs.BackupConfig{
+		Enabled:        c.Enabled,
+		BackupSchedule: c.BackupSchedule,
+		KeepLast:       c.KeepLast,
+		KeepHourly:     c.KeepHourly,
+		KeepDaily:      c.KeepDaily,
+		KeepWeekly:     c.KeepWeekly,
+		KeepMonthly:    c.KeepMonthly,
+		KeepYearly:     c.KeepYearly,
+	}
+}
+
+// buildProgramConfig assembles the Pulumi program config for a server from
+// its persisted config plus controller-level settings. It is shared by the
+// create, update and backup-settings update paths so all of them roll out the
+// same cloud-config, including per-server backup overrides.
+func buildProgramConfig(serverID string, sc *db.ServerConfig, ctrlCfg config.Config, token string) *programs.ServerConfig {
+	return &programs.ServerConfig{
+		Name:                     sc.Name,
+		ServerID:                 serverID,
+		Region:                   sc.Region,
+		Zone:                     sc.Zone,
+		MachineType:              sc.MachineType,
+		MinecraftVersion:         sc.MinecraftVersion,
+		DiskSizeGB:               sc.DiskSizeGB,
+		Environment:              ctrlCfg.Environment,
+		MachineAgentImage:        ctrlCfg.MachineAgentImage,
+		BackupImage:              ctrlCfg.BackupImage,
+		GCPProject:               ctrlCfg.ProjectID,
+		ExistingAddress:          sc.ExistingAddress,
+		ControllerURL:            ctrlCfg.BaseURL,
+		AgentToken:               token,
+		Backup:                   dbBackupToProgramBackup(sc.Backup),
+		BackupResticPassword:     ctrlCfg.BackupResticPassword,
+		RetainLegacyBackupBucket: sc.InfraVersion > 0 && sc.InfraVersion < programs.CurrentInfraVersion,
+	}
 }
 
 type ServerConfigJSON struct {

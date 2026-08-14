@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-daprd-image controller-image machine-agent-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images build-machine-agent-image build-mc-backup-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -199,6 +199,18 @@ build-machine-agent-image:
 	echo "$${MACHINE_AGENT_IMAGE_TAG}" > build/machine-agent-image.txt ;\
 	echo "Machine agent image tag saved to build/machine-agent-image.txt"
 
+# Build mc-backup Docker image and save tag to file
+build-mc-backup-image:
+	@mkdir -p build
+	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
+	echo "Building Docker image for mc-backup with timestamp: $${TIMESTAMP}..." ;\
+	MC_BACKUP_BUILD_ID=$$(gcloud builds submit . --config images/mc-backup/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
+	echo "Build ID: $${MC_BACKUP_BUILD_ID}" ;\
+	MC_BACKUP_IMAGE_TAG=$$(gcloud builds describe $${MC_BACKUP_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
+	echo "Built image: $${MC_BACKUP_IMAGE_TAG}" ;\
+	echo "$${MC_BACKUP_IMAGE_TAG}" > build/mc-backup-image.txt ;\
+	echo "mc-backup image tag saved to build/mc-backup-image.txt"
+
 # Build controller Docker image and save tag to file
 build-controller-image:
 	@mkdir -p build
@@ -222,6 +234,12 @@ ci-machine-agent-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	echo "Building machine-agent image for CI: ghcr.io/nbyl/metio/machine-agent:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} -f cmd/machine-agent/Dockerfile --load .
+
+# CI mc-backup image build — tag for ghcr.io, load into local daemon (no push)
+ci-mc-backup-image:
+	@SHA=$$(git rev-parse --short HEAD); \
+	echo "Building mc-backup image for CI: ghcr.io/nbyl/metio/mc-backup:$${SHA}"; \
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/mc-backup:$${SHA} -f images/mc-backup/Dockerfile --load .
 
 # CI daprd image build — tag for ghcr.io, load into local daemon (no push)
 ci-daprd-image:
@@ -247,6 +265,15 @@ machine-agent-image:
 	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --push . ; \
 	echo "$${IMAGE}" > build/machine-agent-image.txt
 
+# Local mc-backup image build + push to Artifact Registry
+mc-backup-image:
+	@mkdir -p build
+	@SHA=$$(git rev-parse --short HEAD); \
+	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:$${SHA}"; \
+	echo "Building mc-backup image: $${IMAGE}"; \
+	docker buildx build --platform linux/amd64 -f images/mc-backup/Dockerfile -t $${IMAGE} --push . ; \
+	echo "$${IMAGE}" > build/mc-backup-image.txt
+
 # Local daprd image build + push to Artifact Registry
 daprd-image:
 	@mkdir -p build
@@ -260,6 +287,7 @@ daprd-image:
 push-images:
 	docker push ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD)
 	docker push ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD)
+	docker push ghcr.io/nbyl/metio/mc-backup:$(shell git rev-parse --short HEAD)
 	docker push ghcr.io/nbyl/metio/daprd:$(shell git rev-parse --short HEAD)
 
 # Promote image tags (usage: make promote FROM=a1b2c3d4 TO=main)
@@ -270,6 +298,7 @@ promote:
 	fi
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
+	docker buildx imagetools create -t ghcr.io/nbyl/metio/mc-backup:$(TO) ghcr.io/nbyl/metio/mc-backup:$(FROM)
 	docker buildx imagetools create -t ghcr.io/nbyl/metio/daprd:$(TO) ghcr.io/nbyl/metio/daprd:$(FROM)
 
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
@@ -277,21 +306,25 @@ DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
 	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker tag ghcr.io/nbyl/metio/mc-backup:$(SHA) $(DISTRO_REGISTRY)/mc-backup:$(SHA)
 	docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(SHA)
 	docker push $(DISTRO_REGISTRY)/controller:$(SHA)
 	docker push $(DISTRO_REGISTRY)/machine-agent:$(SHA)
+	docker push $(DISTRO_REGISTRY)/mc-backup:$(SHA)
 	docker push $(DISTRO_REGISTRY)/daprd:$(SHA)
 	if [ -n "$(VERSION)" ]; then \
 		docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/mc-backup:$(SHA) $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
 		docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker push $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 	fi
 
 # Build all Docker images (local, without gcloud)
-build-images: controller-image machine-agent-image daprd-image
+build-images: controller-image machine-agent-image mc-backup-image daprd-image
 	@echo "All Docker images built successfully"
 
 # Deploy infrastructure: apply OpenTofu with pre-built Docker images
@@ -300,18 +333,20 @@ deploy: deploy-full
 # Deploy full system: build all images and deploy all infrastructure
 deploy-full: build-images
 	@set -e ;\
-	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ] || [ ! -f "build/daprd-image.txt" ]; then \
+	if [ ! -f "build/machine-agent-image.txt" ] || [ ! -f "build/controller-image.txt" ] || [ ! -f "build/daprd-image.txt" ] || [ ! -f "build/mc-backup-image.txt" ]; then \
 		echo "Error: Image tag files not found. Run 'make build-images' first." ;\
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
+	MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
 	echo "Deploying full system with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -auto-approve
+	echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" -auto-approve
 
 # Deploy infrastructure only: use existing images or module defaults
 deploy-infrastructure:
@@ -328,6 +363,10 @@ deploy-infrastructure:
 	if [ -f "build/daprd-image.txt" ]; then \
 		set -- "$$@" -var="daprd_image=$$(cat build/daprd-image.txt)" ;\
 		echo "Daprd image: $$(cat build/daprd-image.txt)" ;\
+	fi ;\
+	if [ -f "build/mc-backup-image.txt" ]; then \
+		set -- "$$@" -var="backup_image=$$(cat build/mc-backup-image.txt)" ;\
+		echo "mc-backup image: $$(cat build/mc-backup-image.txt)" ;\
 	fi ;\
 	echo "Deploying infrastructure only with OpenTofu..." ;\
 	tofu -chdir=deploy apply "$$@" -auto-approve
@@ -350,6 +389,11 @@ deploy-machine-agent: build-machine-agent-image
 		ARGS="$${ARGS} -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
 		echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
 	fi ;\
+	if [ -f "build/mc-backup-image.txt" ]; then \
+		MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
+		ARGS="$${ARGS} -var=\"backup_image=$${MC_BACKUP_IMAGE_TAG}\"" ;\
+		echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
+	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	tofu -chdir=deploy apply $${ARGS} -auto-approve
@@ -366,7 +410,13 @@ deploy-controller: controller-image daprd-image
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -auto-approve
+	ARGS="-var=\"controller_image=$${CONTROLLER_IMAGE_TAG}\" -var=\"daprd_image=$${DAPRD_IMAGE_TAG}\"" ;\
+	if [ -f "build/mc-backup-image.txt" ]; then \
+		MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
+		ARGS="$${ARGS} -var=\"backup_image=$${MC_BACKUP_IMAGE_TAG}\"" ;\
+		echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
+	fi ;\
+	tofu -chdir=deploy apply $${ARGS} -auto-approve
 
 # Clean up old local images to prevent registry bloat
 cleanup-old-images:
@@ -386,6 +436,13 @@ cleanup-old-images:
 			gcloud artifacts docker images delete "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/controller@$$digest" --quiet || true ;\
 		fi ;\
 	done
+	@echo "Cleaning old local mc-backup images..."
+	@gcloud artifacts docker images list "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio" --filter="tags~$(USERNAME)-local" --format="value(version)" --limit=10 | tail -n +6 | while read -r digest; do \
+		if [ -n "$$digest" ]; then \
+			echo "Deleting old image: $$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/mc-backup@$$digest" ;\
+			gcloud artifacts docker images delete "$$LOCATION-docker.pkg.dev/$$PROJECT_ID/metio/mc-backup@$$digest" --quiet || true ;\
+		fi ;\
+	done
 	@echo "Cleanup completed"
 
 # Show available targets
@@ -395,15 +452,18 @@ help:
 	@echo "  <binary>                - Build specific binary (e.g., make controller)"
 	@echo "  controller-image        - Build controller Docker image and push to Artifact Registry"
 	@echo "  machine-agent-image     - Build machine-agent image and push to Artifact Registry"
+	@echo "  mc-backup-image         - Build mc-backup image and push to Artifact Registry"
 	@echo "  daprd-image             - Build daprd image with baked statestore and push to Artifact Registry"
 	@echo "  ci-controller-image     - Build controller image for CI (ghcr.io tag, no push)"
 	@echo "  ci-machine-agent-image  - Build machine-agent image for CI (ghcr.io tag, no push)"
+	@echo "  ci-mc-backup-image      - Build mc-backup image for CI (ghcr.io tag, no push)"
 	@echo "  ci-daprd-image          - Build daprd image for CI (ghcr.io tag, no push)"
 	@echo "  push-images             - Push images to ghcr.io"
 	@echo "  promote                 - Retag image (make promote FROM=<sha> TO=<tag>)"
 	@echo "  build-machine-agent-image - Build machine-agent via gcloud builds (legacy)"
+	@echo "  build-mc-backup-image   - Build mc-backup via gcloud builds (legacy)"
 	@echo "  build-controller-image  - Build controller via gcloud builds (legacy)"
-	@echo "  build-images            - Build all Docker images (controller, machine-agent, daprd)"
+	@echo "  build-images            - Build all Docker images (controller, machine-agent, mc-backup, daprd)"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test                    - Run all tests (backend + frontend)"

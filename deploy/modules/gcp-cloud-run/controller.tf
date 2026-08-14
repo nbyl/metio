@@ -300,6 +300,10 @@ resource "google_cloud_run_v2_service" "controller" {
         value = var.machine_agent_image
       }
       env {
+        name  = "BACKUP_IMAGE"
+        value = var.backup_image
+      }
+      env {
         name  = "OPERATION_MODE"
         value = "cloudtasks"
       }

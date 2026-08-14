@@ -2,6 +2,7 @@ package programs
 
 import (
 	_ "embed"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -10,19 +11,23 @@ import (
 var cloudConfigTemplate string
 
 type TemplateConfig struct {
-	Region              string
-	GCPProject          string
-	Environment         string
-	InstanceName        string
-	BackupBucket        string
-	ServerID            string
-	BackupRetentionDays int
-	ResticPassword      string
-	MachineAgentImage   string
-	MinecraftVersion    string
-	RCONPassword        string
-	ControllerURL       string
-	AgentToken          string
+	Region               string
+	GCPProject           string
+	Environment          string
+	InstanceName         string
+	BackupBucket         string
+	ServerID             string
+	BackupRetentionDays  int
+	ResticPassword       string
+	MachineAgentImage    string
+	BackupImage          string
+	BackupInterval       string
+	PruneResticRetention string
+	BackupServiceEnable  string
+	MinecraftVersion     string
+	RCONPassword         string
+	ControllerURL        string
+	AgentToken           string
 }
 
 func imageRegistryHost(image string, fallbackRegion string) string {
@@ -36,21 +41,40 @@ func imageRegistryHost(image string, fallbackRegion string) string {
 func RenderCloudConfig(config *TemplateConfig) (string, error) {
 	imageHost := imageRegistryHost(config.MachineAgentImage, config.Region)
 
+	// Normalize defaults so the rendered unit file always has valid values,
+	// even when the caller only sets a subset of the template fields.
+	if config.BackupRetentionDays == 0 {
+		config.BackupRetentionDays = 90
+	}
+	if config.BackupImage == "" {
+		config.BackupImage = "ghcr.io/itzg/mc-backup:latest"
+	}
+	if config.BackupInterval == "" {
+		config.BackupInterval = "1h"
+	}
+	if config.PruneResticRetention == "" {
+		config.PruneResticRetention = fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays)
+	}
+
 	replacements := map[string]string{
-		"${region}":              config.Region,
-		"${gcpProject}":          config.GCPProject,
-		"${environment}":         config.Environment,
-		"${instanceName}":        config.InstanceName,
-		"${backupBucket}":        config.BackupBucket,
-		"${serverId}":            config.ServerID,
-		"${backupRetentionDays}": strconv.Itoa(config.BackupRetentionDays),
-		"${resticPassword}":      config.ResticPassword,
-		"${machineAgentImage}":   config.MachineAgentImage,
-		"${minecraftVersion}":    config.MinecraftVersion,
-		"${rconPassword}":        config.RCONPassword,
-		"${controllerUrl}":       config.ControllerURL,
-		"${agentToken}":          config.AgentToken,
-		"${imageRegistryHost}":   imageHost,
+		"${region}":               config.Region,
+		"${gcpProject}":           config.GCPProject,
+		"${environment}":          config.Environment,
+		"${instanceName}":         config.InstanceName,
+		"${backupBucket}":         config.BackupBucket,
+		"${serverId}":             config.ServerID,
+		"${backupRetentionDays}":  strconv.Itoa(config.BackupRetentionDays),
+		"${resticPassword}":       config.ResticPassword,
+		"${machineAgentImage}":    config.MachineAgentImage,
+		"${backupImage}":          config.BackupImage,
+		"${backupInterval}":       config.BackupInterval,
+		"${pruneResticRetention}": config.PruneResticRetention,
+		"${backupServiceEnable}":  config.BackupServiceEnable,
+		"${minecraftVersion}":     config.MinecraftVersion,
+		"${rconPassword}":         config.RCONPassword,
+		"${controllerUrl}":        config.ControllerURL,
+		"${agentToken}":           config.AgentToken,
+		"${imageRegistryHost}":    imageHost,
 	}
 
 	result := cloudConfigTemplate

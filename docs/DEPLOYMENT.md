@@ -380,6 +380,47 @@ Retention:
 Backups run on the standard hourly schedule from `mc-backup`. A manual world save can be triggered
 from the dashboard with the **Save World** button.
 
+#### Per-server backup settings
+
+Each server inherits the deployment defaults (backups **enabled**, hourly interval, Restic
+`--keep-within <backupRetentionDays>d` retention). Individual servers can override the schedule and
+retention from the dashboard (the **Backup** section on a server card) or via the API:
+
+```bash
+# Read current settings (servers that were never customized report defaults)
+curl https://<controller-url>/api/servers/<server-id>/settings/backup
+
+# Override: keep the 3 most recent daily snapshots, hourly schedule
+curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled": true, "backupSchedule": "1h", "keepDaily": 3}'
+
+# Disable backups entirely for this server
+curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled": false}'
+```
+
+The request body maps to Restic retention flags:
+
+| Field           | Restic flag      | Meaning                            |
+|-----------------|------------------|------------------------------------|
+| `backupSchedule`| `BACKUP_INTERVAL`| Interval in `sleep` format (`1h`, `6h`, `1d`, `1w`), empty means default `1h` |
+| `keepLast`      | `--keep-last`    | Always keep this many snapshots    |
+| `keepHourly`    | `--keep-hourly`  | Keep the last N hourly snapshots   |
+| `keepDaily`     | `--keep-daily`   | Keep the last N daily snapshots    |
+| `keepWeekly`    | `--keep-weekly`  | Keep the last N weekly snapshots   |
+| `keepMonthly`   | `--keep-monthly` | Keep the last N monthly snapshots  |
+| `keepYearly`    | `--keep-yearly`  | Keep the last N yearly snapshots   |
+
+Zero/empty values fall back to the deployment default for that dimension. Settings are stored per
+server in the state store and applied by re-provisioning the VM (a Pulumi deployment appears on the
+provisioning page). The `mc-backup` image that renders the schedule/retention configuration is the
+Metio image from `images/mc-backup/`, which wraps the upstream
+[`itzg/mc-backup`](https://github.com/itzg/docker-mc-backup) and adds a post-backup hook that writes
+`/manifests/latest.json` (timestamp, Restic snapshot id, size) after every successful backup. The
+machine-agent mounts the same directory to surface the last backup on the dashboard.
+
 #### Manual Restic access
 
 Operators can inspect a server's repository from a workstation:
@@ -429,7 +470,19 @@ When the machine-agent image changes, the Pulumi program recreates the VM with t
 make deploy
 ```
 
-Builds both images and applies all OpenTofu infrastructure.
+Builds all Docker images (controller, machine-agent, mc-backup, daprd) and applies all OpenTofu
+infrastructure.
+
+#### mc-backup Image Update
+
+```bash
+make build-mc-backup-image
+```
+
+The Metio `mc-backup` image wraps the upstream `itzg/mc-backup` plus a `/manifests` hook (see
+[Per-server backup settings](#per-server-backup-settings)). It is pulled by the per-server backup
+service at VM boot. Changing the `backup_image` Terraform variable rebuilds the cloud-config pushed
+to new/updated servers.
 
 ### Monitoring and Logs
 

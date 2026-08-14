@@ -3,6 +3,7 @@ package programs
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"regexp"
 	"testing"
 
@@ -187,6 +188,67 @@ func TestServerConfigDefaults_CentralBackup(t *testing.T) {
 	assert.Equal(t, "my-project-development-backups", centralBackupBucketName(config.GCPProject, config.Environment))
 	assert.Equal(t, "servers/srv-1/restic", serverBackupPrefix(config.ServerID))
 	assert.Equal(t, 0, config.BackupRetentionDays, "zero means the program default (90) applies")
+}
+
+func TestResticRetention(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *BackupConfig
+		want   string
+	}{
+		{
+			name:   "nil config falls back to deployment default",
+			config: nil,
+			want:   "",
+		},
+		{
+			name:   "no retention override falls back to deployment default",
+			config: &BackupConfig{Enabled: true, BackupSchedule: "6h"},
+			want:   "",
+		},
+		{
+			name:   "single retention flag",
+			config: &BackupConfig{Enabled: true, KeepDaily: 10},
+			want:   "--keep-daily 10",
+		},
+		{
+			name:   "multiple retention flags in canonical order",
+			config: &BackupConfig{KeepDaily: 10, KeepLast: 3, KeepMonthly: 12, KeepWeekly: 4},
+			want:   "--keep-last 3 --keep-daily 10 --keep-weekly 4 --keep-monthly 12",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, resticRetention(tt.config))
+		})
+	}
+}
+
+func TestServerProgramBackupDefaults_EnabledByDefault(t *testing.T) {
+	config := &ServerConfig{
+		Name:                "test-server",
+		ServerID:            "srv-1",
+		GCPProject:          "my-project",
+		Environment:         "development",
+		BackupRetentionDays: 90,
+		Backup:              nil,
+	}
+
+	userData, err := RenderCloudConfig(&TemplateConfig{
+		Region:               config.Region,
+		GCPProject:           config.GCPProject,
+		Environment:          config.Environment,
+		InstanceName:         config.Name,
+		ServerID:             config.ServerID,
+		BackupRetentionDays:  config.BackupRetentionDays,
+		BackupImage:          config.BackupImage,
+		BackupInterval:       "1h",
+		PruneResticRetention: fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays),
+		BackupServiceEnable:  "minecraft-backup ",
+		RCONPassword:         "rcon-password",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, userData, "systemctl enable minecraft minecraft-backup metio-machine-agent")
 }
 
 func TestExistingAddressImportID(t *testing.T) {

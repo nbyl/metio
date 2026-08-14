@@ -23,11 +23,18 @@ type ServerConfig struct {
 	DiskSizeGB        int
 	Environment       string
 	MachineAgentImage string
+	BackupImage       string
 	GCPProject        string
 	RCONPassword      string
 	ExistingAddress   string
 	ControllerURL     string
 	AgentToken        string
+
+	// Backup holds a per-server override for the backup schedule and Restic
+	// retention policy. When nil, the deployment defaults apply (backup
+	// enabled, hourly interval, keep-within BackupRetentionDays), so existing
+	// servers are unaffected until a backup config is set for them.
+	Backup *BackupConfig
 
 	// BackupBucket is the deployment-wide central backup bucket (ADR-0004).
 	// When empty it is derived from GCPProject and Environment as
@@ -89,6 +96,46 @@ func existingAddressImportID(config *ServerConfig) string {
 		config.GCPProject, config.Region, config.ExistingAddress)
 }
 
+// BackupConfig holds a per-server override for the backup schedule and Restic
+// retention policy. Zero values fall back to the deployment defaults.
+type BackupConfig struct {
+	Enabled        bool
+	BackupSchedule string
+	KeepLast       int
+	KeepHourly     int
+	KeepDaily      int
+	KeepWeekly     int
+	KeepMonthly    int
+	KeepYearly     int
+}
+
+// resticRetention renders the PRUNE_RESTIC_RETENTION argument for a backup
+// config, or "" when no retention override is set so the deployment default
+// (keep-within BackupRetentionDays) is used.
+func resticRetention(b *BackupConfig) string {
+	if b == nil {
+		return ""
+	}
+	args := []string{}
+	flags := []struct {
+		name  string
+		value int
+	}{
+		{"--keep-last", b.KeepLast},
+		{"--keep-hourly", b.KeepHourly},
+		{"--keep-daily", b.KeepDaily},
+		{"--keep-weekly", b.KeepWeekly},
+		{"--keep-monthly", b.KeepMonthly},
+		{"--keep-yearly", b.KeepYearly},
+	}
+	for _, f := range flags {
+		if f.value > 0 {
+			args = append(args, fmt.Sprintf("%s %d", f.name, f.value))
+		}
+	}
+	return strings.Join(args, " ")
+}
+
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 	return func(ctx *pulumi.Context) error {
 		if config.Name == "" {
@@ -123,20 +170,49 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			resticPassword = config.RCONPassword
 		}
 
+		backupImage := config.BackupImage
+		if backupImage == "" {
+			backupImage = "ghcr.io/itzg/mc-backup:latest"
+		}
+
+		// Backup scheduling and retention. Per-server overrides take effect
+		// only when a backup config is provided; otherwise the deployment
+		// defaults apply so existing servers keep their current behavior.
+		backupEnabled := true
+		backupInterval := "1h"
+		pruneResticRetention := fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays)
+		backupServiceEnable := "minecraft-backup "
+		if config.Backup != nil {
+			backupEnabled = config.Backup.Enabled
+			if config.Backup.BackupSchedule != "" {
+				backupInterval = config.Backup.BackupSchedule
+			}
+			if retention := resticRetention(config.Backup); retention != "" {
+				pruneResticRetention = retention
+			}
+			if !backupEnabled {
+				backupServiceEnable = ""
+			}
+		}
+
 		userData, err := RenderCloudConfig(&TemplateConfig{
-			Region:              config.Region,
-			GCPProject:          config.GCPProject,
-			Environment:         config.Environment,
-			InstanceName:        config.Name,
-			BackupBucket:        config.BackupBucket,
-			ServerID:            config.ServerID,
-			BackupRetentionDays: config.BackupRetentionDays,
-			ResticPassword:      resticPassword,
-			MachineAgentImage:   config.MachineAgentImage,
-			MinecraftVersion:    config.MinecraftVersion,
-			RCONPassword:        config.RCONPassword,
-			ControllerURL:       config.ControllerURL,
-			AgentToken:          config.AgentToken,
+			Region:               config.Region,
+			GCPProject:           config.GCPProject,
+			Environment:          config.Environment,
+			InstanceName:         config.Name,
+			BackupBucket:         config.BackupBucket,
+			ServerID:             config.ServerID,
+			BackupRetentionDays:  config.BackupRetentionDays,
+			ResticPassword:       resticPassword,
+			MachineAgentImage:    config.MachineAgentImage,
+			BackupImage:          backupImage,
+			BackupInterval:       backupInterval,
+			PruneResticRetention: pruneResticRetention,
+			BackupServiceEnable:  backupServiceEnable,
+			MinecraftVersion:     config.MinecraftVersion,
+			RCONPassword:         config.RCONPassword,
+			ControllerURL:        config.ControllerURL,
+			AgentToken:           config.AgentToken,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)

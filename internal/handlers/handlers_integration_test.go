@@ -2259,3 +2259,144 @@ func TestUpdateServer_UnavailableMachineTypeUnchangedStillSucceeds(t *testing.T)
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	mockDB.AssertCalled(t, "UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig"))
 }
+
+func TestGetBackupSettings_Default(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/settings/backup", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.GetBackupSettingsByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp servers.BackupSettings
+	json.NewDecoder(w.Body).Decode(&resp)
+	assert.True(t, resp.Enabled, "servers without an override report deployment defaults (enabled)")
+	assert.Equal(t, "", resp.BackupSchedule)
+	assert.Equal(t, 0, resp.KeepDaily)
+}
+
+func TestGetBackupSettings_Stored(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
+		Backup: &db.BackupConfig{Enabled: false, BackupSchedule: "6h", KeepDaily: 7, KeepLast: 3},
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/settings/backup", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.GetBackupSettingsByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp servers.BackupSettings
+	json.NewDecoder(w.Body).Decode(&resp)
+	assert.False(t, resp.Enabled)
+	assert.Equal(t, "6h", resp.BackupSchedule)
+	assert.Equal(t, 7, resp.KeepDaily)
+	assert.Equal(t, 3, resp.KeepLast)
+}
+
+func TestGetBackupSettings_NotFound(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "missing").Return((*db.ServerConfig)(nil), assert.AnError)
+
+	req := httptest.NewRequest("GET", "/api/servers/missing/settings/backup", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "missing"})
+	w := httptest.NewRecorder()
+	servers.GetBackupSettingsByID(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestUpdateBackupSettings_BadSchedule(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
+	}, nil)
+
+	body, _ := json.Marshal(servers.BackupSettings{Enabled: true, BackupSchedule: "12"})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1/settings/backup", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateBackupSettingsByID(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	mockDB.AssertNotCalled(t, "SaveConfigSnapshot", mock.Anything, mock.Anything, mock.Anything)
+	mockDB.AssertNotCalled(t, "UpdateServerConfig", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestUpdateBackupSettings_Success(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
+
+	body, _ := json.Marshal(servers.BackupSettings{Enabled: true, BackupSchedule: "6h", KeepDaily: 10})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1/settings/backup", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateBackupSettingsByID(w, req)
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	var resp servers.BackupSettings
+	json.NewDecoder(w.Body).Decode(&resp)
+	assert.True(t, resp.Enabled)
+	assert.Equal(t, "6h", resp.BackupSchedule)
+	assert.Equal(t, 10, resp.KeepDaily)
+	mockPS.AssertCalled(t, "UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int"))
+}
+
+func TestUpdateBackupSettings_ProvisioningFailureReverts(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockPS := new(testutil.MockProvisioningService)
+	oldPS := servers.ProvisioningService
+	servers.ProvisioningService = mockPS
+	defer func() { servers.ProvisioningService = oldPS }()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
+	}, nil)
+	mockDB.On("SaveConfigSnapshot", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(assert.AnError)
+	mockPS.On("RevertServerConfig", mock.Anything, "srv1").Return(nil)
+
+	body, _ := json.Marshal(servers.BackupSettings{Enabled: false})
+	req := httptest.NewRequest("PUT", "/api/servers/srv1/settings/backup", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.UpdateBackupSettingsByID(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	mockPS.AssertCalled(t, "RevertServerConfig", mock.Anything, "srv1")
+}
