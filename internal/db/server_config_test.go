@@ -246,16 +246,13 @@ func TestBackupConfigIsValid(t *testing.T) {
 		{name: "nil uses deployment defaults", config: nil, wantErr: false},
 		{name: "default enabled", config: &BackupConfig{Enabled: true}, wantErr: false},
 		{name: "disabled", config: &BackupConfig{Enabled: false}, wantErr: false},
-		{name: "hourly schedule", config: &BackupConfig{Enabled: true, BackupSchedule: "1h"}, wantErr: false},
-		{name: "multiple day schedule", config: &BackupConfig{Enabled: true, BackupSchedule: "6h"}, wantErr: false},
-		{name: "week schedule", config: &BackupConfig{Enabled: true, BackupSchedule: "2w"}, wantErr: false},
-		{name: "retention flags", config: &BackupConfig{Enabled: true, KeepDaily: 7, KeepLast: 3}, wantErr: false},
-		{name: "empty schedule invalid", config: &BackupConfig{Enabled: true, BackupSchedule: ""}, wantErr: false},
-		{name: "bad schedule", config: &BackupConfig{Enabled: true, BackupSchedule: "every day"}, wantErr: true},
-		{name: "schedule without unit", config: &BackupConfig{Enabled: true, BackupSchedule: "6"}, wantErr: true},
-		{name: "schedule with compound unit", config: &BackupConfig{Enabled: true, BackupSchedule: "1h30m"}, wantErr: true},
-		{name: "negative retention", config: &BackupConfig{Enabled: true, KeepDaily: -1}, wantErr: true},
-		{name: "negative keep last", config: &BackupConfig{Enabled: true, KeepLast: -2}, wantErr: true},
+		{name: "interval in hours", config: &BackupConfig{Enabled: true, BackupIntervalHours: 6}, wantErr: false},
+		{name: "retention policy", config: &BackupConfig{Enabled: true, Keep: 7, KeepUnit: "daily"}, wantErr: false},
+		{name: "keep without unit", config: &BackupConfig{Enabled: true, Keep: 7}, wantErr: true},
+		{name: "unit without keep", config: &BackupConfig{Enabled: true, KeepUnit: "daily"}, wantErr: false},
+		{name: "unsupported unit", config: &BackupConfig{Enabled: true, Keep: 7, KeepUnit: "fortnightly"}, wantErr: true},
+		{name: "negative interval", config: &BackupConfig{Enabled: true, BackupIntervalHours: -1}, wantErr: true},
+		{name: "negative retention", config: &BackupConfig{Enabled: true, Keep: -1, KeepUnit: "daily"}, wantErr: true},
 	}
 
 	for _, tt := range testCases {
@@ -282,7 +279,7 @@ func TestValidateServerConfig_Backup(t *testing.T) {
 
 	t.Run("valid backup config", func(t *testing.T) {
 		config := *validBase
-		config.Backup = &BackupConfig{Enabled: true, BackupSchedule: "6h", KeepDaily: 7}
+		config.Backup = &BackupConfig{Enabled: true, BackupIntervalHours: 6, Keep: 7, KeepUnit: "daily"}
 		assert.NoError(t, ValidateServerConfig(&config))
 	})
 
@@ -292,9 +289,9 @@ func TestValidateServerConfig_Backup(t *testing.T) {
 		assert.NoError(t, ValidateServerConfig(&config))
 	})
 
-	t.Run("invalid backup schedule", func(t *testing.T) {
+	t.Run("invalid backup interval", func(t *testing.T) {
 		config := *validBase
-		config.Backup = &BackupConfig{Enabled: true, BackupSchedule: "12"}
+		config.Backup = &BackupConfig{Enabled: true, BackupIntervalHours: -1}
 		assert.Error(t, ValidateServerConfig(&config))
 	})
 }

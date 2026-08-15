@@ -395,10 +395,10 @@ retention from the dashboard (the **Backup** section on a server card) or via th
 # Read current settings (servers that were never customized report defaults)
 curl https://<controller-url>/api/servers/<server-id>/settings/backup
 
-# Override: keep the 3 most recent daily snapshots, hourly schedule
+# Override: keep the 3 most recent daily snapshots, backup every 6 hours
 curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
   -H 'Content-Type: application/json' \
-  -d '{"enabled": true, "backupSchedule": "1h", "keepDaily": 3}'
+  -d '{"enabled": true, "backupIntervalHours": 6, "keep": 3, "keepUnit": "daily"}'
 
 # Disable backups entirely for this server
 curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
@@ -406,17 +406,12 @@ curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
   -d '{"enabled": false}'
 ```
 
-The request body maps to Restic retention flags:
+The request body maps to the backup schedule and Restic retention:
 
-| Field           | Restic flag      | Meaning                            |
-|-----------------|------------------|------------------------------------|
-| `backupSchedule`| `BACKUP_INTERVAL`| Interval in `sleep` format (`1h`, `6h`, `1d`, `1w`), empty means default `1h` |
-| `keepLast`      | `--keep-last`    | Always keep this many snapshots    |
-| `keepHourly`    | `--keep-hourly`  | Keep the last N hourly snapshots   |
-| `keepDaily`     | `--keep-daily`   | Keep the last N daily snapshots    |
-| `keepWeekly`    | `--keep-weekly`  | Keep the last N weekly snapshots   |
-| `keepMonthly`   | `--keep-monthly` | Keep the last N monthly snapshots  |
-| `keepYearly`    | `--keep-yearly`  | Keep the last N yearly snapshots   |
+| Field               | Effect                                | Meaning                                |
+|---------------------|---------------------------------------|----------------------------------------|
+| `backupIntervalHours` | `BACKUP_INTERVAL`                   | Hours between backups (e.g. `6`, `24`), zero means default `1h` |
+| `keep` + `keepUnit` | `--keep-<unit> <keep>`               | Keep the last N snapshots of the given unit (`hourly`, `daily`, `weekly`, `monthly`, `yearly`) |
 
 Zero/empty values fall back to the deployment default for that dimension. Settings are stored per
 server in the state store and applied by re-provisioning the VM (a Pulumi deployment appears on the

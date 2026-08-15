@@ -190,18 +190,18 @@ func TestResticRetention(t *testing.T) {
 		},
 		{
 			name:   "no retention override falls back to deployment default",
-			config: &BackupConfig{Enabled: true, BackupSchedule: "6h"},
+			config: &BackupConfig{Enabled: true, BackupIntervalHours: 6},
 			want:   "",
 		},
 		{
 			name:   "single retention flag",
-			config: &BackupConfig{Enabled: true, KeepDaily: 10},
+			config: &BackupConfig{Enabled: true, Keep: 10, KeepUnit: "daily"},
 			want:   "--keep-daily 10",
 		},
 		{
-			name:   "multiple retention flags in canonical order",
-			config: &BackupConfig{KeepDaily: 10, KeepLast: 3, KeepMonthly: 12, KeepWeekly: 4},
-			want:   "--keep-last 3 --keep-daily 10 --keep-weekly 4 --keep-monthly 12",
+			name:   "unsupported retention unit renders empty",
+			config: &BackupConfig{Keep: 12, KeepUnit: "fortnightly"},
+			want:   "",
 		},
 	}
 	for _, tt := range tests {

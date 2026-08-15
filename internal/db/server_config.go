@@ -21,19 +21,19 @@ func (s *ShutdownSchedule) IsValid() bool {
 	return s.Time != "" && s.Timezone != ""
 }
 
+// BackupKeepUnits are the supported Restic retention units for a per-server
+// backup override.
+var BackupKeepUnits = []string{"hourly", "daily", "weekly", "monthly", "yearly"}
+
 // BackupConfig holds a per-server override for the backup schedule and Restic
 // retention policy. Zero/empty values fall back to the deployment defaults
 // (backup enabled, hourly interval, keep-within BackupRetentionDays), so
 // existing servers are unaffected until a backup config is set for them.
 type BackupConfig struct {
-	Enabled        bool   `json:"enabled"`
-	BackupSchedule string `json:"backupSchedule,omitempty"`
-	KeepLast       int    `json:"keepLast,omitempty"`
-	KeepHourly     int    `json:"keepHourly,omitempty"`
-	KeepDaily      int    `json:"keepDaily,omitempty"`
-	KeepWeekly     int    `json:"keepWeekly,omitempty"`
-	KeepMonthly    int    `json:"keepMonthly,omitempty"`
-	KeepYearly     int    `json:"keepYearly,omitempty"`
+	Enabled             bool   `json:"enabled"`
+	BackupIntervalHours int    `json:"backupIntervalHours,omitempty"`
+	Keep                int    `json:"keep,omitempty"`
+	KeepUnit            string `json:"keepUnit,omitempty"`
 }
 
 // IsValid validates a backup config. A nil config (deployment defaults) is
@@ -42,19 +42,25 @@ func (b *BackupConfig) IsValid() error {
 	if b == nil {
 		return nil
 	}
-	if b.BackupSchedule != "" && !isValidBackupSchedule(b.BackupSchedule) {
-		return fmt.Errorf("backup schedule %q must be a duration with a single unit like 30m, 1h, 6h, 1d, 1w (units s, m, h, d, w)", b.BackupSchedule)
+	if b.BackupIntervalHours < 0 {
+		return fmt.Errorf("backup interval must not be negative, got %d", b.BackupIntervalHours)
 	}
-	for name, v := range map[string]int{
-		"keepLast":    b.KeepLast,
-		"keepHourly":  b.KeepHourly,
-		"keepDaily":   b.KeepDaily,
-		"keepWeekly":  b.KeepWeekly,
-		"keepMonthly": b.KeepMonthly,
-		"keepYearly":  b.KeepYearly,
-	} {
-		if v < 0 {
-			return fmt.Errorf("%s must not be negative, got %d", name, v)
+	if b.Keep < 0 {
+		return fmt.Errorf("keep must not be negative, got %d", b.Keep)
+	}
+	if b.Keep > 0 && b.KeepUnit == "" {
+		return fmt.Errorf("keep unit is required when a keep policy is set")
+	}
+	if b.KeepUnit != "" {
+		valid := false
+		for _, unit := range BackupKeepUnits {
+			if unit == b.KeepUnit {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("keep unit %q must be one of %v", b.KeepUnit, BackupKeepUnits)
 		}
 	}
 	return nil

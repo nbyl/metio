@@ -2278,8 +2278,9 @@ func TestGetBackupSettings_Default(t *testing.T) {
 	var resp servers.BackupSettings
 	json.NewDecoder(w.Body).Decode(&resp)
 	assert.True(t, resp.Enabled, "servers without an override report deployment defaults (enabled)")
-	assert.Equal(t, "", resp.BackupSchedule)
-	assert.Equal(t, 0, resp.KeepDaily)
+	assert.Equal(t, 0, resp.BackupIntervalHours)
+	assert.Equal(t, 0, resp.Keep)
+	assert.Equal(t, "", resp.KeepUnit)
 }
 
 func TestGetBackupSettings_Stored(t *testing.T) {
@@ -2289,7 +2290,7 @@ func TestGetBackupSettings_Stored(t *testing.T) {
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
 		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
-		Backup: &db.BackupConfig{Enabled: false, BackupSchedule: "6h", KeepDaily: 7, KeepLast: 3},
+		Backup: &db.BackupConfig{Enabled: false, BackupIntervalHours: 6, Keep: 7, KeepUnit: "daily"},
 	}, nil)
 
 	req := httptest.NewRequest("GET", "/api/servers/srv1/settings/backup", nil)
@@ -2301,9 +2302,9 @@ func TestGetBackupSettings_Stored(t *testing.T) {
 	var resp servers.BackupSettings
 	json.NewDecoder(w.Body).Decode(&resp)
 	assert.False(t, resp.Enabled)
-	assert.Equal(t, "6h", resp.BackupSchedule)
-	assert.Equal(t, 7, resp.KeepDaily)
-	assert.Equal(t, 3, resp.KeepLast)
+	assert.Equal(t, 6, resp.BackupIntervalHours)
+	assert.Equal(t, 7, resp.Keep)
+	assert.Equal(t, "daily", resp.KeepUnit)
 }
 
 func TestGetBackupSettings_NotFound(t *testing.T) {
@@ -2321,7 +2322,7 @@ func TestGetBackupSettings_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestUpdateBackupSettings_BadSchedule(t *testing.T) {
+func TestUpdateBackupSettings_InvalidInterval(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 	cleanup := setupMockDB(mockDB)
 	defer cleanup()
@@ -2330,7 +2331,7 @@ func TestUpdateBackupSettings_BadSchedule(t *testing.T) {
 		ID: "srv1", Name: "test", Region: "us-central1", Zone: "us-central1-a", MachineType: "e2-small",
 	}, nil)
 
-	body, _ := json.Marshal(servers.BackupSettings{Enabled: true, BackupSchedule: "12"})
+	body, _ := json.Marshal(servers.BackupSettings{Enabled: true, BackupIntervalHours: -1})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1/settings/backup", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
@@ -2358,7 +2359,7 @@ func TestUpdateBackupSettings_Success(t *testing.T) {
 	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
 	mockPS.On("UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int")).Return(nil)
 
-	body, _ := json.Marshal(servers.BackupSettings{Enabled: true, BackupSchedule: "6h", KeepDaily: 10})
+	body, _ := json.Marshal(servers.BackupSettings{Enabled: true, BackupIntervalHours: 6, Keep: 10, KeepUnit: "daily"})
 	req := httptest.NewRequest("PUT", "/api/servers/srv1/settings/backup", bytes.NewReader(body))
 	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
 	w := httptest.NewRecorder()
@@ -2368,8 +2369,9 @@ func TestUpdateBackupSettings_Success(t *testing.T) {
 	var resp servers.BackupSettings
 	json.NewDecoder(w.Body).Decode(&resp)
 	assert.True(t, resp.Enabled)
-	assert.Equal(t, "6h", resp.BackupSchedule)
-	assert.Equal(t, 10, resp.KeepDaily)
+	assert.Equal(t, 6, resp.BackupIntervalHours)
+	assert.Equal(t, 10, resp.Keep)
+	assert.Equal(t, "daily", resp.KeepUnit)
 	mockPS.AssertCalled(t, "UpdateServer", mock.Anything, "srv1", mock.AnythingOfType("*programs.ServerConfig"), mock.AnythingOfType("int"))
 }
 

@@ -81,13 +81,9 @@ export interface StatusResponse {
  */
 export interface BackupSettings {
   enabled: boolean
-  backupSchedule?: string
-  keepLast?: number
-  keepHourly?: number
-  keepDaily?: number
-  keepWeekly?: number
-  keepMonthly?: number
-  keepYearly?: number
+  backupIntervalHours?: number
+  keep?: number
+  keepUnit?: string
 }
 
 /**

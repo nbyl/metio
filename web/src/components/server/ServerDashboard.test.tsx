@@ -406,7 +406,7 @@ describe('ServerDashboard backup settings', () => {
 
   it('preloads current settings into the backup form', async () => {
     vi.mocked(useBackupSettings).mockReturnValue({
-      data: { enabled: true, backupSchedule: '6h', keepDaily: 3 },
+      data: { enabled: true, backupIntervalHours: 6, keep: 3, keepUnit: 'daily' },
       isLoading: false,
     } as never)
 
@@ -415,13 +415,13 @@ describe('ServerDashboard backup settings', () => {
     await user.click(screen.getByRole('button', { name: /update/i }))
     await user.click(screen.getByRole('tab', { name: 'Backup' }))
 
-    expect(screen.getByLabelText('Backup interval')).toHaveValue('6h')
-    expect(screen.getByLabelText('Keep daily')).toHaveValue(3)
+    expect(screen.getByLabelText('Backup interval (hours)')).toHaveValue(6)
+    expect(screen.getByLabelText('Retention policy')).toHaveValue(3)
   })
 
   it('saves settings and navigates to provisioning on success', async () => {
     vi.mocked(useBackupSettings).mockReturnValue({
-      data: { enabled: true, backupSchedule: '1h' },
+      data: { enabled: true, backupIntervalHours: 1 },
       isLoading: false,
     } as never)
     const mockMutate = vi.fn(
@@ -440,7 +440,7 @@ describe('ServerDashboard backup settings', () => {
     await user.click(screen.getByRole('button', { name: /save/i }))
 
     expect(mockMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: true, backupSchedule: '1h' }),
+      expect.objectContaining({ enabled: true, backupIntervalHours: 1 }),
       expect.anything()
     )
     expect(mockNavigate).toHaveBeenCalledWith('/servers/srv1/provisioning', {

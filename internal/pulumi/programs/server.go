@@ -106,14 +106,10 @@ func existingAddressImportID(config *ServerConfig) string {
 // BackupConfig holds a per-server override for the backup schedule and Restic
 // retention policy. Zero values fall back to the deployment defaults.
 type BackupConfig struct {
-	Enabled        bool
-	BackupSchedule string
-	KeepLast       int
-	KeepHourly     int
-	KeepDaily      int
-	KeepWeekly     int
-	KeepMonthly    int
-	KeepYearly     int
+	Enabled             bool
+	BackupIntervalHours int
+	Keep                int
+	KeepUnit            string
 }
 
 // resticRetention renders the PRUNE_RESTIC_RETENTION argument for a backup
@@ -123,24 +119,16 @@ func resticRetention(b *BackupConfig) string {
 	if b == nil {
 		return ""
 	}
-	args := []string{}
-	flags := []struct {
-		name  string
-		value int
-	}{
-		{"--keep-last", b.KeepLast},
-		{"--keep-hourly", b.KeepHourly},
-		{"--keep-daily", b.KeepDaily},
-		{"--keep-weekly", b.KeepWeekly},
-		{"--keep-monthly", b.KeepMonthly},
-		{"--keep-yearly", b.KeepYearly},
+	if b.Keep <= 0 {
+		return ""
 	}
-	for _, f := range flags {
-		if f.value > 0 {
-			args = append(args, fmt.Sprintf("%s %d", f.name, f.value))
+	unit := "--keep-" + b.KeepUnit
+	for _, u := range []string{"hourly", "daily", "weekly", "monthly", "yearly"} {
+		if u == b.KeepUnit {
+			return fmt.Sprintf("%s %d", unit, b.Keep)
 		}
 	}
-	return strings.Join(args, " ")
+	return ""
 }
 
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
@@ -191,8 +179,8 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		backupServiceEnable := "minecraft-backup "
 		if config.Backup != nil {
 			backupEnabled = config.Backup.Enabled
-			if config.Backup.BackupSchedule != "" {
-				backupInterval = config.Backup.BackupSchedule
+			if config.Backup.BackupIntervalHours > 0 {
+				backupInterval = fmt.Sprintf("%dh", config.Backup.BackupIntervalHours)
 			}
 			if retention := resticRetention(config.Backup); retention != "" {
 				pruneResticRetention = retention

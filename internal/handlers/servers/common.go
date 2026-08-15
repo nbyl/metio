@@ -53,14 +53,10 @@ type UpdateServerRequest struct {
 // a response with only Enabled=true (all values defaulted) is what is served
 // for servers that were never customized.
 type BackupSettings struct {
-	Enabled        bool   `json:"enabled"`
-	BackupSchedule string `json:"backupSchedule,omitempty"`
-	KeepLast       int    `json:"keepLast,omitempty"`
-	KeepHourly     int    `json:"keepHourly,omitempty"`
-	KeepDaily      int    `json:"keepDaily,omitempty"`
-	KeepWeekly     int    `json:"keepWeekly,omitempty"`
-	KeepMonthly    int    `json:"keepMonthly,omitempty"`
-	KeepYearly     int    `json:"keepYearly,omitempty"`
+	Enabled             bool   `json:"enabled"`
+	BackupIntervalHours int    `json:"backupIntervalHours,omitempty"`
+	Keep                int    `json:"keep,omitempty"`
+	KeepUnit            string `json:"keepUnit,omitempty"`
 }
 
 func backupSettingsFromDB(c *db.BackupConfig) *BackupSettings {
@@ -69,14 +65,10 @@ func backupSettingsFromDB(c *db.BackupConfig) *BackupSettings {
 		return &BackupSettings{Enabled: true}
 	}
 	return &BackupSettings{
-		Enabled:        c.Enabled,
-		BackupSchedule: c.BackupSchedule,
-		KeepLast:       c.KeepLast,
-		KeepHourly:     c.KeepHourly,
-		KeepDaily:      c.KeepDaily,
-		KeepWeekly:     c.KeepWeekly,
-		KeepMonthly:    c.KeepMonthly,
-		KeepYearly:     c.KeepYearly,
+		Enabled:             c.Enabled,
+		BackupIntervalHours: c.BackupIntervalHours,
+		Keep:                c.Keep,
+		KeepUnit:            c.KeepUnit,
 	}
 }
 
@@ -85,14 +77,10 @@ func backupSettingsToDB(s *BackupSettings) *db.BackupConfig {
 		return nil
 	}
 	return &db.BackupConfig{
-		Enabled:        s.Enabled,
-		BackupSchedule: s.BackupSchedule,
-		KeepLast:       s.KeepLast,
-		KeepHourly:     s.KeepHourly,
-		KeepDaily:      s.KeepDaily,
-		KeepWeekly:     s.KeepWeekly,
-		KeepMonthly:    s.KeepMonthly,
-		KeepYearly:     s.KeepYearly,
+		Enabled:             s.Enabled,
+		BackupIntervalHours: s.BackupIntervalHours,
+		Keep:                s.Keep,
+		KeepUnit:            s.KeepUnit,
 	}
 }
 
@@ -101,14 +89,10 @@ func dbBackupToProgramBackup(c *db.BackupConfig) *programs.BackupConfig {
 		return nil
 	}
 	return &programs.BackupConfig{
-		Enabled:        c.Enabled,
-		BackupSchedule: c.BackupSchedule,
-		KeepLast:       c.KeepLast,
-		KeepHourly:     c.KeepHourly,
-		KeepDaily:      c.KeepDaily,
-		KeepWeekly:     c.KeepWeekly,
-		KeepMonthly:    c.KeepMonthly,
-		KeepYearly:     c.KeepYearly,
+		Enabled:             c.Enabled,
+		BackupIntervalHours: c.BackupIntervalHours,
+		Keep:                c.Keep,
+		KeepUnit:            c.KeepUnit,
 	}
 }
 

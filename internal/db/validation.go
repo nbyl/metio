@@ -6,13 +6,12 @@ import (
 )
 
 var (
-	nameRegex           = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$`)
-	timeRegex           = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):[0-5][0-9]$`)
-	regionRegex         = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	zoneRegex           = regexp.MustCompile(`^[a-z][a-z0-9-]*?-[a-z]$`)
-	machineTypeRegex    = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	backupScheduleRegex = regexp.MustCompile(`^[0-9]+[smhdw]$`)
-	validGCPRegions     = map[string]bool{
+	nameRegex        = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$`)
+	timeRegex        = regexp.MustCompile(`^([01]?[0-9]|2[0-3]):[0-5][0-9]$`)
+	regionRegex      = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	zoneRegex        = regexp.MustCompile(`^[a-z][a-z0-9-]*?-[a-z]$`)
+	machineTypeRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	validGCPRegions  = map[string]bool{
 		"us-central1":             true,
 		"us-east1":                true,
 		"us-east4":                true,
@@ -68,10 +67,6 @@ var (
 
 func isValidTimeFormat(t string) bool {
 	return timeRegex.MatchString(t)
-}
-
-func isValidBackupSchedule(s string) bool {
-	return backupScheduleRegex.MatchString(s)
 }
 
 func isValidTimezone(tz string) bool {

@@ -62,7 +62,7 @@ beforeEach(() => {
     isLoading: false,
   } as never)
   vi.mocked(useBackupSettings).mockReturnValue({
-    data: { enabled: true, backupSchedule: '6h', keepDaily: 3 },
+    data: { enabled: true, backupIntervalHours: 6, keep: 3, keepUnit: 'daily' },
     isLoading: false,
   } as never)
   vi.mocked(useUpdateBackupSettings).mockReturnValue({
@@ -160,7 +160,7 @@ describe('UpdateModal tabs', () => {
       'aria-selected',
       'true'
     )
-    expect(screen.getByLabelText('Backup interval')).toHaveValue('6h')
-    expect(screen.getByLabelText('Keep daily')).toHaveValue(3)
+    expect(screen.getByLabelText('Backup interval (hours)')).toHaveValue(6)
+    expect(screen.getByLabelText('Retention policy')).toHaveValue(3)
   })
 })

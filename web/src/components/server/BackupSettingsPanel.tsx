@@ -14,45 +14,39 @@ export interface BackupSettingsPanelProps {
   serverName: string
 }
 
-export type BackupSettingsFormState = {
+export interface BackupSettingsFormState {
   enabled: boolean
-  backupSchedule: string
-  keepLast: number
-  keepHourly: number
-  keepDaily: number
-  keepWeekly: number
-  keepMonthly: number
-  keepYearly: number
+  backupIntervalHours: number
+  keep: number
+  keepUnit: string
 }
 
-type RetentionKey = Exclude<
-  keyof BackupSettingsFormState,
-  'enabled' | 'backupSchedule'
->
+const KEEP_UNITS = ['hourly', 'daily', 'weekly', 'monthly', 'yearly'] as const
 
-const RETENTION_FIELDS: Array<{
-  key: RetentionKey
-  label: string
-  hint: string
-}> = [
-  { key: 'keepLast', label: 'Keep last', hint: 'Always kept' },
-  { key: 'keepHourly', label: 'Keep hourly', hint: 'Last N hours' },
-  { key: 'keepDaily', label: 'Keep daily', hint: 'Last N days' },
-  { key: 'keepWeekly', label: 'Keep weekly', hint: 'Last N weeks' },
-  { key: 'keepMonthly', label: 'Keep monthly', hint: 'Last N months' },
-  { key: 'keepYearly', label: 'Keep yearly', hint: 'Last N years' },
-]
+export type BackupUnit = (typeof KEEP_UNITS)[number]
+
+const UNIT_LABELS: Record<BackupUnit, string> = {
+  hourly: 'Hourly',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+}
+
+const UNIT_HINTS: Record<BackupUnit, string> = {
+  hourly: 'Keep the last N hourly snapshots',
+  daily: 'Keep the last N daily snapshots',
+  weekly: 'Keep the last N weekly snapshots',
+  monthly: 'Keep the last N monthly snapshots',
+  yearly: 'Keep the last N yearly snapshots',
+}
 
 function toBackupFormState(settings: BackupSettings): BackupSettingsFormState {
   return {
     enabled: settings.enabled,
-    backupSchedule: settings.backupSchedule ?? '',
-    keepLast: settings.keepLast ?? 0,
-    keepHourly: settings.keepHourly ?? 0,
-    keepDaily: settings.keepDaily ?? 0,
-    keepWeekly: settings.keepWeekly ?? 0,
-    keepMonthly: settings.keepMonthly ?? 0,
-    keepYearly: settings.keepYearly ?? 0,
+    backupIntervalHours: settings.backupIntervalHours ?? 0,
+    keep: settings.keep ?? 0,
+    keepUnit: (settings.keepUnit as BackupUnit | undefined) ?? 'daily',
   }
 }
 
@@ -73,29 +67,15 @@ function BackupSettingsForm({
   )
   const updateMutation = useUpdateBackupSettings(serverId)
 
-  const handleSetNumber = (key: RetentionKey, raw: string) => {
-    if (raw === '') {
-      setForm((prev) => ({ ...prev, [key]: 0 }))
-      return
-    }
-    const value = Number(raw)
-    if (Number.isNaN(value) || value < 0) return
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
-
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
     if (updateMutation.isPending) return
 
     const settings: BackupSettings = {
       enabled: form.enabled,
-      backupSchedule: form.backupSchedule.trim() || undefined,
-      keepLast: form.keepLast,
-      keepHourly: form.keepHourly,
-      keepDaily: form.keepDaily,
-      keepWeekly: form.keepWeekly,
-      keepMonthly: form.keepMonthly,
-      keepYearly: form.keepYearly,
+      backupIntervalHours: form.backupIntervalHours || undefined,
+      keep: form.keep || undefined,
+      keepUnit: form.keep && form.keepUnit ? form.keepUnit : undefined,
     }
 
     updateMutation.mutate(settings, {
@@ -122,44 +102,78 @@ function BackupSettingsForm({
       </div>
 
       <div className="backup-field mb-3">
-        <label htmlFor="backup-schedule" className="backup-field-label">
-          Backup interval
+        <label htmlFor="backup-interval" className="backup-field-label">
+          Backup interval (hours)
         </label>
         <input
-          id="backup-schedule"
-          type="text"
-          value={form.backupSchedule}
-          onChange={(e) =>
-            setForm((prev) => ({
-              ...prev,
-              backupSchedule: e.target.value,
-            }))
+          id="backup-interval"
+          type="number"
+          min={0}
+          value={
+            form.backupIntervalHours === 0
+              ? ''
+              : form.backupIntervalHours
           }
-          placeholder="e.g. 1h, 6h, 1d (default 1h)"
-          className="whitelist-input"
+          onChange={(e) => {
+            if (e.target.value === '') {
+              setForm((prev) => ({ ...prev, backupIntervalHours: 0 }))
+              return
+            }
+            const value = Number(e.target.value)
+            if (Number.isNaN(value) || value < 0) return
+            setForm((prev) => ({ ...prev, backupIntervalHours: value }))
+          }}
+          placeholder="default (1h)"
+          className="backup-number-input"
           disabled={updateMutation.isPending || !form.enabled}
         />
+        <span className="backup-field-hint">
+          Hours between backups, e.g. 1, 6, 24 (default 1h)
+        </span>
       </div>
 
-      <div className="backup-grid">
-        {RETENTION_FIELDS.map(({ key, label, hint }) => (
-          <div key={key} className="backup-field">
-            <label htmlFor={`backup-${key}`} className="backup-field-label">
-              {label}
-            </label>
-            <input
-              id={`backup-${key}`}
-              type="number"
-              min={0}
-              value={form[key] === 0 ? '' : form[key]}
-              onChange={(e) => handleSetNumber(key, e.target.value)}
-              placeholder="default"
-              className="backup-number-input"
-              disabled={updateMutation.isPending || !form.enabled}
-            />
-            <span className="backup-field-hint">{hint}</span>
-          </div>
-        ))}
+      <div className="backup-field mb-3">
+        <label htmlFor="backup-keep" className="backup-field-label">
+          Retention policy
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="backup-keep"
+            type="number"
+            min={0}
+            value={form.keep === 0 ? '' : form.keep}
+            onChange={(e) => {
+              if (e.target.value === '') {
+                setForm((prev) => ({ ...prev, keep: 0 }))
+                return
+              }
+              const value = Number(e.target.value)
+              if (Number.isNaN(value) || value < 0) return
+              setForm((prev) => ({ ...prev, keep: value }))
+            }}
+            placeholder="default"
+            className="backup-number-input"
+            disabled={updateMutation.isPending || !form.enabled}
+          />
+          <select
+            value={form.keepUnit}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, keepUnit: e.target.value }))
+            }
+            className="whitelist-input"
+            disabled={updateMutation.isPending || !form.enabled}
+            aria-label="Retention unit"
+          >
+            {KEEP_UNITS.map((unit) => (
+              <option key={unit} value={unit}>
+                {UNIT_LABELS[unit]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="backup-field-hint">
+          {UNIT_HINTS[form.keepUnit as BackupUnit]}
+        </span>
       </div>
 
       <p className="text-xs text-slate-500 mb-3">
