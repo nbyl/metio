@@ -9,7 +9,7 @@
 # repository state directly.
 FROM ghcr.io/itzg/mc-backup:latest
 
-COPY images/mc-backup/post-backup.sh /post-backup.sh
+COPY cmd/mc-backup/post-backup.sh /post-backup.sh
 USER root
 RUN chmod +x /post-backup.sh
 

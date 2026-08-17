@@ -204,7 +204,7 @@ build-mc-backup-image:
 	@mkdir -p build
 	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
 	echo "Building Docker image for mc-backup with timestamp: $${TIMESTAMP}..." ;\
-	MC_BACKUP_BUILD_ID=$$(gcloud builds submit . --config images/mc-backup/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
+	MC_BACKUP_BUILD_ID=$$(gcloud builds submit . --config cmd/mc-backup/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
 	echo "Build ID: $${MC_BACKUP_BUILD_ID}" ;\
 	MC_BACKUP_IMAGE_TAG=$$(gcloud builds describe $${MC_BACKUP_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
 	echo "Built image: $${MC_BACKUP_IMAGE_TAG}" ;\
@@ -239,13 +239,13 @@ ci-machine-agent-image:
 ci-mc-backup-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	echo "Building mc-backup image for CI: ghcr.io/nbyl/metio/mc-backup:$${SHA}"; \
-	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/mc-backup:$${SHA} -f images/mc-backup/Dockerfile --load .
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/mc-backup:$${SHA} -f cmd/mc-backup/Dockerfile --load .
 
 # CI daprd image build — tag for ghcr.io, load into local daemon (no push)
 ci-daprd-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	echo "Building daprd image for CI: ghcr.io/nbyl/metio/daprd:$${SHA}"; \
-	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/daprd:$${SHA} -f deploy/daprd/Dockerfile --load .
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/daprd:$${SHA} -f cmd/daprd/Dockerfile --load .
 
 # Local controller image build + push to Artifact Registry
 controller-image:
@@ -271,7 +271,7 @@ mc-backup-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:$${SHA}"; \
 	echo "Building mc-backup image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f images/mc-backup/Dockerfile -t $${IMAGE} --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/mc-backup/Dockerfile -t $${IMAGE} --push . ; \
 	echo "$${IMAGE}" > build/mc-backup-image.txt
 
 # Local daprd image build + push to Artifact Registry
@@ -280,7 +280,7 @@ daprd-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/daprd:$${SHA}"; \
 	echo "Building daprd image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f deploy/daprd/Dockerfile -t $${IMAGE} --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/daprd/Dockerfile -t $${IMAGE} --push . ; \
 	echo "$${IMAGE}" > build/daprd-image.txt
 
 # Push images to ghcr.io

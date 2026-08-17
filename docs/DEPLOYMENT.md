@@ -416,7 +416,7 @@ The request body maps to the backup schedule and Restic retention:
 Zero/empty values fall back to the deployment default for that dimension. Settings are stored per
 server in the state store and applied by re-provisioning the VM (a Pulumi deployment appears on the
 provisioning page). The `mc-backup` image that renders the schedule/retention configuration is the
-Metio image from `images/mc-backup/`, which wraps the upstream
+Metio image from `cmd/mc-backup/`, which wraps the upstream
 [`itzg/mc-backup`](https://github.com/itzg/docker-mc-backup) and adds a post-backup hook that writes
 `/manifests/latest.json` (timestamp, Restic snapshot id, size) after every successful backup. The
 machine-agent mounts the same directory to surface the last backup on the dashboard.

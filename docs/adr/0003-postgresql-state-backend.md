@@ -178,7 +178,7 @@ keeping the component self-contained and store-agnostic.
 
 A follow-up implementation will touch infrastructure and dev tooling only:
 
-- `deploy/daprd/components/statestore.yaml` — switch to `state.postgresql`.
+- `cmd/daprd/components/statestore.yaml` — switch to `state.postgresql`.
 - New `deploy/modules/gcp-cloud-run/postgres.tf` — Cloud SQL resources and the
   connection-string secret.
 - `deploy/variables.tf` + module `variables.tf` — `postgres_mode` and

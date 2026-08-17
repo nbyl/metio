@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '.', '-f', 'images/mc-backup/Dockerfile', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/mc-backup:$COMMIT_SHA']
+  args: ['build', '.', '-f', 'cmd/mc-backup/Dockerfile', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/mc-backup:$COMMIT_SHA']
 images:
 - '$LOCATION-docker.pkg.dev/$PROJECT_ID/metio/mc-backup:$COMMIT_SHA'
 options:
