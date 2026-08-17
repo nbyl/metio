@@ -5,15 +5,20 @@
 # backup. The machine-agent mounts the same directory at /manifests and will
 # use the manifest to report when the last backup ran on the dashboard.
 #
-# The base image ships bash, jq and restic (Alpine), so the hook can parse the
-# repository state directly.
+# The hook is a statically-linked Go binary (cmd/mc-backup/post-backup) that
+# shells out to the restic binary shipped in the base image.
+FROM golang:1.26-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/mc-backup/post-backup ./cmd/mc-backup/post-backup
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /post-backup ./cmd/mc-backup/post-backup
+
 FROM ghcr.io/itzg/mc-backup:latest
 
-COPY cmd/mc-backup/post-backup.sh /post-backup.sh
-USER root
-RUN chmod +x /post-backup.sh
+COPY --from=builder /post-backup /usr/local/bin/post-backup
 
 # Upstream contract: the backup-loop invokes POST_BACKUP_SCRIPT_FILE with
 #   $1 = backup exit code
 #   $2 = path to the backup tool's output log
-ENV POST_BACKUP_SCRIPT_FILE=/post-backup.sh
+ENV POST_BACKUP_SCRIPT_FILE=/usr/local/bin/post-backup
