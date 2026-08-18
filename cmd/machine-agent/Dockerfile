@@ -16,10 +16,12 @@ RUN go build -ldflags "-X main.Version=${VERSION}" -o build/machine-agent ./cmd/
 FROM debian:13-slim
 WORKDIR /app
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends adduser && \
+    apt-get install -y --no-install-recommends \
+      adduser \
+      ca-certificates \
+      docker-cli && \
     addgroup --gid 65532 nonroot && \
     addgroup --gid 412 docker && \
-    apt-get install -y --no-install-recommends docker.io && \
     adduser --uid 65532 --gid 65532 --disabled-password --gecos "" nonroot && \
     adduser nonroot docker && \
     apt-get clean && \
