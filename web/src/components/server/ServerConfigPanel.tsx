@@ -59,7 +59,9 @@ export function ServerConfigPanel({
           </span>
           <span className="flex items-center gap-2">
             {outdated && (
-              <Badge variant="transitioning">Update Available</Badge>
+              <Badge variant="secondary" className="bg-yellow-600 text-white">
+                Update Available
+              </Badge>
             )}
             {isOpen ? (
               <ChevronDown className="h-4 w-4 text-slate-400" />
@@ -126,7 +128,9 @@ export function ServerConfigPanel({
           </span>
           <span className="flex items-center gap-2">
             {outdated && (
-              <Badge variant="transitioning">Update Available</Badge>
+              <Badge variant="secondary" className="bg-yellow-600 text-white">
+                Update Available
+              </Badge>
             )}
             {isOpen ? (
               <ChevronDown className="h-4 w-4 text-slate-400" />

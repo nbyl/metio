@@ -3,13 +3,21 @@ import { render, screen } from '@testing-library/react';
 import { Separator } from './Separator';
 
 describe('Separator', () => {
-  it('renders separator element', () => {
-    render(<Separator />);
-    expect(screen.getByRole('separator')).toBeInTheDocument();
+  it('renders a decorative separator by default', () => {
+    render(<Separator data-testid="separator" />);
+
+    expect(screen.getByTestId('separator')).toHaveAttribute(
+      'data-slot',
+      'separator'
+    );
   });
 
-  it('forwards extra props', () => {
-    render(<Separator data-testid="separator" />);
-    expect(screen.getByTestId('separator')).toBeInTheDocument();
+  it('can expose the separator role when non-decorative', () => {
+    render(<Separator decorative={false} data-testid="separator" />);
+
+    expect(screen.getByRole('separator')).toHaveAttribute(
+      'data-orientation',
+      'horizontal'
+    );
   });
 });

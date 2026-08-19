@@ -1,26 +1,27 @@
-export { Button, type ButtonProps } from './Button';
-export { Badge, type BadgeProps } from './Badge';
+export { Button, buttonVariants } from './Button';
+export { Badge, badgeVariants } from './Badge';
 export {
   Card,
   CardHeader,
+  CardFooter,
   CardTitle,
+  CardAction,
+  CardDescription,
   CardContent,
-  type CardProps,
-  type CardHeaderProps,
-  type CardTitleProps,
-  type CardContentProps,
 } from './Card';
-export { Separator, type SeparatorProps } from './Separator';
-export { Skeleton, type SkeletonProps } from './Skeleton';
-export { Tooltip, type TooltipProps } from './Tooltip';
-export { Switch, type SwitchProps } from './Switch';
+export { Separator } from './Separator';
+export { Skeleton } from './Skeleton';
+export {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './Tooltip';
+export { Switch } from './Switch';
 export {
   Tabs,
-  TabList,
-  Tab,
-  TabPanel,
-  type TabsProps,
-  type TabListProps,
-  type TabProps,
-  type TabPanelProps,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  tabsListVariants,
 } from './Tabs';

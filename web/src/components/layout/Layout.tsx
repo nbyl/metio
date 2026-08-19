@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/utils';
+import { TooltipProvider } from '../ui/Tooltip';
 
 export interface LayoutProps {
   /** Page content */
@@ -22,7 +23,9 @@ export interface LayoutProps {
 export function Layout({ children, className }: LayoutProps) {
   return (
     <div className="dark min-h-screen bg-background p-8">
-      <div className={cn('container', className)}>{children}</div>
+      <TooltipProvider>
+        <div className={cn('container', className)}>{children}</div>
+      </TooltipProvider>
     </div>
   );
 }

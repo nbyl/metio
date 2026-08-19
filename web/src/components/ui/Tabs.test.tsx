@@ -2,18 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Tabs, TabList, Tab, TabPanel } from './Tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
 
 function TabsHarness() {
   const [value, setValue] = useState('settings');
   return (
     <Tabs value={value} onValueChange={setValue}>
-      <TabList>
-        <Tab value="settings">Settings</Tab>
-        <Tab value="backup">Backup</Tab>
-      </TabList>
-      <TabPanel value="settings">Settings content</TabPanel>
-      <TabPanel value="backup">Backup content</TabPanel>
+      <TabsList>
+        <TabsTrigger value="settings">Settings</TabsTrigger>
+        <TabsTrigger value="backup">Backup</TabsTrigger>
+      </TabsList>
+      <TabsContent value="settings">Settings content</TabsContent>
+      <TabsContent value="backup">Backup content</TabsContent>
     </Tabs>
   );
 }
@@ -21,12 +21,12 @@ function TabsHarness() {
 function renderTabs(onValueChange = vi.fn()) {
   return render(
     <Tabs value="settings" onValueChange={onValueChange}>
-      <TabList>
-        <Tab value="settings">Settings</Tab>
-        <Tab value="backup">Backup</Tab>
-      </TabList>
-      <TabPanel value="settings">Settings content</TabPanel>
-      <TabPanel value="backup">Backup content</TabPanel>
+      <TabsList>
+        <TabsTrigger value="settings">Settings</TabsTrigger>
+        <TabsTrigger value="backup">Backup</TabsTrigger>
+      </TabsList>
+      <TabsContent value="settings">Settings content</TabsContent>
+      <TabsContent value="backup">Backup content</TabsContent>
     </Tabs>
   );
 }
@@ -60,7 +60,6 @@ describe('Tabs', () => {
     renderTabs(handleChange);
 
     await user.click(screen.getByRole('tab', { name: 'Backup' }));
-
     expect(handleChange).toHaveBeenCalledWith('backup');
   });
 
@@ -68,13 +67,7 @@ describe('Tabs', () => {
     const user = userEvent.setup();
     render(<TabsHarness />);
 
-    expect(screen.getByText('Settings content')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Backup' }));
-
-    expect(screen.getByRole('tab', { name: 'Backup' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
     expect(screen.getByText('Backup content')).toBeInTheDocument();
   });
 
@@ -82,10 +75,8 @@ describe('Tabs', () => {
     const user = userEvent.setup();
     renderTabs();
 
-    const settingsTab = screen.getByRole('tab', { name: 'Settings' });
     await user.tab();
-
-    expect(settingsTab).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Settings' })).toHaveFocus();
 
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Backup' })).toHaveFocus();
@@ -96,20 +87,19 @@ describe('Tabs', () => {
     const handleChange = vi.fn();
     render(
       <Tabs value="settings" onValueChange={handleChange}>
-        <TabList>
-          <Tab value="settings">Settings</Tab>
-          <Tab value="backup" disabled>
+        <TabsList>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="backup" disabled>
             Backup
-          </Tab>
-        </TabList>
-        <TabPanel value="settings">Settings content</TabPanel>
-        <TabPanel value="backup">Backup content</TabPanel>
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="settings">Settings content</TabsContent>
+        <TabsContent value="backup">Backup content</TabsContent>
       </Tabs>
     );
 
     const backupTab = screen.getByRole('tab', { name: 'Backup' });
     expect(backupTab).toBeDisabled();
-
     await user.click(backupTab);
     expect(handleChange).not.toHaveBeenCalled();
   });

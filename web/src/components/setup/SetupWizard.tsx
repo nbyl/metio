@@ -187,7 +187,7 @@ function InitializeStep() {
           bucket stores the infrastructure state for your servers.
         </p>
         {!started ? (
-          <Button variant="primary" onClick={handleInitialize}>
+          <Button variant="default" onClick={handleInitialize}>
             Create State Bucket
             <ArrowRight className="h-4 w-4" />
           </Button>
@@ -231,7 +231,7 @@ function CompleteStep() {
           Your GCP project is now configured. You can start creating and
           managing Minecraft servers.
         </p>
-        <Button variant="primary" onClick={() => navigate('/')}>
+        <Button variant="default" onClick={() => navigate('/')}>
           Go to Dashboard
           <ArrowRight className="h-4 w-4" />
         </Button>
@@ -324,7 +324,7 @@ export function SetupWizard() {
             )}
             {step < STEPS.length - 1 && (
               <Button
-                variant="primary"
+                variant="default"
                 onClick={handleNext}
                 disabled={!canAdvance()}
               >

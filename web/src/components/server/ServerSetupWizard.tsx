@@ -8,6 +8,7 @@ import {
   Cpu,
   Settings,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { useServerOptions } from '../../hooks/useServerOptions';
 import { useCreateServer } from '../../hooks/useServerMutations';
@@ -360,7 +361,7 @@ function OptionsStep({ form, onChange }: OptionsStepProps) {
         </div>
         <Switch
           checked={form.shutdownEnabled}
-          onChange={(enabled) => onChange({ shutdownEnabled: enabled })}
+          onCheckedChange={(enabled) => onChange({ shutdownEnabled: enabled })}
           aria-label="Toggle scheduled shutdown"
         />
       </div>
@@ -651,17 +652,17 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
           )}
 
           {step < STEPS.length - 1 ? (
-            <Button variant="primary" onClick={handleNext}>
+            <Button variant="default" onClick={handleNext}>
               Next
               <ArrowRight className="h-4 w-4" />
             </Button>
           ) : (
             <Button
-              variant="primary"
+              variant="default"
               onClick={handleCreate}
-              loading={isSubmitting}
               disabled={isSubmitting}
             >
+              {isSubmitting && <Loader2 className="animate-spin" />}
               Create Server
             </Button>
           )}

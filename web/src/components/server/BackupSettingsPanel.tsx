@@ -92,7 +92,9 @@ function BackupSettingsForm({
       <div className="flex items-center justify-between mb-3">
         <Switch
           checked={form.enabled}
-          onChange={(enabled) => setForm((prev) => ({ ...prev, enabled }))}
+          onCheckedChange={(enabled) =>
+            setForm((prev) => ({ ...prev, enabled }))
+          }
           disabled={updateMutation.isPending}
           aria-label="Toggle backups"
         />
@@ -179,11 +181,11 @@ function BackupSettingsForm({
 
       <Button
         type="submit"
-        variant="primary"
+        variant="default"
         disabled={updateMutation.isPending}
-        loading={updateMutation.isPending}
-        className="btn-sm"
+        size="sm"
       >
+        {updateMutation.isPending && <Loader2 className="animate-spin" />}
         Save
       </Button>
     </form>

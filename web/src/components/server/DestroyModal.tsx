@@ -6,6 +6,7 @@ import {
   Database,
   Globe,
   Terminal,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -66,7 +67,7 @@ function WarningStep({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" variant="danger" onClick={onNext}>
+        <Button type="button" variant="destructive" onClick={onNext}>
           Continue →
         </Button>
       </div>
@@ -114,11 +115,11 @@ function ConfirmStep({
         </Button>
         <Button
           type="button"
-          variant="danger"
+          variant="destructive"
           disabled={!isConfirmed || isPending}
-          loading={isPending}
           onClick={onConfirm}
         >
+          {isPending && <Loader2 className="animate-spin" />}
           Destroy Server
         </Button>
       </div>
