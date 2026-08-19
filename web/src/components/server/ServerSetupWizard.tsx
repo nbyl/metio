@@ -1,6 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Server, Cpu, Settings, FileText } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Server,
+  Cpu,
+  Settings,
+  FileText,
+} from 'lucide-react';
 import { useServerOptions } from '../../hooks/useServerOptions';
 import { useCreateServer } from '../../hooks/useServerMutations';
 import { Card, CardContent } from '../ui/Card';
@@ -88,8 +96,11 @@ function validateStep(step: number, form: WizardForm): FormErrors {
       errors.name = 'Server name is required';
     } else if (form.name.length < 3 || form.name.length > 24) {
       errors.name = 'Name must be between 3 and 24 characters';
-    } else if (!/^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$/.test(form.name)) {
-      errors.name = 'Name must start with a letter and contain only lowercase letters, digits, and hyphens';
+    } else if (
+      !/^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$/.test(form.name)
+    ) {
+      errors.name =
+        'Name must start with a letter and contain only lowercase letters, digits, and hyphens';
     }
 
     if (!form.region) {
@@ -124,7 +135,12 @@ interface BasicInfoStepProps {
   onChange: (updates: Partial<WizardForm>) => void;
 }
 
-function BasicInfoStep({ form, errors, regions, onChange }: BasicInfoStepProps) {
+function BasicInfoStep({
+  form,
+  errors,
+  regions,
+  onChange,
+}: BasicInfoStepProps) {
   const selectedRegion = regions.find((r) => r.id === form.region);
 
   return (
@@ -140,7 +156,7 @@ function BasicInfoStep({ form, errors, regions, onChange }: BasicInfoStepProps) 
           placeholder="my-minecraft-server"
           className={cn(
             'w-full px-3 py-2 rounded-lg border bg-slate-700 text-white          placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500',
-        
+
             errors.name ? 'border-red-500' : 'border-slate-600'
           )}
         />
@@ -215,13 +231,21 @@ interface SpecsStepProps {
 // are revealed on demand with "Show all machine types".
 const DEFAULT_FAMILIES = ['e2-', 'n2-'];
 
-function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: SpecsStepProps) {
+function SpecsStep({
+  form,
+  errors,
+  machineTypes,
+  minecraftVersions,
+  onChange,
+}: SpecsStepProps) {
   const [showAllMachineTypes, setShowAllMachineTypes] = useState(false);
-  const isDefaultFamily = (id: string) => DEFAULT_FAMILIES.some((family) => id.startsWith(family));
-  const visibleMachineTypes =
-    showAllMachineTypes
-      ? machineTypes
-      : machineTypes.filter((mt) => isDefaultFamily(mt.id) || mt.id === form.machineType);
+  const isDefaultFamily = (id: string) =>
+    DEFAULT_FAMILIES.some((family) => id.startsWith(family));
+  const visibleMachineTypes = showAllMachineTypes
+    ? machineTypes
+    : machineTypes.filter(
+        (mt) => isDefaultFamily(mt.id) || mt.id === form.machineType
+      );
   const hiddenCount = machineTypes.length - visibleMachineTypes.length;
   const showToggle = hiddenCount > 0 || showAllMachineTypes;
 
@@ -254,18 +278,18 @@ function SpecsStep({ form, errors, machineTypes, minecraftVersions, onChange }: 
             );
           })}
         </div>
-{showToggle && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setShowAllMachineTypes((prev) => !prev)}
-          className="mt-4"
-        >
-          {showAllMachineTypes
-            ? 'Show fewer machine types'
-            : `Show all machine types (${hiddenCount} more)`}
-        </Button>
+        {showToggle && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAllMachineTypes((prev) => !prev)}
+            className="mt-4"
+          >
+            {showAllMachineTypes
+              ? 'Show fewer machine types'
+              : `Show all machine types (${hiddenCount} more)`}
+          </Button>
         )}
         {errors.machineType && (
           <p className="mt-2 text-sm text-red-400">{errors.machineType}</p>
@@ -417,7 +441,9 @@ function ReviewStep({ form, machineTypes }: ReviewStepProps) {
         )}
         <div className="flex items-center justify-between px-4 py-3">
           <span className="text-slate-400">Minecraft Version</span>
-          <span className="text-white font-medium">{form.minecraftVersion}</span>
+          <span className="text-white font-medium">
+            {form.minecraftVersion}
+          </span>
         </div>
         <div className="flex items-center justify-between px-4 py-3">
           <span className="text-slate-400">Disk Size</span>
@@ -525,7 +551,11 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
     return (
       <div className={cn('max-w-4xl mx-auto py-8 text-center', className)}>
         <p className="text-red-400">Failed to load server options</p>
-        <Button variant="outline" onClick={() => navigate('/')} className="mt-4">
+        <Button
+          variant="outline"
+          onClick={() => navigate('/')}
+          className="mt-4"
+        >
           Back to Dashboard
         </Button>
       </div>
@@ -596,17 +626,9 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
               onChange={handleChange}
             />
           )}
-          {step === 2 && (
-            <OptionsStep
-              form={form}
-              onChange={handleChange}
-            />
-          )}
+          {step === 2 && <OptionsStep form={form} onChange={handleChange} />}
           {step === 3 && (
-            <ReviewStep
-              form={form}
-              machineTypes={options.machineTypes}
-            />
+            <ReviewStep form={form} machineTypes={options.machineTypes} />
           )}
         </CardContent>
       </Card>
@@ -618,7 +640,11 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
 
         <div className="flex items-center gap-3">
           {step > 0 && (
-            <Button variant="outline" onClick={handleBack} disabled={isSubmitting}>
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              disabled={isSubmitting}
+            >
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>

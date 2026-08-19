@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { X, AlertTriangle, HardDrive, Database, Globe, Terminal } from 'lucide-react';
+import {
+  X,
+  AlertTriangle,
+  HardDrive,
+  Database,
+  Globe,
+  Terminal,
+} from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 
@@ -11,18 +18,30 @@ export interface DestroyModalProps {
   isPending: boolean;
 }
 
-function WarningStep({ serverName, onNext, onCancel }: { serverName: string; onNext: () => void; onCancel: () => void }) {
+function WarningStep({
+  serverName,
+  onNext,
+  onCancel,
+}: {
+  serverName: string;
+  onNext: () => void;
+  onCancel: () => void;
+}) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 rounded-lg bg-red-900/20 border border-red-800/50 px-4 py-3">
         <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
         <p className="text-sm text-red-300">
-          This action will permanently destroy <strong className="text-white">{serverName}</strong> and all associated resources. This cannot be undone!
+          This action will permanently destroy{' '}
+          <strong className="text-white">{serverName}</strong> and all
+          associated resources. This cannot be undone!
         </p>
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-300">The following will be deleted:</p>
+        <p className="text-sm font-medium text-slate-300">
+          The following will be deleted:
+        </p>
         <ul className="space-y-2">
           <li className="flex items-center gap-3 text-sm text-slate-400">
             <Terminal className="h-4 w-4 text-slate-500" />

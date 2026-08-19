@@ -1,25 +1,25 @@
-import { useState } from 'react'
-import { X } from 'lucide-react'
-import type { ServerConfig, UpdateServerRequest } from '../../types/server'
-import { Button } from '../ui/Button'
-import { Tabs, TabList, Tab, TabPanel } from '../ui/Tabs'
-import { useServerOptions } from '../../hooks/useServerOptions'
-import { cn } from '../../lib/utils'
-import { BackupSettingsPanel } from './BackupSettingsPanel'
+import { useState } from 'react';
+import { X } from 'lucide-react';
+import type { ServerConfig, UpdateServerRequest } from '../../types/server';
+import { Button } from '../ui/Button';
+import { Tabs, TabList, Tab, TabPanel } from '../ui/Tabs';
+import { useServerOptions } from '../../hooks/useServerOptions';
+import { cn } from '../../lib/utils';
+import { BackupSettingsPanel } from './BackupSettingsPanel';
 
 export interface UpdateModalProps {
-  open: boolean
-  serverId: string
-  serverName: string
-  config: ServerConfig
-  currentInfraVersion: number
-  outdated: boolean
-  onClose: () => void
-  onUpdate: (data: UpdateServerRequest) => void
-  isPending: boolean
+  open: boolean;
+  serverId: string;
+  serverName: string;
+  config: ServerConfig;
+  currentInfraVersion: number;
+  outdated: boolean;
+  onClose: () => void;
+  onUpdate: (data: UpdateServerRequest) => void;
+  isPending: boolean;
 }
 
-type SettingsTab = 'settings' | 'backup'
+type SettingsTab = 'settings' | 'backup';
 
 export function UpdateModal({
   open,
@@ -32,55 +32,58 @@ export function UpdateModal({
   onUpdate,
   isPending,
 }: UpdateModalProps) {
-  const [name, setName] = useState(config.name)
-  const [machineType, setMachineType] = useState(config.machineType)
-  const [diskSizeGB, setDiskSizeGB] = useState(config.diskSizeGB)
+  const [name, setName] = useState(config.name);
+  const [machineType, setMachineType] = useState(config.machineType);
+  const [diskSizeGB, setDiskSizeGB] = useState(config.diskSizeGB);
   const [minecraftVersion, setMinecraftVersion] = useState(
     config.minecraftVersion
-  )
-  const [activeTab, setActiveTab] = useState<SettingsTab>('settings')
-  const { data: options, isLoading: optionsLoading } = useServerOptions()
+  );
+  const [activeTab, setActiveTab] = useState<SettingsTab>('settings');
+  const { data: options, isLoading: optionsLoading } = useServerOptions();
 
   // Always offer the server's current version, even if Mojang no longer lists
   // it, so opening the modal cannot silently switch the server to another
   // version.
-  const availableVersions = options?.minecraftVersions ?? []
+  const availableVersions = options?.minecraftVersions ?? [];
   const versionOptions = availableVersions.includes(config.minecraftVersion)
     ? availableVersions
-    : [config.minecraftVersion, ...availableVersions]
+    : [config.minecraftVersion, ...availableVersions];
 
   // Same for machine types: keep the current type selectable even if the
   // dynamic list no longer offers it.
-  const availableMachineTypes = options?.machineTypes ?? []
+  const availableMachineTypes = options?.machineTypes ?? [];
   const machineTypeOptions = (() => {
     const withSpecs = availableMachineTypes.map((mt) => ({
       id: mt.id,
       label: `${mt.id} (${mt.vcpus} vCPU · ${mt.memoryGB} GB RAM)`,
-    }))
-    if (withSpecs.some((mt) => mt.id === config.machineType)) return withSpecs
-    return [{ id: config.machineType, label: config.machineType }, ...withSpecs]
-  })()
+    }));
+    if (withSpecs.some((mt) => mt.id === config.machineType)) return withSpecs;
+    return [
+      { id: config.machineType, label: config.machineType },
+      ...withSpecs,
+    ];
+  })();
 
-  if (!open) return null
+  if (!open) return null;
 
   const hasChanges =
     name !== config.name ||
     machineType !== config.machineType ||
     diskSizeGB !== config.diskSizeGB ||
-    minecraftVersion !== config.minecraftVersion
+    minecraftVersion !== config.minecraftVersion;
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    const data: UpdateServerRequest = {}
-    if (name !== config.name) data.name = name
-    if (machineType !== config.machineType) data.machineType = machineType
-    if (diskSizeGB !== config.diskSizeGB) data.diskSizeGB = diskSizeGB
+    const data: UpdateServerRequest = {};
+    if (name !== config.name) data.name = name;
+    if (machineType !== config.machineType) data.machineType = machineType;
+    if (diskSizeGB !== config.diskSizeGB) data.diskSizeGB = diskSizeGB;
     if (minecraftVersion !== config.minecraftVersion)
-      data.minecraftVersion = minecraftVersion
+      data.minecraftVersion = minecraftVersion;
 
-    onUpdate(data)
-  }
+    onUpdate(data);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -221,5 +224,5 @@ export function UpdateModal({
         </Tabs>
       </div>
     </div>
-  )
+  );
 }

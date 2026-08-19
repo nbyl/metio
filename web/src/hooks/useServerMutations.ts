@@ -18,7 +18,9 @@ interface MutationContext {
 }
 
 async function startServer(serverId: string): Promise<ServerActionResponse> {
-  const response = await fetch(`/api/servers/${serverId}/start`, { method: 'POST' });
+  const response = await fetch(`/api/servers/${serverId}/start`, {
+    method: 'POST',
+  });
 
   if (response.status === 401) {
     window.location.href = '/auth/login';
@@ -34,7 +36,9 @@ async function startServer(serverId: string): Promise<ServerActionResponse> {
 }
 
 async function stopServer(serverId: string): Promise<ServerActionResponse> {
-  const response = await fetch(`/api/servers/${serverId}/stop`, { method: 'POST' });
+  const response = await fetch(`/api/servers/${serverId}/stop`, {
+    method: 'POST',
+  });
 
   if (response.status === 401) {
     window.location.href = '/auth/login';
@@ -90,7 +94,10 @@ export function useStartServer(serverId: string) {
     onMutate: async (): Promise<MutationContext> => {
       await queryClient.cancelQueries({ queryKey: ['serverStatus', serverId] });
 
-      const previousStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', serverId]);
+      const previousStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        serverId,
+      ]);
 
       if (previousStatus) {
         queryClient.setQueryData<StatusResponse>(['serverStatus', serverId], {
@@ -105,9 +112,16 @@ export function useStartServer(serverId: string) {
       toast.success('Server starting...');
       queryClient.invalidateQueries({ queryKey: ['serverStatus', serverId] });
     },
-    onError: (error: Error, _variables: void, context: MutationContext | undefined) => {
+    onError: (
+      error: Error,
+      _variables: void,
+      context: MutationContext | undefined
+    ) => {
       if (context?.previousStatus) {
-        queryClient.setQueryData(['serverStatus', serverId], context.previousStatus);
+        queryClient.setQueryData(
+          ['serverStatus', serverId],
+          context.previousStatus
+        );
       }
       toast.error(error.message);
     },
@@ -221,7 +235,10 @@ export function useStopServer(serverId: string) {
     onMutate: async (): Promise<MutationContext> => {
       await queryClient.cancelQueries({ queryKey: ['serverStatus', serverId] });
 
-      const previousStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', serverId]);
+      const previousStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        serverId,
+      ]);
 
       if (previousStatus) {
         queryClient.setQueryData<StatusResponse>(['serverStatus', serverId], {
@@ -236,9 +253,16 @@ export function useStopServer(serverId: string) {
       toast.success('Server stopping...');
       queryClient.invalidateQueries({ queryKey: ['serverStatus', serverId] });
     },
-    onError: (error: Error, _variables: void, context: MutationContext | undefined) => {
+    onError: (
+      error: Error,
+      _variables: void,
+      context: MutationContext | undefined
+    ) => {
       if (context?.previousStatus) {
-        queryClient.setQueryData(['serverStatus', serverId], context.previousStatus);
+        queryClient.setQueryData(
+          ['serverStatus', serverId],
+          context.previousStatus
+        );
       }
       toast.error(error.message);
     },

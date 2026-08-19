@@ -21,7 +21,9 @@ describe('Layout', () => {
   });
 
   it('merges custom className on container', () => {
-    const { container } = render(<Layout className="custom-layout">Content</Layout>);
+    const { container } = render(
+      <Layout className="custom-layout">Content</Layout>
+    );
     const containerDiv = container.querySelector('.container');
     expect(containerDiv).toHaveClass('container', 'custom-layout');
   });

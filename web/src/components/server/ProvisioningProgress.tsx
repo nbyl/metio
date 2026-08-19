@@ -49,7 +49,7 @@ function StepList({ steps }: { steps: ProvisioningStep[] }) {
             step.status === 'IN_PROGRESS' && 'bg-slate-700/50',
             step.status === 'COMPLETED' && 'bg-slate-800',
             step.status === 'FAILED' && 'bg-red-900/20',
-            step.status === 'PENDING' && 'bg-slate-800',
+            step.status === 'PENDING' && 'bg-slate-800'
           )}
         >
           <StepIcon status={step.status} />
@@ -59,7 +59,7 @@ function StepList({ steps }: { steps: ProvisioningStep[] }) {
               step.status === 'PENDING' && 'text-slate-500',
               step.status === 'IN_PROGRESS' && 'text-blue-300',
               step.status === 'COMPLETED' && 'text-slate-300',
-              step.status === 'FAILED' && 'text-red-300',
+              step.status === 'FAILED' && 'text-red-300'
             )}
           >
             {step.message}
@@ -83,10 +83,14 @@ const operationLabels: Record<string, string> = {
 
 export type { ProvisioningProgressProps };
 
-export function ProvisioningProgress({ serverId, className }: ProvisioningProgressProps) {
+export function ProvisioningProgress({
+  serverId,
+  className,
+}: ProvisioningProgressProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { data, isLoading, isError, error, refetch } = useServerProvisioning(serverId);
+  const { data, isLoading, isError, error, refetch } =
+    useServerProvisioning(serverId);
   const [elapsed, setElapsed] = useState('0:00');
 
   const serverName =
@@ -129,7 +133,9 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
         <div className={cn('max-w-2xl mx-auto py-8', className)}>
           <div className="rounded-lg bg-slate-800 p-8 text-center">
             <Server className="mx-auto h-12 w-12 text-slate-500" />
-            <h2 className="mt-4 text-lg font-semibold text-white">No provisioning in progress</h2>
+            <h2 className="mt-4 text-lg font-semibold text-white">
+              No provisioning in progress
+            </h2>
             <p className="mt-2 text-sm text-slate-400">
               This server is not currently being provisioned.
             </p>
@@ -149,7 +155,9 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
       <div className={cn('max-w-2xl mx-auto py-8', className)}>
         <div className="rounded-lg bg-slate-800 p-8 text-center">
           <XCircle className="mx-auto h-12 w-12 text-red-400" />
-          <h2 className="mt-4 text-lg font-semibold text-white">Failed to load status</h2>
+          <h2 className="mt-4 text-lg font-semibold text-white">
+            Failed to load status
+          </h2>
           <p className="mt-2 text-sm text-red-300">{error?.message}</p>
           <button
             onClick={() => refetch()}
@@ -178,7 +186,9 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
               <div>
                 <h2 className="text-lg font-semibold text-white">Completed</h2>
                 <p className="text-sm text-green-300">
-                  {operationLabel} server <span className="font-medium">{serverName}</span> finished successfully.
+                  {operationLabel} server{' '}
+                  <span className="font-medium">{serverName}</span> finished
+                  successfully.
                 </p>
               </div>
             </div>
@@ -192,7 +202,9 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
               <div>
                 <h2 className="text-lg font-semibold text-white">Failed</h2>
                 <p className="text-sm text-red-300">
-                  {operationLabel} server <span className="font-medium">{serverName}</span> encountered an error.
+                  {operationLabel} server{' '}
+                  <span className="font-medium">{serverName}</span> encountered
+                  an error.
                 </p>
               </div>
             </div>
@@ -202,7 +214,8 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
         <div className="px-6 py-5 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">
-              {operationLabel} Server: <span className="text-blue-300">{serverName}</span>
+              {operationLabel} Server:{' '}
+              <span className="text-blue-300">{serverName}</span>
             </h2>
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <span>{elapsed}</span>
@@ -214,7 +227,9 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
           <div>
             <div className="flex items-center justify-between text-sm mb-2">
               <span className="text-slate-400">Progress</span>
-              <span className="text-slate-300 font-medium">{data.progress}%</span>
+              <span className="text-slate-300 font-medium">
+                {data.progress}%
+              </span>
             </div>
             <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
               <div
@@ -222,7 +237,7 @@ export function ProvisioningProgress({ serverId, className }: ProvisioningProgre
                   'h-full rounded-full transition-all duration-500 ease-in-out',
                   isComplete && 'bg-green-500',
                   isFailed && 'bg-red-500',
-                  !isComplete && !isFailed && 'bg-blue-500',
+                  !isComplete && !isFailed && 'bg-blue-500'
                 )}
                 style={{ width: `${data.progress}%` }}
               />

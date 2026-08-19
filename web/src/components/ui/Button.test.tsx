@@ -7,7 +7,9 @@ describe('Button', () => {
   // Behavioral tests
   it('renders with children', () => {
     render(<Button>Click me</Button>);
-    expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Click me' })
+    ).toBeInTheDocument();
   });
 
   it('applies primary variant by default', () => {
@@ -87,7 +89,9 @@ describe('Button', () => {
   });
 
   it('matches snapshot (danger)', () => {
-    const { container } = render(<Button variant="danger">Danger Button</Button>);
+    const { container } = render(
+      <Button variant="danger">Danger Button</Button>
+    );
     expect(container).toMatchSnapshot();
   });
 

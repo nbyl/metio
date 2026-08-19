@@ -72,7 +72,8 @@ describe('useStartServer', () => {
               () =>
                 resolve({
                   ok: true,
-                  json: () => Promise.resolve({ success: true, state: 'STARTING' }),
+                  json: () =>
+                    Promise.resolve({ success: true, state: 'STARTING' }),
                 }),
               100
             )
@@ -88,7 +89,10 @@ describe('useStartServer', () => {
       });
 
       await waitFor(() => {
-        const updatedStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', TEST_SERVER_ID]);
+        const updatedStatus = queryClient.getQueryData<StatusResponse>([
+          'serverStatus',
+          TEST_SERVER_ID,
+        ]);
         expect(updatedStatus?.serverState).toBe('STARTING');
       });
     });
@@ -103,7 +107,8 @@ describe('useStartServer', () => {
               () =>
                 resolve({
                   ok: true,
-                  json: () => Promise.resolve({ success: true, state: 'STARTING' }),
+                  json: () =>
+                    Promise.resolve({ success: true, state: 'STARTING' }),
                 }),
               100
             )
@@ -118,7 +123,10 @@ describe('useStartServer', () => {
         result.current.mutate();
       });
 
-      const updatedStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', TEST_SERVER_ID]);
+      const updatedStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        TEST_SERVER_ID,
+      ]);
       expect(updatedStatus?.version).toBe('1.20.4');
       expect(updatedStatus?.players.max).toBe(20);
     });
@@ -140,7 +148,10 @@ describe('useStartServer', () => {
         expect(result.current.isError).toBe(true);
       });
 
-      const rolledBackStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', TEST_SERVER_ID]);
+      const rolledBackStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        TEST_SERVER_ID,
+      ]);
       expect(rolledBackStatus?.serverState).toBe('STOPPED');
     });
 
@@ -209,7 +220,10 @@ describe('useStopServer', () => {
 
   describe('optimistic updates', () => {
     it('immediately updates status to STOPPING on mutate', async () => {
-      queryClient.setQueryData(['serverStatus', TEST_SERVER_ID], mockRunningStatus);
+      queryClient.setQueryData(
+        ['serverStatus', TEST_SERVER_ID],
+        mockRunningStatus
+      );
 
       mockFetch.mockImplementation(
         () =>
@@ -218,7 +232,8 @@ describe('useStopServer', () => {
               () =>
                 resolve({
                   ok: true,
-                  json: () => Promise.resolve({ success: true, state: 'STOPPING' }),
+                  json: () =>
+                    Promise.resolve({ success: true, state: 'STOPPING' }),
                 }),
               100
             )
@@ -234,13 +249,19 @@ describe('useStopServer', () => {
       });
 
       await waitFor(() => {
-        const updatedStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', TEST_SERVER_ID]);
+        const updatedStatus = queryClient.getQueryData<StatusResponse>([
+          'serverStatus',
+          TEST_SERVER_ID,
+        ]);
         expect(updatedStatus?.serverState).toBe('STOPPING');
       });
     });
 
     it('preserves other status fields during optimistic update', async () => {
-      queryClient.setQueryData(['serverStatus', TEST_SERVER_ID], mockRunningStatus);
+      queryClient.setQueryData(
+        ['serverStatus', TEST_SERVER_ID],
+        mockRunningStatus
+      );
 
       mockFetch.mockImplementation(
         () =>
@@ -249,7 +270,8 @@ describe('useStopServer', () => {
               () =>
                 resolve({
                   ok: true,
-                  json: () => Promise.resolve({ success: true, state: 'STOPPING' }),
+                  json: () =>
+                    Promise.resolve({ success: true, state: 'STOPPING' }),
                 }),
               100
             )
@@ -264,13 +286,19 @@ describe('useStopServer', () => {
         result.current.mutate();
       });
 
-      const updatedStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', TEST_SERVER_ID]);
+      const updatedStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        TEST_SERVER_ID,
+      ]);
       expect(updatedStatus?.players.current).toBe(5);
       expect(updatedStatus?.instanceIP).toBe('192.168.1.100');
     });
 
     it('rolls back to previous status on error', async () => {
-      queryClient.setQueryData(['serverStatus', TEST_SERVER_ID], mockRunningStatus);
+      queryClient.setQueryData(
+        ['serverStatus', TEST_SERVER_ID],
+        mockRunningStatus
+      );
 
       mockFetch.mockRejectedValue(new Error('Network error'));
 
@@ -286,13 +314,19 @@ describe('useStopServer', () => {
         expect(result.current.isError).toBe(true);
       });
 
-      const rolledBackStatus = queryClient.getQueryData<StatusResponse>(['serverStatus', TEST_SERVER_ID]);
+      const rolledBackStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        TEST_SERVER_ID,
+      ]);
       expect(rolledBackStatus?.serverState).toBe('RUNNING');
     });
 
     it('shows success toast on successful stop', async () => {
       const { toast } = await import('sonner');
-      queryClient.setQueryData(['serverStatus', TEST_SERVER_ID], mockRunningStatus);
+      queryClient.setQueryData(
+        ['serverStatus', TEST_SERVER_ID],
+        mockRunningStatus
+      );
 
       mockFetch.mockResolvedValue({
         ok: true,
@@ -316,7 +350,10 @@ describe('useStopServer', () => {
 
     it('shows error toast on failed stop', async () => {
       const { toast } = await import('sonner');
-      queryClient.setQueryData(['serverStatus', TEST_SERVER_ID], mockRunningStatus);
+      queryClient.setQueryData(
+        ['serverStatus', TEST_SERVER_ID],
+        mockRunningStatus
+      );
 
       mockFetch.mockResolvedValue({
         ok: false,

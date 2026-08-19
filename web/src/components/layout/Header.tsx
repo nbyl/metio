@@ -32,7 +32,9 @@ export function Header({ email, showUser = false }: HeaderProps) {
         </h1>
         <p className="subtitle">Minecraft Server Controller</p>
         {options?.controllerVersion && (
-          <p className="text-xs text-slate-500">Version {options.controllerVersion}</p>
+          <p className="text-xs text-slate-500">
+            Version {options.controllerVersion}
+          </p>
         )}
       </div>
       {showUser && email && (

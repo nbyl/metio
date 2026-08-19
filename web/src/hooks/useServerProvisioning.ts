@@ -3,7 +3,9 @@ import type { ProvisioningStatusResponse } from '../types/server';
 
 const POLL_INTERVAL_MS = 2000;
 
-async function fetchServerProvisioning(serverId: string): Promise<ProvisioningStatusResponse> {
+async function fetchServerProvisioning(
+  serverId: string
+): Promise<ProvisioningStatusResponse> {
   const response = await fetch(`/api/servers/${serverId}/provisioning`);
 
   if (response.status === 404) {
@@ -26,13 +28,18 @@ export function useServerProvisioning(serverId: string) {
     refetchInterval: (query) => {
       if (query.state.error) return false;
       const data = query.state.data;
-      if (data && (data.state === 'COMPLETED' || data.state === 'FAILED')) return false;
+      if (data && (data.state === 'COMPLETED' || data.state === 'FAILED'))
+        return false;
       return POLL_INTERVAL_MS;
     },
     refetchIntervalInBackground: false,
     staleTime: 0,
     retry: (failureCount, error) => {
-      if (error instanceof Error && error.message === 'No provisioning in progress') return false;
+      if (
+        error instanceof Error &&
+        error.message === 'No provisioning in progress'
+      )
+        return false;
       return failureCount < 2;
     },
     retryDelay: 2000,

@@ -1,9 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type {
-  APIError,
-  StatusResponse,
-} from '../types/server';
+import type { APIError, StatusResponse } from '../types/server';
 
 interface ScheduleShutdownRequest {
   shutdownTime: string;
@@ -47,17 +44,23 @@ export function useScheduleShutdown(serverId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (shutdownTime: string) => scheduleShutdown(serverId, shutdownTime),
+    mutationFn: (shutdownTime: string) =>
+      scheduleShutdown(serverId, shutdownTime),
     onMutate: async (shutdownTime) => {
       await queryClient.cancelQueries({ queryKey: ['serverStatus', serverId] });
 
-      const previousStatus =
-        queryClient.getQueryData<StatusResponse>(['serverStatus', serverId]);
+      const previousStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        serverId,
+      ]);
 
-      queryClient.setQueryData<StatusResponse>(['serverStatus', serverId], (old) => {
-        if (!old) return old;
-        return { ...old, scheduledShutdown: shutdownTime };
-      });
+      queryClient.setQueryData<StatusResponse>(
+        ['serverStatus', serverId],
+        (old) => {
+          if (!old) return old;
+          return { ...old, scheduledShutdown: shutdownTime };
+        }
+      );
 
       return { previousStatus };
     },
@@ -70,7 +73,10 @@ export function useScheduleShutdown(serverId: string) {
     },
     onError: (error: Error, _shutdownTime, context) => {
       if (context?.previousStatus) {
-        queryClient.setQueryData(['serverStatus', serverId], context.previousStatus);
+        queryClient.setQueryData(
+          ['serverStatus', serverId],
+          context.previousStatus
+        );
       }
       toast.error(error.message);
     },
@@ -85,13 +91,18 @@ export function useCancelScheduledShutdown(serverId: string) {
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['serverStatus', serverId] });
 
-      const previousStatus =
-        queryClient.getQueryData<StatusResponse>(['serverStatus', serverId]);
+      const previousStatus = queryClient.getQueryData<StatusResponse>([
+        'serverStatus',
+        serverId,
+      ]);
 
-      queryClient.setQueryData<StatusResponse>(['serverStatus', serverId], (old) => {
-        if (!old) return old;
-        return { ...old, scheduledShutdown: undefined };
-      });
+      queryClient.setQueryData<StatusResponse>(
+        ['serverStatus', serverId],
+        (old) => {
+          if (!old) return old;
+          return { ...old, scheduledShutdown: undefined };
+        }
+      );
 
       return { previousStatus };
     },
@@ -101,7 +112,10 @@ export function useCancelScheduledShutdown(serverId: string) {
     },
     onError: (error: Error, _vars, context) => {
       if (context?.previousStatus) {
-        queryClient.setQueryData(['serverStatus', serverId], context.previousStatus);
+        queryClient.setQueryData(
+          ['serverStatus', serverId],
+          context.previousStatus
+        );
       }
       toast.error(error.message);
     },
