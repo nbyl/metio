@@ -84,7 +84,11 @@ func backupSettingsToDB(s *BackupSettings) *db.BackupConfig {
 	}
 }
 
-func dbBackupToProgramBackup(c *db.BackupConfig) *programs.BackupConfig {
+// DBBackupToProgramBackup converts a persisted per-server backup config into
+// the Pulumi program representation. It is shared by the server handlers and
+// the Cloud Tasks provisioning handler so every provisioning path rolls out
+// the same backup schedule, retention and image.
+func DBBackupToProgramBackup(c *db.BackupConfig) *programs.BackupConfig {
 	if c == nil {
 		return nil
 	}
@@ -116,7 +120,7 @@ func buildProgramConfig(serverID string, sc *db.ServerConfig, ctrlCfg config.Con
 		ExistingAddress:          sc.ExistingAddress,
 		ControllerURL:            ctrlCfg.BaseURL,
 		AgentToken:               token,
-		Backup:                   dbBackupToProgramBackup(sc.Backup),
+		Backup:                   DBBackupToProgramBackup(sc.Backup),
 		BackupResticPassword:     ctrlCfg.BackupResticPassword,
 		RetainLegacyBackupBucket: sc.InfraVersion > 0 && sc.InfraVersion < programs.CurrentInfraVersion,
 	}
