@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Settings2, Globe, Cpu, HardDrive, Calendar } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Settings2,
+  Globe,
+  Cpu,
+  HardDrive,
+  Calendar,
+} from 'lucide-react';
 import type { ServerConfig } from '../../types/server';
 import { Card, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -61,7 +69,10 @@ export function ServerConfigPanel({
           </span>
         </button>
 
-        <div className="collapsible-content" data-state={isOpen ? 'open' : 'closed'}>
+        <div
+          className="collapsible-content"
+          data-state={isOpen ? 'open' : 'closed'}
+        >
           {isOpen && (
             <div className="space-y-3 pt-3">
               <Separator />
@@ -83,9 +94,7 @@ export function ServerConfigPanel({
                   <span className="stat-value">{config.machineType}</span>
                 </div>
                 <div className="stat">
-                  <span className="stat-label">
-                    Minecraft Version
-                  </span>
+                  <span className="stat-label">Minecraft Version</span>
                   <span className="stat-value">{config.minecraftVersion}</span>
                 </div>
                 <div className="stat">
@@ -127,7 +136,10 @@ export function ServerConfigPanel({
           </span>
         </button>
 
-        <div className="collapsible-content" data-state={isOpen ? 'open' : 'closed'}>
+        <div
+          className="collapsible-content"
+          data-state={isOpen ? 'open' : 'closed'}
+        >
           {isOpen && (
             <div className="space-y-3 pt-3">
               <Separator />
@@ -168,16 +180,12 @@ export function ServerConfigPanel({
                 </div>
 
                 <div className="stat">
-                  <span className="stat-label">
-                    Minecraft Version
-                  </span>
+                  <span className="stat-label">Minecraft Version</span>
                   <span className="stat-value">{config.minecraftVersion}</span>
                 </div>
 
                 <div className="stat">
-                  <span className="stat-label">
-                    Infra Version
-                  </span>
+                  <span className="stat-label">Infra Version</span>
                   <span className="stat-value">v{infrahVersion}</span>
                 </div>
               </div>

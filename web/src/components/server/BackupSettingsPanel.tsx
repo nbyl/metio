@@ -1,29 +1,29 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
-import type { BackupSettings } from '../../types/server'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+import type { BackupSettings } from '../../types/server';
 import {
   useBackupSettings,
   useUpdateBackupSettings,
-} from '../../hooks/useBackupSettings'
-import { Button } from '../ui/Button'
-import { Switch } from '../ui/Switch'
+} from '../../hooks/useBackupSettings';
+import { Button } from '../ui/Button';
+import { Switch } from '../ui/Switch';
 
 export interface BackupSettingsPanelProps {
-  serverId: string
-  serverName: string
+  serverId: string;
+  serverName: string;
 }
 
 export interface BackupSettingsFormState {
-  enabled: boolean
-  backupIntervalHours: number
-  keep: number
-  keepUnit: string
+  enabled: boolean;
+  backupIntervalHours: number;
+  keep: number;
+  keepUnit: string;
 }
 
-const KEEP_UNITS = ['hourly', 'daily', 'weekly', 'monthly', 'yearly'] as const
+const KEEP_UNITS = ['hourly', 'daily', 'weekly', 'monthly', 'yearly'] as const;
 
-export type BackupUnit = (typeof KEEP_UNITS)[number]
+export type BackupUnit = (typeof KEEP_UNITS)[number];
 
 const UNIT_LABELS: Record<BackupUnit, string> = {
   hourly: 'Hourly',
@@ -31,7 +31,7 @@ const UNIT_LABELS: Record<BackupUnit, string> = {
   weekly: 'Weekly',
   monthly: 'Monthly',
   yearly: 'Yearly',
-}
+};
 
 const UNIT_HINTS: Record<BackupUnit, string> = {
   hourly: 'Keep the last N hourly snapshots',
@@ -39,7 +39,7 @@ const UNIT_HINTS: Record<BackupUnit, string> = {
   weekly: 'Keep the last N weekly snapshots',
   monthly: 'Keep the last N monthly snapshots',
   yearly: 'Keep the last N yearly snapshots',
-}
+};
 
 function toBackupFormState(settings: BackupSettings): BackupSettingsFormState {
   return {
@@ -47,13 +47,13 @@ function toBackupFormState(settings: BackupSettings): BackupSettingsFormState {
     backupIntervalHours: settings.backupIntervalHours ?? 0,
     keep: settings.keep ?? 0,
     keepUnit: (settings.keepUnit as BackupUnit | undefined) ?? 'daily',
-  }
+  };
 }
 
 interface BackupSettingsFormProps {
-  serverId: string
-  serverName: string
-  initial: BackupSettings
+  serverId: string;
+  serverName: string;
+  initial: BackupSettings;
 }
 
 function BackupSettingsForm({
@@ -61,31 +61,31 @@ function BackupSettingsForm({
   serverName,
   initial,
 }: BackupSettingsFormProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
   const [form, setForm] = useState<BackupSettingsFormState>(() =>
     toBackupFormState(initial)
-  )
-  const updateMutation = useUpdateBackupSettings(serverId)
+  );
+  const updateMutation = useUpdateBackupSettings(serverId);
 
   const handleSave = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (updateMutation.isPending) return
+    e.preventDefault();
+    if (updateMutation.isPending) return;
 
     const settings: BackupSettings = {
       enabled: form.enabled,
       backupIntervalHours: form.backupIntervalHours || undefined,
       keep: form.keep || undefined,
       keepUnit: form.keep && form.keepUnit ? form.keepUnit : undefined,
-    }
+    };
 
     updateMutation.mutate(settings, {
       onSuccess: () => {
         navigate(`/servers/${serverId}/provisioning`, {
           state: { serverName },
-        })
+        });
       },
-    })
-  }
+    });
+  };
 
   return (
     <form onSubmit={handleSave}>
@@ -109,19 +109,15 @@ function BackupSettingsForm({
           id="backup-interval"
           type="number"
           min={0}
-          value={
-            form.backupIntervalHours === 0
-              ? ''
-              : form.backupIntervalHours
-          }
+          value={form.backupIntervalHours === 0 ? '' : form.backupIntervalHours}
           onChange={(e) => {
             if (e.target.value === '') {
-              setForm((prev) => ({ ...prev, backupIntervalHours: 0 }))
-              return
+              setForm((prev) => ({ ...prev, backupIntervalHours: 0 }));
+              return;
             }
-            const value = Number(e.target.value)
-            if (Number.isNaN(value) || value < 0) return
-            setForm((prev) => ({ ...prev, backupIntervalHours: value }))
+            const value = Number(e.target.value);
+            if (Number.isNaN(value) || value < 0) return;
+            setForm((prev) => ({ ...prev, backupIntervalHours: value }));
           }}
           placeholder="default (1h)"
           className="backup-number-input"
@@ -144,12 +140,12 @@ function BackupSettingsForm({
             value={form.keep === 0 ? '' : form.keep}
             onChange={(e) => {
               if (e.target.value === '') {
-                setForm((prev) => ({ ...prev, keep: 0 }))
-                return
+                setForm((prev) => ({ ...prev, keep: 0 }));
+                return;
               }
-              const value = Number(e.target.value)
-              if (Number.isNaN(value) || value < 0) return
-              setForm((prev) => ({ ...prev, keep: value }))
+              const value = Number(e.target.value);
+              if (Number.isNaN(value) || value < 0) return;
+              setForm((prev) => ({ ...prev, keep: value }));
             }}
             placeholder="default"
             className="backup-number-input"
@@ -191,14 +187,14 @@ function BackupSettingsForm({
         Save
       </Button>
     </form>
-  )
+  );
 }
 
 export function BackupSettingsPanel({
   serverId,
   serverName,
 }: BackupSettingsPanelProps) {
-  const { data, isLoading } = useBackupSettings(serverId)
+  const { data, isLoading } = useBackupSettings(serverId);
 
   return (
     <div>
@@ -214,5 +210,5 @@ export function BackupSettingsPanel({
         />
       )}
     </div>
-  )
+  );
 }

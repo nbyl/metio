@@ -57,12 +57,16 @@ describe('Header', () => {
   it('hides user section when showUser is false', () => {
     render(<Header email="test@example.com" showUser={false} />);
     expect(screen.queryByText('test@example.com')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Logout' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Logout' })
+    ).not.toBeInTheDocument();
   });
 
   it('hides user section when email is undefined', () => {
     render(<Header showUser />);
-    expect(screen.queryByRole('link', { name: 'Logout' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Logout' })
+    ).not.toBeInTheDocument();
   });
 
   // Snapshot tests

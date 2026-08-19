@@ -41,7 +41,11 @@ describe('StatsGrid', () => {
 
   it('renders icons when provided', () => {
     const statsWithIcon = [
-      { label: 'Status', value: 'Running', icon: <Activity data-testid="status-icon" /> },
+      {
+        label: 'Status',
+        value: 'Running',
+        icon: <Activity data-testid="status-icon" />,
+      },
     ];
     render(<StatsGrid stats={statsWithIcon} />);
     expect(screen.getByTestId('status-icon')).toBeInTheDocument();
@@ -53,7 +57,9 @@ describe('StatsGrid', () => {
   });
 
   it('merges custom className', () => {
-    const { container } = render(<StatsGrid stats={mockStats} className="custom-grid" />);
+    const { container } = render(
+      <StatsGrid stats={mockStats} className="custom-grid" />
+    );
     const grid = container.firstChild;
     expect(grid).toHaveClass('stats-grid', 'custom-grid');
   });

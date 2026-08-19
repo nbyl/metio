@@ -6,26 +6,26 @@ import {
   type KeyboardEvent,
   type MutableRefObject,
   type ReactNode,
-} from 'react'
-import { cn } from '../../lib/utils'
+} from 'react';
+import { cn } from '../../lib/utils';
 
 interface TabsContextValue {
-  idPrefix: string
-  value: string
-  onValueChange: (value: string) => void
-  tabsRef: MutableRefObject<Map<string, HTMLButtonElement>>
+  idPrefix: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  tabsRef: MutableRefObject<Map<string, HTMLButtonElement>>;
 }
 
-const TabsContext = createContext<TabsContextValue | null>(null)
+const TabsContext = createContext<TabsContextValue | null>(null);
 
 export interface TabsProps {
   /** Currently active tab value */
-  value: string
+  value: string;
   /** Callback when a tab is selected */
-  onValueChange: (value: string) => void
+  onValueChange: (value: string) => void;
   /** Additional CSS classes */
-  className?: string
-  children: ReactNode
+  className?: string;
+  children: ReactNode;
 }
 
 /**
@@ -44,28 +44,28 @@ export interface TabsProps {
  * ```
  */
 export function Tabs({ value, onValueChange, className, children }: TabsProps) {
-  const idPrefix = useId()
-  const tabsRef = useRef<Map<string, HTMLButtonElement>>(new Map())
+  const idPrefix = useId();
+  const tabsRef = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   return (
     <TabsContext.Provider value={{ idPrefix, value, onValueChange, tabsRef }}>
       <div className={cn('tabs', className)}>{children}</div>
     </TabsContext.Provider>
-  )
+  );
 }
 
 function useTabs(): TabsContextValue {
-  const context = useContext(TabsContext)
+  const context = useContext(TabsContext);
   if (!context) {
-    throw new Error('Tab components must be used within a <Tabs>')
+    throw new Error('Tab components must be used within a <Tabs>');
   }
-  return context
+  return context;
 }
 
 export interface TabListProps {
   /** Additional CSS classes */
-  className?: string
-  children: ReactNode
+  className?: string;
+  children: ReactNode;
 }
 
 /**
@@ -73,39 +73,39 @@ export interface TabListProps {
  * keyboard navigation between tabs.
  */
 export function TabList({ className, children }: TabListProps) {
-  const { tabsRef } = useTabs()
+  const { tabsRef } = useTabs();
 
   const focusTab = (current: HTMLButtonElement, offset: number) => {
-    const tabs = Array.from(tabsRef.current.values())
-    if (tabs.length === 0) return
-    const currentIndex = tabs.indexOf(current)
-    const nextIndex = (currentIndex + offset + tabs.length) % tabs.length
-    tabs[nextIndex].focus()
-  }
+    const tabs = Array.from(tabsRef.current.values());
+    if (tabs.length === 0) return;
+    const currentIndex = tabs.indexOf(current);
+    const nextIndex = (currentIndex + offset + tabs.length) % tabs.length;
+    tabs[nextIndex].focus();
+  };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    const current = e.currentTarget as HTMLButtonElement
+    const current = e.currentTarget as HTMLButtonElement;
     switch (e.key) {
       case 'ArrowLeft':
-        e.preventDefault()
-        focusTab(current, -1)
-        break
+        e.preventDefault();
+        focusTab(current, -1);
+        break;
       case 'ArrowRight':
-        e.preventDefault()
-        focusTab(current, 1)
-        break
+        e.preventDefault();
+        focusTab(current, 1);
+        break;
       case 'Home':
-        e.preventDefault()
-        tabsRef.current.values().next().value?.focus()
-        break
+        e.preventDefault();
+        tabsRef.current.values().next().value?.focus();
+        break;
       case 'End': {
-        e.preventDefault()
-        const tabs = Array.from(tabsRef.current.values())
-        tabs[tabs.length - 1]?.focus()
-        break
+        e.preventDefault();
+        const tabs = Array.from(tabsRef.current.values());
+        tabs[tabs.length - 1]?.focus();
+        break;
       }
     }
-  }
+  };
 
   return (
     <div
@@ -115,17 +115,17 @@ export function TabList({ className, children }: TabListProps) {
     >
       {children}
     </div>
-  )
+  );
 }
 
 export interface TabProps {
   /** Value that activates this tab when selected */
-  value: string
+  value: string;
   /** Whether the tab is disabled */
-  disabled?: boolean
+  disabled?: boolean;
   /** Additional CSS classes */
-  className?: string
-  children: ReactNode
+  className?: string;
+  children: ReactNode;
 }
 
 /**
@@ -137,10 +137,10 @@ export function Tab({
   className,
   children,
 }: TabProps) {
-  const { idPrefix, value: activeValue, onValueChange, tabsRef } = useTabs()
-  const selected = activeValue === value
-  const id = `${idPrefix}-${value}-tab`
-  const panelId = `${idPrefix}-${value}-panel`
+  const { idPrefix, value: activeValue, onValueChange, tabsRef } = useTabs();
+  const selected = activeValue === value;
+  const id = `${idPrefix}-${value}-tab`;
+  const panelId = `${idPrefix}-${value}-panel`;
 
   return (
     <button
@@ -153,8 +153,8 @@ export function Tab({
       disabled={disabled}
       onClick={() => onValueChange(value)}
       ref={(el) => {
-        if (el) tabsRef.current.set(value, el)
-        else tabsRef.current.delete(value)
+        if (el) tabsRef.current.set(value, el);
+        else tabsRef.current.delete(value);
       }}
       className={cn(
         'inline-flex items-center px-4 py-2 text-sm font-medium border-b-2 transition-colors',
@@ -167,25 +167,25 @@ export function Tab({
     >
       {children}
     </button>
-  )
+  );
 }
 
 export interface TabPanelProps {
   /** Value of the tab this panel belongs to */
-  value: string
+  value: string;
   /** Additional CSS classes */
-  className?: string
-  children: ReactNode
+  className?: string;
+  children: ReactNode;
 }
 
 /**
  * Content shown for the tab with the matching {@link TabPanelProps.value}.
  */
 export function TabPanel({ value, className, children }: TabPanelProps) {
-  const { idPrefix, value: activeValue } = useTabs()
-  const id = `${idPrefix}-${value}-panel`
-  const tabId = `${idPrefix}-${value}-tab`
-  const selected = activeValue === value
+  const { idPrefix, value: activeValue } = useTabs();
+  const id = `${idPrefix}-${value}-panel`;
+  const tabId = `${idPrefix}-${value}-tab`;
+  const selected = activeValue === value;
 
   return (
     <div
@@ -197,5 +197,5 @@ export function TabPanel({ value, className, children }: TabPanelProps) {
     >
       {children}
     </div>
-  )
+  );
 }

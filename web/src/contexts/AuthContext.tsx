@@ -44,7 +44,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       .then((data) => {
         if (data) {
           setIsAuthenticated(data.authenticated);
-          setUser(data.authenticated && data.email ? { email: data.email } : null);
+          setUser(
+            data.authenticated && data.email ? { email: data.email } : null
+          );
         }
       })
       .catch(() => {
@@ -61,7 +63,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [checkAuth]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, isLoading, checkAuth }}>
+    <AuthContext.Provider
+      value={{ isAuthenticated, user, isLoading, checkAuth }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Loader2, Server, ArrowRight } from 'lucide-react';
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Server,
+  ArrowRight,
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -23,7 +29,8 @@ function WelcomeStep({ status, isLoading }: StepProps) {
         </h3>
         <p className="text-slate-400 max-w-md mb-2">
           Metio manages Minecraft servers on Google Cloud. Before you can create
-          servers, we need to verify that your GCP project is properly configured.
+          servers, we need to verify that your GCP project is properly
+          configured.
         </p>
         {isLoading ? (
           <div className="flex items-center gap-2 mt-4 text-slate-400">
@@ -74,13 +81,20 @@ function ValidationStep({ status, isLoading }: StepProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-white">GCP APIs</span>
-            <span className={enabledApis === apiCount ? 'text-green-400' : 'text-yellow-400'}>
+            <span
+              className={
+                enabledApis === apiCount ? 'text-green-400' : 'text-yellow-400'
+              }
+            >
               {enabledApis}/{apiCount} enabled
             </span>
           </div>
           <div className="space-y-2">
             {Object.entries(checks.apis).map(([api, result]) => (
-              <div key={api} className="flex items-center justify-between text-sm">
+              <div
+                key={api}
+                className="flex items-center justify-between text-sm"
+              >
                 <span className="text-slate-300">{api}</span>
                 {result.enabled ? (
                   <CheckCircle className="h-4 w-4 text-green-400" />
@@ -94,13 +108,22 @@ function ValidationStep({ status, isLoading }: StepProps) {
           <div className="border-t border-slate-700 pt-4">
             <div className="flex items-center justify-between">
               <span className="text-white">IAM Permissions</span>
-              <span className={grantedPerms === permCount ? 'text-green-400' : 'text-yellow-400'}>
+              <span
+                className={
+                  grantedPerms === permCount
+                    ? 'text-green-400'
+                    : 'text-yellow-400'
+                }
+              >
                 {grantedPerms}/{permCount} granted
               </span>
             </div>
             <div className="space-y-2 mt-2">
               {Object.entries(checks.permissions).map(([perm, result]) => (
-                <div key={perm} className="flex items-center justify-between text-sm">
+                <div
+                  key={perm}
+                  className="flex items-center justify-between text-sm"
+                >
                   <span className="text-slate-300">{perm}</span>
                   {result.granted ? (
                     <CheckCircle className="h-4 w-4 text-green-400" />
@@ -121,13 +144,15 @@ function ValidationStep({ status, isLoading }: StepProps) {
                     <AlertCircle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
                     <span className="text-slate-300">
                       {fix.type === 'enable_api' && `Enable API: ${fix.api}`}
-                      {fix.type === 'grant_role' && `Grant role ${fix.role} (${fix.permission})`}
+                      {fix.type === 'grant_role' &&
+                        `Grant role ${fix.role} (${fix.permission})`}
                     </span>
                   </div>
                 ))}
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                Open the GCP console links above to fix these issues, then refresh.
+                Open the GCP console links above to fix these issues, then
+                refresh.
               </p>
             </div>
           )}
@@ -174,7 +199,9 @@ function InitializeStep() {
         ) : initializeMutation.isError ? (
           <div className="flex flex-col items-center gap-2">
             <AlertCircle className="h-8 w-8 text-red-400" />
-            <p className="text-red-400 text-sm">{initializeMutation.error.message}</p>
+            <p className="text-red-400 text-sm">
+              {initializeMutation.error.message}
+            </p>
             <Button variant="outline" onClick={handleInitialize}>
               Retry
             </Button>
@@ -201,8 +228,8 @@ function CompleteStep() {
           Setup Complete
         </h3>
         <p className="text-slate-400 max-w-md mb-6">
-          Your GCP project is now configured. You can start creating and managing
-          Minecraft servers.
+          Your GCP project is now configured. You can start creating and
+          managing Minecraft servers.
         </p>
         <Button variant="primary" onClick={() => navigate('/')}>
           Go to Dashboard
@@ -289,10 +316,7 @@ export function SetupWizard() {
         <div className="px-6 pb-6">
           <div className="flex justify-between">
             {step > 0 ? (
-              <Button
-                variant="outline"
-                onClick={() => setStep(step - 1)}
-              >
+              <Button variant="outline" onClick={() => setStep(step - 1)}>
                 Back
               </Button>
             ) : (

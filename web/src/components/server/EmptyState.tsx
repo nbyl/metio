@@ -18,8 +18,8 @@ export function EmptyState({ onCreateServer, className }: EmptyStateProps) {
             No Servers Yet
           </h3>
           <p className="text-slate-400 max-w-md mb-6">
-            Get started by creating your first Minecraft server. You can configure
-            the region, machine type, and version during setup.
+            Get started by creating your first Minecraft server. You can
+            configure the region, machine type, and version during setup.
           </p>
           {onCreateServer && (
             <Button variant="primary" onClick={onCreateServer}>

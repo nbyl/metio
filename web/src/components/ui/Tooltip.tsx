@@ -55,10 +55,7 @@ export function Tooltip({
     >
       {children}
       {isVisible && (
-        <span
-          className={cn('tooltip', className)}
-          role="tooltip"
-        >
+        <span className={cn('tooltip', className)} role="tooltip">
           {content}
         </span>
       )}

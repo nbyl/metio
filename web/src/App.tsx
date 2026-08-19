@@ -5,7 +5,11 @@ import { Layout } from './components/layout/Layout';
 import { Header } from './components/layout/Header';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { useSetupStatus } from './hooks/useSetupStatus';
-import { ServerDashboard, ServerSetupWizard, ProvisioningProgress } from './components/server';
+import {
+  ServerDashboard,
+  ServerSetupWizard,
+  ProvisioningProgress,
+} from './components/server';
 
 /**
  * Dashboard component - main server control panel

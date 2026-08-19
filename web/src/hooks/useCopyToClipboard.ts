@@ -24,7 +24,9 @@ export interface UseCopyToClipboardResult {
  * </button>
  * ```
  */
-export function useCopyToClipboard(resetDelay = 2000): UseCopyToClipboardResult {
+export function useCopyToClipboard(
+  resetDelay = 2000
+): UseCopyToClipboardResult {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
