@@ -1,8 +1,7 @@
 package programs
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"fmt"
 	"regexp"
 	"testing"
 
@@ -93,34 +92,6 @@ func NewMockResourceRegistry() *MockResourceRegistry {
 	}
 }
 
-func TestCloudConfigHash_DifferentInputsProduceDifferentHashes(t *testing.T) {
-	hash := func(input string) string {
-		h := sha256.New()
-		h.Write([]byte(input))
-		return hex.EncodeToString(h.Sum(nil))[:16]
-	}
-
-	h1 := hash("cloud-config-v1")
-	h2 := hash("cloud-config-v2")
-
-	assert.NotEqual(t, h1, h2, "Different cloud-config content should produce different hashes")
-	assert.Len(t, h1, 16, "Hash should be 16 hex characters")
-	assert.Len(t, h2, 16, "Hash should be 16 hex characters")
-}
-
-func TestCloudConfigHash_SameInputProducesSameHash(t *testing.T) {
-	hash := func(input string) string {
-		h := sha256.New()
-		h.Write([]byte(input))
-		return hex.EncodeToString(h.Sum(nil))[:16]
-	}
-
-	h1 := hash("cloud-config-v1")
-	h2 := hash("cloud-config-v1")
-
-	assert.Equal(t, h1, h2, "Same cloud-config content should produce the same hash")
-}
-
 func TestCurrentInfraVersion_IsPositive(t *testing.T) {
 	assert.Greater(t, CurrentInfraVersion, 0, "CurrentInfraVersion should be > 0")
 }
@@ -176,6 +147,23 @@ func TestBackupPrefixCondition(t *testing.T) {
 		cond)
 }
 
+func TestBackupObjectListRoleID(t *testing.T) {
+	tests := []struct {
+		environment string
+		want        string
+	}{
+		{"development", "development_backup_object_list"},
+		{"development2", "development2_backup_object_list"},
+		{"my-env-1", "my_env_1_backup_object_list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.environment, func(t *testing.T) {
+			assert.Equal(t, tt.want, backupObjectListRoleID(tt.environment))
+		})
+	}
+}
+
 func TestServerConfigDefaults_CentralBackup(t *testing.T) {
 	config := &ServerConfig{
 		Name:        "test-server",
@@ -187,6 +175,67 @@ func TestServerConfigDefaults_CentralBackup(t *testing.T) {
 	assert.Equal(t, "my-project-development-backups", centralBackupBucketName(config.GCPProject, config.Environment))
 	assert.Equal(t, "servers/srv-1/restic", serverBackupPrefix(config.ServerID))
 	assert.Equal(t, 0, config.BackupRetentionDays, "zero means the program default (90) applies")
+}
+
+func TestResticRetention(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *BackupConfig
+		want   string
+	}{
+		{
+			name:   "nil config falls back to deployment default",
+			config: nil,
+			want:   "",
+		},
+		{
+			name:   "no retention override falls back to deployment default",
+			config: &BackupConfig{Enabled: true, BackupIntervalHours: 6},
+			want:   "",
+		},
+		{
+			name:   "single retention flag",
+			config: &BackupConfig{Enabled: true, Keep: 10, KeepUnit: "daily"},
+			want:   "--keep-daily 10",
+		},
+		{
+			name:   "unsupported retention unit renders empty",
+			config: &BackupConfig{Keep: 12, KeepUnit: "fortnightly"},
+			want:   "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, resticRetention(tt.config))
+		})
+	}
+}
+
+func TestServerProgramBackupDefaults_EnabledByDefault(t *testing.T) {
+	config := &ServerConfig{
+		Name:                "test-server",
+		ServerID:            "srv-1",
+		GCPProject:          "my-project",
+		Environment:         "development",
+		BackupRetentionDays: 90,
+		Backup:              nil,
+	}
+
+	userData, err := RenderCloudConfig(&TemplateConfig{
+		Region:               config.Region,
+		GCPProject:           config.GCPProject,
+		Environment:          config.Environment,
+		InstanceName:         config.Name,
+		ServerID:             config.ServerID,
+		BackupRetentionDays:  config.BackupRetentionDays,
+		BackupImage:          config.BackupImage,
+		BackupInterval:       "1h",
+		PruneResticRetention: fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays),
+		BackupServiceEnable:  "minecraft-backup ",
+		RCONPassword:         "rcon-password",
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, userData, "systemctl enable minecraft minecraft-backup metio-machine-agent")
 }
 
 func TestExistingAddressImportID(t *testing.T) {

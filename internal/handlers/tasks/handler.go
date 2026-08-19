@@ -9,6 +9,7 @@ import (
 	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/handlers/agent"
+	"github.com/nbyl/metio/internal/handlers/servers"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 	"github.com/nbyl/metio/internal/services"
 )
@@ -55,23 +56,7 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	programConfig := &programs.ServerConfig{
-		Name:                     serverConfig.Name,
-		ServerID:                 serverID,
-		Region:                   serverConfig.Region,
-		Zone:                     serverConfig.Zone,
-		MachineType:              serverConfig.MachineType,
-		MinecraftVersion:         serverConfig.MinecraftVersion,
-		DiskSizeGB:               serverConfig.DiskSizeGB,
-		Environment:              cfg.Environment,
-		MachineAgentImage:        cfg.MachineAgentImage,
-		GCPProject:               cfg.ProjectID,
-		ExistingAddress:          serverConfig.ExistingAddress,
-		ControllerURL:            cfg.BaseURL,
-		AgentToken:               token,
-		BackupResticPassword:     cfg.BackupResticPassword,
-		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
-	}
+	programConfig := buildProgramConfig(serverConfig, cfg, token)
 
 	log.Printf("[tasks] Executing provisioning for server %s", serverID)
 
@@ -82,4 +67,31 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// buildProgramConfig assembles the Pulumi program config for a provisioning
+// task from the persisted server config plus controller-level settings. It
+// must stay in sync with servers.buildProgramConfig so task-executed
+// provisioning rolls out the same cloud-config (backup image, per-server
+// backup overrides) as the synchronous request paths.
+func buildProgramConfig(serverConfig *db.ServerConfig, cfg config.Config, token string) *programs.ServerConfig {
+	return &programs.ServerConfig{
+		Name:                     serverConfig.Name,
+		ServerID:                 serverConfig.ID,
+		Region:                   serverConfig.Region,
+		Zone:                     serverConfig.Zone,
+		MachineType:              serverConfig.MachineType,
+		MinecraftVersion:         serverConfig.MinecraftVersion,
+		DiskSizeGB:               serverConfig.DiskSizeGB,
+		Environment:              cfg.Environment,
+		MachineAgentImage:        cfg.MachineAgentImage,
+		BackupImage:              cfg.BackupImage,
+		GCPProject:               cfg.ProjectID,
+		ExistingAddress:          serverConfig.ExistingAddress,
+		ControllerURL:            cfg.BaseURL,
+		AgentToken:               token,
+		Backup:                   servers.DBBackupToProgramBackup(serverConfig.Backup),
+		BackupResticPassword:     cfg.BackupResticPassword,
+		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
+	}
 }

@@ -87,3 +87,69 @@ func TestRenderCloudConfig_CentralBackupSettings(t *testing.T) {
 	assert.NotContains(t, result, "RESTIC_REPOSITORY=gs:"+cfg.BackupBucket+":/ \\")
 	assert.NotContains(t, result, "keep-within 3m")
 }
+
+func TestRenderCloudConfig_DiskLayoutAndManifestMount(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupBucket:        "my-project-development-backups",
+		ServerID:            "0dcbaca4-2a26-489c-b4a3-d2fad8bb6483",
+		BackupRetentionDays: 90,
+		ResticPassword:      "deployment-wide-restic-password",
+		RCONPassword:        "rcon-password",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	// The data disk now mounts at /mnt/disks/minecraft with world data in a
+	// data/ subdirectory (InfraVersion 4 layout).
+	assert.Contains(t, result, "[minecraft_data, /mnt/disks/minecraft, ext4, \"defaults\", \"0\", \"2\"]")
+	assert.NotContains(t, result, "[minecraft_data, /mnt/disks/minecraft/data, ext4")
+
+	// The manifest queue is a parallel directory on the same disk, shared by
+	// the backup and machine-agent containers as /manifests.
+	assert.Contains(t, result, "-v /mnt/disks/minecraft/backup-manifests:/manifests")
+	assert.Contains(t, result, "mkdir -p /mnt/disks/minecraft/data /mnt/disks/minecraft/backup-manifests")
+	assert.Contains(t, result, "chmod 0777 /mnt/disks/minecraft/backup-manifests")
+
+	// Both backup and agent containers still mount the world data directory.
+	assert.Contains(t, result, "-v /mnt/disks/minecraft/data:/data")
+}
+
+func TestRenderCloudConfig_BackupOverrides(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:               "europe-west3",
+		MachineAgentImage:    "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupImage:          "europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:1.0.0",
+		BackupInterval:       "6h",
+		PruneResticRetention: "--keep-last 3 --keep-daily 10",
+		BackupServiceEnable:  "minecraft-backup ",
+		RCONPassword:         "rcon-password",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "docker pull europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:1.0.0")
+	assert.Contains(t, result, "BACKUP_INTERVAL=\"6h\"")
+	assert.Contains(t, result, "PRUNE_RESTIC_RETENTION=\"--keep-last 3 --keep-daily 10\"")
+	assert.Contains(t, result, "systemctl enable minecraft minecraft-backup metio-machine-agent")
+	assert.Contains(t, result, "systemctl start minecraft minecraft-backup metio-machine-agent")
+}
+
+func TestRenderCloudConfig_BackupDisabled(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:               "europe-west3",
+		MachineAgentImage:    "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupImage:          "ghcr.io/itzg/mc-backup:latest",
+		BackupInterval:       "1h",
+		PruneResticRetention: "--keep-within 90d",
+		BackupServiceEnable:  "",
+		RCONPassword:         "rcon-password",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "systemctl enable minecraft metio-machine-agent")
+	assert.Contains(t, result, "systemctl start minecraft metio-machine-agent")
+	assert.NotContains(t, result, "minecraft-backup metio-machine-agent")
+}

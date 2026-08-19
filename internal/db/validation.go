@@ -180,6 +180,12 @@ func ValidateServerConfig(config *ServerConfig) error {
 		}
 	}
 
+	if config.Backup != nil {
+		if err := config.Backup.IsValid(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

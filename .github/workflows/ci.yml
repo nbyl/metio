@@ -41,6 +41,7 @@ jobs:
       - run: echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - run: make ci-controller-image
       - run: make ci-machine-agent-image
+      - run: make ci-mc-backup-image
       - run: make ci-daprd-image
       - if: github.ref == 'refs/heads/main'
         run: make push-images
@@ -86,6 +87,7 @@ jobs:
           echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker pull ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7}
           docker pull ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7}
+          docker pull ghcr.io/nbyl/metio/mc-backup:${GITHUB_SHA::7}
           docker pull ghcr.io/nbyl/metio/daprd:${GITHUB_SHA::7}
       - name: Promote to GCP Artifact Registry
         run: make promote-distribution SHA=${GITHUB_SHA::7} VERSION=${{ needs.release.outputs.version }}
@@ -93,7 +95,9 @@ jobs:
         run: |
           docker tag ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
           docker tag ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/mc-backup:${GITHUB_SHA::7} ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
           docker tag ghcr.io/nbyl/metio/daprd:${GITHUB_SHA::7} ghcr.io/nbyl/metio/daprd:${{ needs.release.outputs.version }}
           docker push ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
           docker push ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
+          docker push ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
           docker push ghcr.io/nbyl/metio/daprd:${{ needs.release.outputs.version }}

@@ -366,8 +366,13 @@ The central bucket and infrastructure are created during `tofu apply`:
   (randomly generated, not the RCON password). The controller reads it to configure each server's
   `mc-backup` container.
 - Bucket IAM: the controller service account gets `roles/storage.objectAdmin` on the central bucket;
-  each server VM service account gets object access **scoped to its own prefix** (created by the
-  Pulumi server program).
+   each server VM service account gets object get/create/delete access **scoped to its own prefix**
+   (created by the Pulumi server program). Because GCS grants `storage.objects.list` at the bucket
+   level and IAM conditions cannot scope it (Restic lists on every `init`/`snapshots`/`prune`), each
+   server service account additionally gets a bucket-wide **list-only** custom role
+   (`{environment}_backup_object_list`, see `deploy/modules/gcp-cloud-run/backups.tf`) that contains
+   just `storage.objects.list` — it can enumerate object names/metadata but not read or modify other
+   servers' repositories.
 
 Retention:
 
@@ -379,6 +384,45 @@ Retention:
 
 Backups run on the standard hourly schedule from `mc-backup`. A manual world save can be triggered
 from the dashboard with the **Save World** button.
+
+#### Per-server backup settings
+
+Each server inherits the deployment defaults (backups **enabled**, hourly interval, Restic
+`--keep-within <backupRetentionDays>d` retention). Individual servers can override the schedule and
+retention from the dashboard (the **Backup** section on a server card) or via the API:
+
+```bash
+# Read current settings (servers that were never customized report defaults)
+curl https://<controller-url>/api/servers/<server-id>/settings/backup
+
+# Override: keep the 3 most recent daily snapshots, backup every 6 hours
+curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled": true, "backupIntervalHours": 6, "keep": 3, "keepUnit": "daily"}'
+
+# Disable backups entirely for this server
+curl -X PUT https://<controller-url>/api/servers/<server-id>/settings/backup \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled": false}'
+```
+
+The request body maps to the backup schedule and Restic retention:
+
+| Field               | Effect                                | Meaning                                |
+|---------------------|---------------------------------------|----------------------------------------|
+| `backupIntervalHours` | `BACKUP_INTERVAL`                   | Hours between backups (e.g. `6`, `24`), zero means default `1h` |
+| `keep` + `keepUnit` | `--keep-<unit> <keep>`               | Keep the last N snapshots of the given unit (`hourly`, `daily`, `weekly`, `monthly`, `yearly`) |
+
+Zero/empty values fall back to the deployment default for that dimension. Settings are stored per
+server in the state store and applied by re-provisioning the VM (a Pulumi deployment appears on the
+provisioning page). The `mc-backup` image that renders the schedule/retention configuration is the
+Metio image from `cmd/mc-backup/`, which wraps the upstream
+[`itzg/mc-backup`](https://github.com/itzg/docker-mc-backup) and adds a post-backup hook — a Go
+binary at `cmd/mc-backup/post-backup/` — that writes a
+`/manifests/manifest-<timestamp>.json` file (timestamp, Restic snapshot id, size) after every
+successful backup. Each backup produces its own timestamped manifest, so a slow ingestion process
+never misses a snapshot because the file was overwritten. The machine-agent mounts the same directory
+to surface the backup history on the dashboard.
 
 #### Manual Restic access
 
@@ -429,7 +473,19 @@ When the machine-agent image changes, the Pulumi program recreates the VM with t
 make deploy
 ```
 
-Builds both images and applies all OpenTofu infrastructure.
+Builds all Docker images (controller, machine-agent, mc-backup, daprd) and applies all OpenTofu
+infrastructure.
+
+#### mc-backup Image Update
+
+```bash
+make build-mc-backup-image
+```
+
+The Metio `mc-backup` image wraps the upstream `itzg/mc-backup` plus a `/manifests` hook (see
+[Per-server backup settings](#per-server-backup-settings)). It is pulled by the per-server backup
+service at VM boot. Changing the `backup_image` Terraform variable rebuilds the cloud-config pushed
+to new/updated servers.
 
 ### Monitoring and Logs
 

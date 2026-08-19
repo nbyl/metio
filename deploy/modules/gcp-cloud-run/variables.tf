@@ -33,6 +33,12 @@ variable "machine_agent_image" {
   default     = "europe-docker.pkg.dev/metio-distribution/metio/machine-agent:1.7.0" # x-release-please-version
 }
 
+variable "backup_image" {
+  description = "Docker image used for the per-server backup service (mc-backup)."
+  type        = string
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/mc-backup:1.7.0" # x-release-please-version
+}
+
 variable "environment" {
   description = "The deployment environment (e.g., dev, staging, prod)."
   type        = string
