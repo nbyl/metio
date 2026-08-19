@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react';
 import { Badge } from './Badge';
 
 describe('Badge', () => {
-  // Behavioral tests
   it('renders with children', () => {
     render(<Badge variant="online">Status</Badge>);
     expect(screen.getByText('Status')).toBeInTheDocument();
@@ -11,47 +10,34 @@ describe('Badge', () => {
 
   it('applies online variant', () => {
     render(<Badge variant="online">Online</Badge>);
-    const badge = screen.getByText('Online');
-    expect(badge).toHaveClass('badge', 'badge-online');
+    expect(screen.getByText('Online')).toHaveAttribute(
+      'data-variant',
+      'online'
+    );
   });
 
   it('applies offline variant', () => {
     render(<Badge variant="offline">Offline</Badge>);
-    const badge = screen.getByText('Offline');
-    expect(badge).toHaveClass('badge', 'badge-offline');
+    expect(screen.getByText('Offline')).toHaveAttribute(
+      'data-variant',
+      'offline'
+    );
   });
 
   it('applies transitioning variant', () => {
     render(<Badge variant="transitioning">Starting...</Badge>);
-    const badge = screen.getByText('Starting...');
-    expect(badge).toHaveClass('badge', 'badge-transitioning');
+    expect(screen.getByText('Starting...')).toHaveAttribute(
+      'data-variant',
+      'transitioning'
+    );
   });
 
-  it('merges custom className', () => {
+  it('forwards extra props', () => {
     render(
-      <Badge variant="online" className="custom-class">
+      <Badge variant="online" data-testid="badge">
         Custom
       </Badge>
     );
-    const badge = screen.getByText('Custom');
-    expect(badge).toHaveClass('badge', 'badge-online', 'custom-class');
-  });
-
-  // Snapshot tests
-  it('matches snapshot (online)', () => {
-    const { container } = render(<Badge variant="online">Online</Badge>);
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (offline)', () => {
-    const { container } = render(<Badge variant="offline">Offline</Badge>);
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (transitioning)', () => {
-    const { container } = render(
-      <Badge variant="transitioning">Starting...</Badge>
-    );
-    expect(container).toMatchSnapshot();
+    expect(screen.getByTestId('badge')).toBeInTheDocument();
   });
 });

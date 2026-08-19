@@ -1,22 +1,6 @@
-import {
-  createContext,
-  useContext,
-  useId,
-  useRef,
-  type KeyboardEvent,
-  type MutableRefObject,
-  type ReactNode,
-} from 'react';
-import { cn } from '../../lib/utils';
-
-interface TabsContextValue {
-  idPrefix: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  tabsRef: MutableRefObject<Map<string, HTMLButtonElement>>;
-}
-
-const TabsContext = createContext<TabsContextValue | null>(null);
+import type { ReactNode } from 'react';
+import { Tabs as TabsPrimitive } from 'radix-ui';
+import { cn } from '@/lib/utils';
 
 export interface TabsProps {
   /** Currently active tab value */
@@ -30,7 +14,8 @@ export interface TabsProps {
 
 /**
  * Accessible tabs container that ties together {@link TabList}, {@link Tab}
- * and {@link TabPanel}.
+ * and {@link TabPanel}. Built on Radix UI's Tabs primitive (roving tabindex,
+ * arrow-key navigation, ARIA wiring).
  *
  * @example
  * ```tsx
@@ -44,22 +29,16 @@ export interface TabsProps {
  * ```
  */
 export function Tabs({ value, onValueChange, className, children }: TabsProps) {
-  const idPrefix = useId();
-  const tabsRef = useRef<Map<string, HTMLButtonElement>>(new Map());
-
   return (
-    <TabsContext.Provider value={{ idPrefix, value, onValueChange, tabsRef }}>
-      <div className={cn('tabs', className)}>{children}</div>
-    </TabsContext.Provider>
+    <TabsPrimitive.Root
+      data-slot="tabs"
+      value={value}
+      onValueChange={onValueChange}
+      className={cn('tabs', className)}
+    >
+      {children}
+    </TabsPrimitive.Root>
   );
-}
-
-function useTabs(): TabsContextValue {
-  const context = useContext(TabsContext);
-  if (!context) {
-    throw new Error('Tab components must be used within a <Tabs>');
-  }
-  return context;
 }
 
 export interface TabListProps {
@@ -73,48 +52,13 @@ export interface TabListProps {
  * keyboard navigation between tabs.
  */
 export function TabList({ className, children }: TabListProps) {
-  const { tabsRef } = useTabs();
-
-  const focusTab = (current: HTMLButtonElement, offset: number) => {
-    const tabs = Array.from(tabsRef.current.values());
-    if (tabs.length === 0) return;
-    const currentIndex = tabs.indexOf(current);
-    const nextIndex = (currentIndex + offset + tabs.length) % tabs.length;
-    tabs[nextIndex].focus();
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const current = e.currentTarget as HTMLButtonElement;
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        focusTab(current, -1);
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        focusTab(current, 1);
-        break;
-      case 'Home':
-        e.preventDefault();
-        tabsRef.current.values().next().value?.focus();
-        break;
-      case 'End': {
-        e.preventDefault();
-        const tabs = Array.from(tabsRef.current.values());
-        tabs[tabs.length - 1]?.focus();
-        break;
-      }
-    }
-  };
-
   return (
-    <div
-      role="tablist"
-      onKeyDown={handleKeyDown}
+    <TabsPrimitive.List
+      data-slot="tablist"
       className={cn('tablist', className)}
     >
       {children}
-    </div>
+    </TabsPrimitive.List>
   );
 }
 
@@ -137,36 +81,22 @@ export function Tab({
   className,
   children,
 }: TabProps) {
-  const { idPrefix, value: activeValue, onValueChange, tabsRef } = useTabs();
-  const selected = activeValue === value;
-  const id = `${idPrefix}-${value}-tab`;
-  const panelId = `${idPrefix}-${value}-panel`;
-
   return (
-    <button
-      type="button"
-      id={id}
-      role="tab"
-      aria-selected={selected}
-      aria-controls={panelId}
-      tabIndex={selected ? 0 : -1}
+    <TabsPrimitive.Trigger
+      data-slot="tab"
+      value={value}
       disabled={disabled}
-      onClick={() => onValueChange(value)}
-      ref={(el) => {
-        if (el) tabsRef.current.set(value, el);
-        else tabsRef.current.delete(value);
-      }}
       className={cn(
         'inline-flex items-center px-4 py-2 text-sm font-medium border-b-2 transition-colors',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-0',
-        selected
-          ? 'border-green-500 text-white'
-          : 'border-transparent text-slate-400 hover:text-slate-200 disabled:opacity-50',
+        'data-[state=active]:border-green-500 data-[state=active]:text-white',
+        'data-[state=inactive]:border-transparent data-[state=inactive]:text-slate-400 hover:text-slate-200',
+        'disabled:opacity-50',
         className
       )}
     >
       {children}
-    </button>
+    </TabsPrimitive.Trigger>
   );
 }
 
@@ -182,20 +112,13 @@ export interface TabPanelProps {
  * Content shown for the tab with the matching {@link TabPanelProps.value}.
  */
 export function TabPanel({ value, className, children }: TabPanelProps) {
-  const { idPrefix, value: activeValue } = useTabs();
-  const id = `${idPrefix}-${value}-panel`;
-  const tabId = `${idPrefix}-${value}-tab`;
-  const selected = activeValue === value;
-
   return (
-    <div
-      id={id}
-      role="tabpanel"
-      aria-labelledby={tabId}
-      hidden={!selected}
+    <TabsPrimitive.Content
+      data-slot="tabpanel"
+      value={value}
       className={cn('tabpanel', className)}
     >
       {children}
-    </div>
+    </TabsPrimitive.Content>
   );
 }

@@ -36,18 +36,22 @@ const machineTypes = [
   { id: 'e2-medium', vcpus: 2, memoryGB: 4 },
 ];
 
-function renderModal(overrides: Partial<ServerConfig> = {}) {
+function renderModal(
+  configOverrides: Partial<ServerConfig> = {},
+  handlerOverrides: Partial<Parameters<typeof UpdateModal>[0]> = {}
+) {
   return render(
     <UpdateModal
       open
       serverId="srv1"
       serverName="test-server"
-      config={{ ...config, ...overrides }}
+      config={{ ...config, ...configOverrides }}
       currentInfraVersion={1}
       outdated={false}
       onClose={vi.fn()}
       onUpdate={vi.fn()}
       isPending={false}
+      {...handlerOverrides}
     />
   );
 }
@@ -162,5 +166,103 @@ describe('UpdateModal tabs', () => {
     );
     expect(screen.getByLabelText('Backup interval (hours)')).toHaveValue(6);
     expect(screen.getByLabelText('Retention policy')).toHaveValue(3);
+  });
+});
+
+describe('UpdateModal close behaviour', () => {
+  it('closes via the close icon button', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const { container } = renderModal({}, { onClose });
+
+    const closeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === ''
+    );
+    expect(closeButton).toBeDefined();
+    await user.click(closeButton as HTMLButtonElement);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes via the Cancel button', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderModal({}, { onClose });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('UpdateModal submit behaviour', () => {
+  it('submits only the changed fields', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderModal({}, { onUpdate });
+
+    await user.clear(screen.getByDisplayValue('test-server'));
+    await user.type(screen.getByDisplayValue(''), 'renamed-server');
+    await user.click(screen.getByRole('button', { name: 'Update Server' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ name: 'renamed-server' });
+  });
+
+  it('submits the machine type when changed', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderModal({}, { onUpdate });
+
+    await user.selectOptions(screen.getAllByRole('combobox')[0], 'e2-medium');
+    await user.click(screen.getByRole('button', { name: 'Update Server' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ machineType: 'e2-medium' });
+  });
+
+  it('submits the disk size when changed', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderModal({}, { onUpdate });
+
+    const diskInput = screen.getByDisplayValue('50');
+    await user.clear(diskInput);
+    await user.type(diskInput, '100');
+    await user.click(screen.getByRole('button', { name: 'Update Server' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ diskSizeGB: 100 });
+  });
+
+  it('submits the minecraft version when changed', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderModal({}, { onUpdate });
+
+    await user.selectOptions(screen.getByDisplayValue('1.21.11'), '26.2');
+    await user.click(screen.getByRole('button', { name: 'Update Server' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ minecraftVersion: '26.2' });
+  });
+
+  it('disables the Update button when nothing changed and not outdated', () => {
+    renderModal();
+
+    expect(
+      screen.getByRole('button', { name: 'Update Server' })
+    ).toBeDisabled();
+  });
+
+  it('shows the outdated banner and allows submitting an empty payload', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderModal({}, { outdated: true, onUpdate });
+
+    expect(
+      screen.getByText('Infrastructure Update Available')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Controller version: v1/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Update Server' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({});
   });
 });

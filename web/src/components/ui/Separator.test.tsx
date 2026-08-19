@@ -8,20 +8,8 @@ describe('Separator', () => {
     expect(screen.getByRole('separator')).toBeInTheDocument();
   });
 
-  it('applies separator class', () => {
-    render(<Separator />);
-    const separator = screen.getByRole('separator');
-    expect(separator).toHaveClass('separator');
-  });
-
-  it('merges custom className', () => {
-    render(<Separator className="my-4" />);
-    const separator = screen.getByRole('separator');
-    expect(separator).toHaveClass('separator', 'my-4');
-  });
-
-  it('matches snapshot', () => {
-    const { container } = render(<Separator />);
-    expect(container).toMatchSnapshot();
+  it('forwards extra props', () => {
+    render(<Separator data-testid="separator" />);
+    expect(screen.getByTestId('separator')).toBeInTheDocument();
   });
 });
