@@ -1,10 +1,7 @@
 import type { HTMLAttributes } from 'react';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
 
-export interface SkeletonProps extends HTMLAttributes<HTMLDivElement> {
-  /** Additional CSS classes */
-  className?: string;
-}
+export type SkeletonProps = HTMLAttributes<HTMLDivElement>;
 
 /**
  * Skeleton loading placeholder component.
@@ -24,6 +21,7 @@ export interface SkeletonProps extends HTMLAttributes<HTMLDivElement> {
 export function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
+      data-slot="skeleton"
       className={cn('skeleton animate-pulse rounded', className)}
       {...props}
     />

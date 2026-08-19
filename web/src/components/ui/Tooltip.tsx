@@ -1,11 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { cn } from '../../lib/utils';
+import type { ReactNode } from 'react';
+import { Tooltip as TooltipPrimitive } from 'radix-ui';
+import { cn } from '@/lib/utils';
 
 export interface TooltipProps {
   /** The content to show in the tooltip */
-  content: React.ReactNode;
+  content: ReactNode;
   /** The element that triggers the tooltip */
-  children: React.ReactNode;
+  children: ReactNode;
   /** Additional CSS classes for the tooltip */
   className?: string;
   /** Delay before showing tooltip in ms */
@@ -13,7 +14,11 @@ export interface TooltipProps {
 }
 
 /**
- * Tooltip component that shows content on hover
+ * Tooltip component that shows content on hover or focus.
+ *
+ * Built on Radix UI's Tooltip primitive. The content is portaled to the body
+ * and positioned around the trigger; multiline content (newlines) is rendered
+ * via `whitespace-pre-line`.
  */
 export function Tooltip({
   content,
@@ -21,44 +26,23 @@ export function Tooltip({
   className,
   delay = 200,
 }: TooltipProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showTooltip = () => {
-    timeoutRef.current = setTimeout(() => {
-      setIsVisible(true);
-    }, delay);
-  };
-
-  const hideTooltip = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    setIsVisible(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
   return (
-    <span
-      className="tooltip-wrapper"
-      onMouseEnter={showTooltip}
-      onMouseLeave={hideTooltip}
-      onFocus={showTooltip}
-      onBlur={hideTooltip}
-    >
-      {children}
-      {isVisible && (
-        <span className={cn('tooltip', className)} role="tooltip">
-          {content}
-        </span>
-      )}
-    </span>
+    <TooltipPrimitive.Provider delayDuration={delay}>
+      <TooltipPrimitive.Root delayDuration={delay} disableHoverableContent>
+        <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            data-slot="tooltip"
+            sideOffset={4}
+            className={cn(
+              'z-50 max-w-xs whitespace-pre-line px-2 py-1 text-xs text-white shadow-lg rounded-md bg-slate-900',
+              className
+            )}
+          >
+            {content}
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
   );
 }

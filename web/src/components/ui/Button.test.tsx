@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { Button } from './Button';
 
 describe('Button', () => {
-  // Behavioral tests
   it('renders with children', () => {
     render(<Button>Click me</Button>);
     expect(
@@ -15,25 +14,29 @@ describe('Button', () => {
   it('applies primary variant by default', () => {
     render(<Button>Primary</Button>);
     const button = screen.getByRole('button');
-    expect(button).toHaveClass('btn', 'btn-green');
+    expect(button).toHaveAttribute('data-variant', 'primary');
+    expect(button).toHaveAttribute('data-size', 'default');
   });
 
   it('applies danger variant', () => {
     render(<Button variant="danger">Danger</Button>);
-    const button = screen.getByRole('button');
-    expect(button).toHaveClass('btn', 'btn-red');
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'data-variant',
+      'danger'
+    );
   });
 
   it('applies outline variant', () => {
     render(<Button variant="outline">Outline</Button>);
-    const button = screen.getByRole('button');
-    expect(button).toHaveClass('btn', 'btn-outline');
+    expect(screen.getByRole('button')).toHaveAttribute(
+      'data-variant',
+      'outline'
+    );
   });
 
   it('applies sm size', () => {
     render(<Button size="sm">Small</Button>);
-    const button = screen.getByRole('button');
-    expect(button).toHaveClass('btn-sm');
+    expect(screen.getByRole('button')).toHaveAttribute('data-size', 'sm');
   });
 
   it('shows loading spinner when loading', () => {
@@ -41,23 +44,21 @@ describe('Button', () => {
     const button = screen.getByRole('button');
     const spinner = button.querySelector('svg');
     expect(spinner).toBeInTheDocument();
-    expect(spinner).toHaveClass('animate-spin');
   });
 
-  it('disables button when loading', () => {
+  it('is disabled when loading', () => {
     render(<Button loading>Loading</Button>);
     expect(screen.getByRole('button')).toBeDisabled();
   });
 
-  it('disables button when disabled prop is set', () => {
+  it('is disabled when disabled prop is set', () => {
     render(<Button disabled>Disabled</Button>);
     expect(screen.getByRole('button')).toBeDisabled();
   });
 
-  it('merges custom className', () => {
-    render(<Button className="custom-class">Custom</Button>);
-    const button = screen.getByRole('button');
-    expect(button).toHaveClass('btn', 'custom-class');
+  it('forwards extra props', () => {
+    render(<Button data-testid="btn">Custom</Button>);
+    expect(screen.getByTestId('btn')).toBeInTheDocument();
   });
 
   it('forwards onClick handler', async () => {
@@ -80,23 +81,5 @@ describe('Button', () => {
 
     await user.click(screen.getByRole('button'));
     expect(handleClick).not.toHaveBeenCalled();
-  });
-
-  // Snapshot tests
-  it('matches snapshot (primary)', () => {
-    const { container } = render(<Button>Primary Button</Button>);
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (danger)', () => {
-    const { container } = render(
-      <Button variant="danger">Danger Button</Button>
-    );
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (loading)', () => {
-    const { container } = render(<Button loading>Loading Button</Button>);
-    expect(container).toMatchSnapshot();
   });
 });

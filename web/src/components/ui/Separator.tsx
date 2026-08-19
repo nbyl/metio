@@ -1,9 +1,8 @@
-import { cn } from '../../lib/utils';
+import type { ComponentProps } from 'react';
+import { Separator as SeparatorPrimitive } from 'radix-ui';
+import { cn } from '@/lib/utils';
 
-export interface SeparatorProps {
-  /** Additional CSS classes */
-  className?: string;
-}
+export type SeparatorProps = ComponentProps<typeof SeparatorPrimitive.Root>;
 
 /**
  * Horizontal separator/divider component.
@@ -17,6 +16,17 @@ export interface SeparatorProps {
  * </CardContent>
  * ```
  */
-export function Separator({ className }: SeparatorProps) {
-  return <div className={cn('separator', className)} role="separator" />;
+export function Separator({
+  className,
+  orientation = 'horizontal',
+  ...props
+}: SeparatorProps) {
+  return (
+    <SeparatorPrimitive.Root
+      data-slot="separator"
+      orientation={orientation}
+      className={cn('separator', className)}
+      {...props}
+    />
+  );
 }

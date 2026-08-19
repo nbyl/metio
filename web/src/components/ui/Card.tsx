@@ -1,12 +1,7 @@
-import type { ReactNode } from 'react';
-import { cn } from '../../lib/utils';
+import type { HTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
 
-export interface CardProps {
-  /** Card content */
-  children: ReactNode;
-  /** Additional CSS classes */
-  className?: string;
-}
+export type CardProps = HTMLAttributes<HTMLDivElement>;
 
 /**
  * Card container component.
@@ -21,48 +16,51 @@ export interface CardProps {
  * </Card>
  * ```
  */
-export function Card({ children, className }: CardProps) {
-  return <div className={cn('card', className)}>{children}</div>;
+export function Card({ className, ...props }: CardProps) {
+  return <div data-slot="card" className={cn('card', className)} {...props} />;
 }
 
-export interface CardHeaderProps {
-  /** Header content */
-  children: ReactNode;
-  /** Additional CSS classes */
-  className?: string;
-}
+export type CardHeaderProps = HTMLAttributes<HTMLDivElement>;
 
 /**
  * Card header section.
  */
-export function CardHeader({ children, className }: CardHeaderProps) {
-  return <div className={cn('card-header', className)}>{children}</div>;
+export function CardHeader({ className, ...props }: CardHeaderProps) {
+  return (
+    <div
+      data-slot="card-header"
+      className={cn('card-header', className)}
+      {...props}
+    />
+  );
 }
 
-export interface CardTitleProps {
-  /** Title content */
-  children: ReactNode;
-  /** Additional CSS classes */
-  className?: string;
-}
+export type CardTitleProps = HTMLAttributes<HTMLHeadingElement>;
 
 /**
  * Card title element.
  */
-export function CardTitle({ children, className }: CardTitleProps) {
-  return <h2 className={cn('card-title', className)}>{children}</h2>;
+export function CardTitle({ className, ...props }: CardTitleProps) {
+  return (
+    <h2
+      data-slot="card-title"
+      className={cn('card-title', className)}
+      {...props}
+    />
+  );
 }
 
-export interface CardContentProps {
-  /** Content */
-  children: ReactNode;
-  /** Additional CSS classes */
-  className?: string;
-}
+export type CardContentProps = HTMLAttributes<HTMLDivElement>;
 
 /**
  * Card content section.
  */
-export function CardContent({ children, className }: CardContentProps) {
-  return <div className={cn('card-content', className)}>{children}</div>;
+export function CardContent({ className, ...props }: CardContentProps) {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn('card-content', className)}
+      {...props}
+    />
+  );
 }

@@ -1,23 +1,30 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { Loader2 } from 'lucide-react';
+import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
-const variantStyles = {
-  primary: 'btn-green',
-  danger: 'btn-red',
-  outline: 'btn-outline',
-} as const;
+const buttonVariants = cva('btn', {
+  variants: {
+    variant: {
+      primary: 'btn-green',
+      danger: 'btn-red',
+      outline: 'btn-outline',
+    },
+    size: {
+      default: '',
+      sm: 'btn-sm',
+    },
+  },
+  defaultVariants: {
+    variant: 'primary',
+    size: 'default',
+  },
+});
 
-const sizeStyles = {
-  default: '',
-  sm: 'btn-sm',
-} as const;
-
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** Button style variant */
-  variant?: keyof typeof variantStyles;
-  /** Button size */
-  size?: keyof typeof sizeStyles;
+export interface ButtonProps
+  extends
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   /** Show loading spinner and disable button */
   loading?: boolean;
 }
@@ -38,26 +45,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    {
-      className,
-      variant = 'primary',
-      size = 'default',
-      loading = false,
-      disabled,
-      children,
-      ...props
-    },
+    { className, variant, size, loading = false, disabled, children, ...props },
     ref
   ) => {
     return (
       <button
         ref={ref}
-        className={cn(
-          'btn',
-          variantStyles[variant],
-          sizeStyles[size],
-          className
-        )}
+        data-slot="button"
+        data-variant={variant ?? 'primary'}
+        data-size={size ?? 'default'}
+        className={cn(buttonVariants({ variant, size }), className)}
         disabled={disabled || loading}
         {...props}
       >
@@ -69,3 +66,5 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 
 Button.displayName = 'Button';
+// eslint-disable-next-line react-refresh/only-export-components
+export { buttonVariants };

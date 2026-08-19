@@ -1,4 +1,5 @@
-import { cn } from '../../lib/utils';
+import { Switch as SwitchPrimitive } from 'radix-ui';
+import { cn } from '@/lib/utils';
 
 export interface SwitchProps {
   /** Whether the switch is checked */
@@ -14,27 +15,31 @@ export interface SwitchProps {
 }
 
 /**
- * Switch component for boolean toggles
+ * Switch component for boolean toggles.
+ *
+ * Built on Radix UI's Switch primitive so it is keyboard-operable (space/enter)
+ * and exposes the correct `switch` role and `aria-checked` state.
  */
 export function Switch({
   checked,
   onChange,
   disabled = false,
   className,
-  'aria-label': ariaLabel,
+  ...props
 }: SwitchProps) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
-      data-state={checked ? 'checked' : 'unchecked'}
+    <SwitchPrimitive.Root
+      data-slot="switch"
+      checked={checked}
+      onCheckedChange={onChange}
       disabled={disabled}
-      onClick={() => onChange(!checked)}
       className={cn('switch', className)}
+      {...props}
     >
-      <span className="switch-thumb" />
-    </button>
+      <SwitchPrimitive.Thumb
+        data-slot="switch-thumb"
+        className="switch-thumb"
+      />
+    </SwitchPrimitive.Root>
   );
 }
