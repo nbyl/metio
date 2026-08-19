@@ -188,6 +188,7 @@ make machine-agent
 # Build Docker images (local, pushes to ghcr.io)
 make controller-image
 make machine-agent-image
+make mc-backup-image
 make push-images
 
 # Promote image tag (retag for deployment)

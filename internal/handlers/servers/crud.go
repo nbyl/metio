@@ -117,23 +117,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	programConfig := &programs.ServerConfig{
-		Name:                     req.Name,
-		ServerID:                 serverID,
-		Region:                   req.Region,
-		Zone:                     req.Zone,
-		MachineType:              req.MachineType,
-		MinecraftVersion:         req.MinecraftVersion,
-		DiskSizeGB:               req.DiskSizeGB,
-		Environment:              cfg.Environment,
-		MachineAgentImage:        cfg.MachineAgentImage,
-		GCPProject:               cfg.ProjectID,
-		ExistingAddress:          req.ExistingAddress,
-		ControllerURL:            cfg.BaseURL,
-		AgentToken:               token,
-		BackupResticPassword:     cfg.BackupResticPassword,
-		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
-	}
+	programConfig := buildProgramConfig(serverID, serverConfig, cfg, token)
 
 	if err := ProvisioningService.CreateServer(ctx, serverID, programConfig); err != nil {
 		log.Printf("Error starting server provisioning: %v", err)
@@ -366,23 +350,7 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	programConfig := &programs.ServerConfig{
-		Name:                     existingConfig.Name,
-		ServerID:                 serverID,
-		Region:                   existingConfig.Region,
-		Zone:                     existingConfig.Zone,
-		MachineType:              existingConfig.MachineType,
-		MinecraftVersion:         existingConfig.MinecraftVersion,
-		DiskSizeGB:               existingConfig.DiskSizeGB,
-		Environment:              cfg.Environment,
-		MachineAgentImage:        cfg.MachineAgentImage,
-		GCPProject:               cfg.ProjectID,
-		ExistingAddress:          existingConfig.ExistingAddress,
-		ControllerURL:            cfg.BaseURL,
-		AgentToken:               token,
-		BackupResticPassword:     cfg.BackupResticPassword,
-		RetainLegacyBackupBucket: existingConfig.InfraVersion > 0 && existingConfig.InfraVersion < programs.CurrentInfraVersion,
-	}
+	programConfig := buildProgramConfig(serverID, existingConfig, cfg, token)
 
 	if err := ProvisioningService.UpdateServer(ctx, serverID, programConfig, updateType); err != nil {
 		log.Printf("Error starting server update: %v", err)

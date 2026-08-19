@@ -237,6 +237,65 @@ func TestShutdownScheduleIsValid(t *testing.T) {
 	})
 }
 
+func TestBackupConfigIsValid(t *testing.T) {
+	testCases := []struct {
+		name    string
+		config  *BackupConfig
+		wantErr bool
+	}{
+		{name: "nil uses deployment defaults", config: nil, wantErr: false},
+		{name: "default enabled", config: &BackupConfig{Enabled: true}, wantErr: false},
+		{name: "disabled", config: &BackupConfig{Enabled: false}, wantErr: false},
+		{name: "interval in hours", config: &BackupConfig{Enabled: true, BackupIntervalHours: 6}, wantErr: false},
+		{name: "retention policy", config: &BackupConfig{Enabled: true, Keep: 7, KeepUnit: "daily"}, wantErr: false},
+		{name: "keep without unit", config: &BackupConfig{Enabled: true, Keep: 7}, wantErr: true},
+		{name: "unit without keep", config: &BackupConfig{Enabled: true, KeepUnit: "daily"}, wantErr: false},
+		{name: "unsupported unit", config: &BackupConfig{Enabled: true, Keep: 7, KeepUnit: "fortnightly"}, wantErr: true},
+		{name: "negative interval", config: &BackupConfig{Enabled: true, BackupIntervalHours: -1}, wantErr: true},
+		{name: "negative retention", config: &BackupConfig{Enabled: true, Keep: -1, KeepUnit: "daily"}, wantErr: true},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.IsValid()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateServerConfig_Backup(t *testing.T) {
+	validBase := &ServerConfig{
+		Name:             "test-server",
+		Region:           "europe-west3",
+		Zone:             "europe-west3-a",
+		MachineType:      "e2-small",
+		MinecraftVersion: "1.21.1",
+		DiskSizeGB:       50,
+	}
+
+	t.Run("valid backup config", func(t *testing.T) {
+		config := *validBase
+		config.Backup = &BackupConfig{Enabled: true, BackupIntervalHours: 6, Keep: 7, KeepUnit: "daily"}
+		assert.NoError(t, ValidateServerConfig(&config))
+	})
+
+	t.Run("backup disabled", func(t *testing.T) {
+		config := *validBase
+		config.Backup = &BackupConfig{Enabled: false}
+		assert.NoError(t, ValidateServerConfig(&config))
+	})
+
+	t.Run("invalid backup interval", func(t *testing.T) {
+		config := *validBase
+		config.Backup = &BackupConfig{Enabled: true, BackupIntervalHours: -1}
+		assert.Error(t, ValidateServerConfig(&config))
+	})
+}
+
 func TestMachineTypes(t *testing.T) {
 	t.Run("e2-small exists", func(t *testing.T) {
 		spec, ok := MachineTypes["e2-small"]

@@ -1,8 +1,6 @@
 package programs
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -23,11 +21,18 @@ type ServerConfig struct {
 	DiskSizeGB        int
 	Environment       string
 	MachineAgentImage string
+	BackupImage       string
 	GCPProject        string
 	RCONPassword      string
 	ExistingAddress   string
 	ControllerURL     string
 	AgentToken        string
+
+	// Backup holds a per-server override for the backup schedule and Restic
+	// retention policy. When nil, the deployment defaults apply (backup
+	// enabled, hourly interval, keep-within BackupRetentionDays), so existing
+	// servers are unaffected until a backup config is set for them.
+	Backup *BackupConfig
 
 	// BackupBucket is the deployment-wide central backup bucket (ADR-0004).
 	// When empty it is derived from GCPProject and Environment as
@@ -77,6 +82,15 @@ func backupPrefixCondition(bucket, serverID string) string {
 		bucket, serverBackupPrefix(serverID))
 }
 
+// backupObjectListRoleID returns the project-scoped custom role that grants
+// only storage.objects.list. GCS grants list at the bucket level and IAM
+// conditions cannot scope it, so per-server service accounts get this
+// bucket-wide role in addition to their prefix-scoped object access. The name
+// must match the tofu resource in deploy/modules/gcp-cloud-run/backups.tf.
+func backupObjectListRoleID(environment string) string {
+	return strings.ReplaceAll(environment, "-", "_") + "_backup_object_list"
+}
+
 // existingAddressImportID returns the Pulumi import ID for a pre-existing GCP
 // address, or "" when no address should be adopted. Adoption only happens on
 // the initial create; on updates the address is already managed by the stack
@@ -87,6 +101,34 @@ func existingAddressImportID(config *ServerConfig) string {
 	}
 	return fmt.Sprintf("projects/%s/regions/%s/addresses/%s",
 		config.GCPProject, config.Region, config.ExistingAddress)
+}
+
+// BackupConfig holds a per-server override for the backup schedule and Restic
+// retention policy. Zero values fall back to the deployment defaults.
+type BackupConfig struct {
+	Enabled             bool
+	BackupIntervalHours int
+	Keep                int
+	KeepUnit            string
+}
+
+// resticRetention renders the PRUNE_RESTIC_RETENTION argument for a backup
+// config, or "" when no retention override is set so the deployment default
+// (keep-within BackupRetentionDays) is used.
+func resticRetention(b *BackupConfig) string {
+	if b == nil {
+		return ""
+	}
+	if b.Keep <= 0 {
+		return ""
+	}
+	unit := "--keep-" + b.KeepUnit
+	for _, u := range []string{"hourly", "daily", "weekly", "monthly", "yearly"} {
+		if u == b.KeepUnit {
+			return fmt.Sprintf("%s %d", unit, b.Keep)
+		}
+	}
+	return ""
 }
 
 func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
@@ -123,29 +165,53 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			resticPassword = config.RCONPassword
 		}
 
+		backupImage := config.BackupImage
+		if backupImage == "" {
+			backupImage = "ghcr.io/itzg/mc-backup:latest"
+		}
+
+		// Backup scheduling and retention. Per-server overrides take effect
+		// only when a backup config is provided; otherwise the deployment
+		// defaults apply so existing servers keep their current behavior.
+		backupEnabled := true
+		backupInterval := "1h"
+		pruneResticRetention := fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays)
+		backupServiceEnable := "minecraft-backup "
+		if config.Backup != nil {
+			backupEnabled = config.Backup.Enabled
+			if config.Backup.BackupIntervalHours > 0 {
+				backupInterval = fmt.Sprintf("%dh", config.Backup.BackupIntervalHours)
+			}
+			if retention := resticRetention(config.Backup); retention != "" {
+				pruneResticRetention = retention
+			}
+			if !backupEnabled {
+				backupServiceEnable = ""
+			}
+		}
+
 		userData, err := RenderCloudConfig(&TemplateConfig{
-			Region:              config.Region,
-			GCPProject:          config.GCPProject,
-			Environment:         config.Environment,
-			InstanceName:        config.Name,
-			BackupBucket:        config.BackupBucket,
-			ServerID:            config.ServerID,
-			BackupRetentionDays: config.BackupRetentionDays,
-			ResticPassword:      resticPassword,
-			MachineAgentImage:   config.MachineAgentImage,
-			MinecraftVersion:    config.MinecraftVersion,
-			RCONPassword:        config.RCONPassword,
-			ControllerURL:       config.ControllerURL,
-			AgentToken:          config.AgentToken,
+			Region:               config.Region,
+			GCPProject:           config.GCPProject,
+			Environment:          config.Environment,
+			InstanceName:         config.Name,
+			BackupBucket:         config.BackupBucket,
+			ServerID:             config.ServerID,
+			BackupRetentionDays:  config.BackupRetentionDays,
+			ResticPassword:       resticPassword,
+			MachineAgentImage:    config.MachineAgentImage,
+			BackupImage:          backupImage,
+			BackupInterval:       backupInterval,
+			PruneResticRetention: pruneResticRetention,
+			BackupServiceEnable:  backupServiceEnable,
+			MinecraftVersion:     config.MinecraftVersion,
+			RCONPassword:         config.RCONPassword,
+			ControllerURL:        config.ControllerURL,
+			AgentToken:           config.AgentToken,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
 		}
-
-		// Compute a hash of the cloud-config to detect changes that require VM recreation.
-		h := sha256.New()
-		h.Write([]byte(userData))
-		cloudConfigHash := hex.EncodeToString(h.Sum(nil))[:16] // first 16 hex chars
 
 		sa, err := serviceaccount.NewAccount(ctx, fmt.Sprintf("%s-sa", config.Name), &serviceaccount.AccountArgs{
 			AccountId:   pulumi.String(fmt.Sprintf("%s-sa", config.Name)),
@@ -205,6 +271,20 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		})
 		if err != nil {
 			return fmt.Errorf("failed to grant backup bucket access: %w", err)
+		}
+
+		// GCS grants storage.objects.list at the bucket level and IAM conditions
+		// cannot scope it, so Restic's list calls (init/snapshots/prune) need a
+		// separate bucket-wide grant. Scope it to the deployment's list-only
+		// custom role so object get/create/delete stay restricted to this
+		// server's prefix by the conditional binding above.
+		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-list", config.Name), &storage.BucketIAMMemberArgs{
+			Bucket: pulumi.String(config.BackupBucket),
+			Role:   pulumi.Sprintf("projects/%s/roles/%s", config.GCPProject, backupObjectListRoleID(config.Environment)),
+			Member: pulumi.Sprintf("serviceAccount:%s", sa.Email),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to grant backup bucket list access: %w", err)
 		}
 
 		disk, err := compute.NewDisk(ctx, fmt.Sprintf("%s-disk", config.Name), &compute.DiskArgs{
@@ -302,14 +382,13 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 				},
 			},
 			Labels: pulumi.StringMap{
-				"cloud_config_hash": pulumi.String(cloudConfigHash),
-				"infra_version":     pulumi.String(fmt.Sprintf("%d", CurrentInfraVersion)),
-				"server_id":         pulumi.String(config.ServerID),
+				"infra_version": pulumi.String(fmt.Sprintf("%d", CurrentInfraVersion)),
+				"server_id":     pulumi.String(config.ServerID),
 			},
 			Metadata: pulumi.StringMap{
 				"user-data": pulumi.String(userData),
 			},
-		}, pulumi.ReplaceOnChanges([]string{"labels.cloud_config_hash"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{firewall}))
+		}, pulumi.ReplaceOnChanges([]string{"metadata.user-data"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{firewall}))
 		if err != nil {
 			return fmt.Errorf("failed to create instance: %w", err)
 		}

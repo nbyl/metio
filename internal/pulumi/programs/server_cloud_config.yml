@@ -3,7 +3,7 @@ device_aliases: {minecraft_data: /dev/disk/by-id/google-minecraft-data}
 fs_setup:
   - {device: minecraft_data, filesystem: ext4, label: fs1}
 mounts:
-  - [minecraft_data, /mnt/disks/minecraft/data, ext4, "defaults", "0", "2"]
+  - [minecraft_data, /mnt/disks/minecraft, ext4, "defaults", "0", "2"]
 users:
   - name: metio
     uid: 1000
@@ -59,18 +59,19 @@ write_files:
       Restart=always
       ExecStartPre=-/usr/bin/docker stop %n
       ExecStartPre=-/usr/bin/docker rm %n
-      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull itzg/mc-backup && exit 0; sleep 10; done; exit 1'
+      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull ${backupImage} && exit 0; sleep 10; done; exit 1'
       ExecStart=/usr/bin/docker run --rm --name %n \
         --network host \
         -e BACKUP_METHOD=restic \
-        -e BACKUP_INTERVAL=1h \
-        -e PRUNE_RESTIC_RETENTION="--keep-within ${backupRetentionDays}d" \
+        -e BACKUP_INTERVAL="${backupInterval}" \
+        -e PRUNE_RESTIC_RETENTION="${pruneResticRetention}" \
         -e RESTIC_REPOSITORY=gs:${backupBucket}:/servers/${serverId}/restic \
         -e RESTIC_PASSWORD=${resticPassword} \
         -e RCON_HOST=127.0.0.1 \
         -e RCON_PASSWORD=${rconPassword} \
         -v /mnt/disks/minecraft/data:/data \
-        itzg/mc-backup
+        -v /mnt/disks/minecraft/backup-manifests:/manifests \
+        ${backupImage}
       ExecStop=/usr/bin/docker stop %n
 
       [Install]
@@ -95,6 +96,7 @@ write_files:
       ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull ${machineAgentImage} && exit 0; sleep 10; done; exit 1'
       ExecStart=/usr/bin/docker run --rm --name %n \
         -v /var/run/docker.sock:/var/run/docker.sock \
+        -v /mnt/disks/minecraft/backup-manifests:/manifests \
         -e ENVIRONMENT=${environment} \
         -e REGION=${region} \
         -e INSTANCE_NAME=${instanceName} \
@@ -108,6 +110,8 @@ write_files:
       WantedBy=default.target
 
 runcmd:
+  - mkdir -p /mnt/disks/minecraft/data /mnt/disks/minecraft/backup-manifests
+  - chmod 0777 /mnt/disks/minecraft/backup-manifests
   - systemctl daemon-reload
-  - systemctl enable minecraft minecraft-backup metio-machine-agent
-  - systemctl start minecraft minecraft-backup metio-machine-agent
+  - systemctl enable minecraft ${backupServiceEnable}metio-machine-agent
+  - systemctl start minecraft ${backupServiceEnable}metio-machine-agent
