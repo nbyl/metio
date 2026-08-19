@@ -155,33 +155,12 @@
     @apply text-slate-400 text-sm;
   }
 
-  .btn-sm {
-    @apply h-7 px-3 text-xs;
-  }
-
   .title {
     @apply text-4xl font-bold text-white flex items-center justify-center gap-3;
   }
 
   .subtitle {
     @apply text-slate-400;
-  }
-
-  /* Card */
-  .card {
-    @apply text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm bg-slate-800/50 border-slate-700;
-  }
-
-  .card-header {
-    @apply grid auto-rows-min items-start gap-1.5 px-6;
-  }
-
-  .card-title {
-    @apply leading-none font-semibold flex items-center justify-between text-white;
-  }
-
-  .card-content {
-    @apply px-6 space-y-3 text-slate-300 text-sm;
   }
 
   /* Stats */
@@ -201,30 +180,8 @@
     @apply flex items-center gap-2 text-white;
   }
 
-  /* Misc */
-  .separator {
-    @apply bg-border shrink-0 h-px w-full bg-slate-700;
-  }
-
   .controls {
     @apply flex gap-3;
-  }
-
-  /* Buttons */
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] h-9 px-4 py-2 has-[>svg]:px-3 cursor-pointer;
-  }
-
-  .btn-green {
-    @apply bg-green-600 hover:bg-green-700 text-white;
-  }
-
-  .btn-red {
-    @apply bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60;
-  }
-
-  .btn-outline {
-    @apply border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 text-foreground;
   }
 
   /* Loading */
@@ -241,39 +198,6 @@
     @apply font-semibold text-white;
   }
 
-  /* Badges */
-  .badge {
-    @apply inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] transition-[color,box-shadow] overflow-hidden border-transparent;
-  }
-
-  .badge-online {
-    @apply text-primary-foreground bg-green-600 hover:bg-green-700;
-  }
-
-  .badge-offline {
-    @apply text-primary-foreground bg-red-600 hover:bg-red-700;
-  }
-
-  .badge-transitioning {
-    @apply text-primary-foreground bg-yellow-600 hover:bg-yellow-700;
-  }
-
-  /* Skeleton */
-  .skeleton {
-    @apply bg-slate-700;
-  }
-
-  /* Tooltip */
-  .tooltip-wrapper {
-    @apply relative inline-block;
-  }
-
-  .tooltip {
-    @apply absolute z-50 px-2 py-1 text-xs text-white bg-slate-900 rounded shadow-lg whitespace-pre-line;
-    @apply bottom-full left-1/2 -translate-x-1/2 mb-1;
-    @apply pointer-events-none;
-  }
-
   /* Collapsible */
   .collapsible-trigger {
     @apply flex items-center justify-between w-full py-2 text-left cursor-pointer;
@@ -285,33 +209,6 @@
 
   .collapsible-content[data-state='closed'] {
     @apply hidden;
-  }
-
-  /* Switch */
-  .switch {
-    @apply relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
-  .switch[data-state='checked'] {
-    @apply bg-green-600;
-  }
-
-  .switch[data-state='unchecked'] {
-    @apply bg-slate-600;
-  }
-
-  .switch-thumb {
-    @apply pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform;
-  }
-
-  .switch[data-state='checked'] .switch-thumb {
-    @apply translate-x-4;
-  }
-
-  .switch[data-state='unchecked'] .switch-thumb {
-    @apply translate-x-0;
   }
 
   /* Whitelist */

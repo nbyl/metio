@@ -4,82 +4,71 @@ import userEvent from '@testing-library/user-event';
 import { Button } from './Button';
 
 describe('Button', () => {
-  it('renders with children', () => {
+  it('renders with children and the default variant', () => {
     render(<Button>Click me</Button>);
-    expect(
-      screen.getByRole('button', { name: 'Click me' })
-    ).toBeInTheDocument();
-  });
+    const button = screen.getByRole('button', { name: 'Click me' });
 
-  it('applies primary variant by default', () => {
-    render(<Button>Primary</Button>);
-    const button = screen.getByRole('button');
-    expect(button).toHaveAttribute('data-variant', 'primary');
+    expect(button).toHaveAttribute('data-variant', 'default');
     expect(button).toHaveAttribute('data-size', 'default');
   });
 
-  it('applies danger variant', () => {
-    render(<Button variant="danger">Danger</Button>);
-    expect(screen.getByRole('button')).toHaveAttribute(
-      'data-variant',
-      'danger'
+  it('supports the canonical variants', () => {
+    render(
+      <>
+        <Button variant="destructive">Destructive</Button>
+        <Button variant="outline">Outline</Button>
+        <Button variant="secondary">Secondary</Button>
+      </>
     );
-  });
 
-  it('applies outline variant', () => {
-    render(<Button variant="outline">Outline</Button>);
-    expect(screen.getByRole('button')).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Destructive' })).toHaveAttribute(
+      'data-variant',
+      'destructive'
+    );
+    expect(screen.getByRole('button', { name: 'Outline' })).toHaveAttribute(
       'data-variant',
       'outline'
     );
+    expect(screen.getByRole('button', { name: 'Secondary' })).toHaveAttribute(
+      'data-variant',
+      'secondary'
+    );
   });
 
-  it('applies sm size', () => {
-    render(<Button size="sm">Small</Button>);
-    expect(screen.getByRole('button')).toHaveAttribute('data-size', 'sm');
-  });
-
-  it('shows loading spinner when loading', () => {
-    render(<Button loading>Loading</Button>);
-    const button = screen.getByRole('button');
-    const spinner = button.querySelector('svg');
-    expect(spinner).toBeInTheDocument();
-  });
-
-  it('is disabled when loading', () => {
-    render(<Button loading>Loading</Button>);
-    expect(screen.getByRole('button')).toBeDisabled();
-  });
-
-  it('is disabled when disabled prop is set', () => {
-    render(<Button disabled>Disabled</Button>);
-    expect(screen.getByRole('button')).toBeDisabled();
-  });
-
-  it('forwards extra props', () => {
-    render(<Button data-testid="btn">Custom</Button>);
-    expect(screen.getByTestId('btn')).toBeInTheDocument();
-  });
-
-  it('forwards onClick handler', async () => {
-    const user = userEvent.setup();
-    const handleClick = vi.fn();
-    render(<Button onClick={handleClick}>Click</Button>);
-
-    await user.click(screen.getByRole('button'));
-    expect(handleClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not call onClick when disabled', async () => {
-    const user = userEvent.setup();
-    const handleClick = vi.fn();
+  it('supports the small size and disabled state', () => {
     render(
-      <Button onClick={handleClick} disabled>
-        Disabled
+      <Button size="sm" disabled>
+        Small
       </Button>
     );
 
-    await user.click(screen.getByRole('button'));
-    expect(handleClick).not.toHaveBeenCalled();
+    expect(screen.getByRole('button')).toHaveAttribute('data-size', 'sm');
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  it('forwards extra props and click handlers', async () => {
+    const user = userEvent.setup();
+    const handleClick = vi.fn();
+    render(
+      <Button data-testid="button" onClick={handleClick}>
+        Click
+      </Button>
+    );
+
+    await user.click(screen.getByTestId('button'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports rendering through Slot with asChild', () => {
+    render(
+      <Button asChild>
+        <a href="/servers">Servers</a>
+      </Button>
+    );
+
+    expect(screen.getByRole('link', { name: 'Servers' })).toHaveAttribute(
+      'data-slot',
+      'button'
+    );
   });
 });

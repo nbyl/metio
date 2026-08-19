@@ -423,7 +423,9 @@ describe('ServerDashboard loading and error states', () => {
 
     const { container } = renderDashboard();
 
-    expect(container.querySelectorAll('.skeleton').length).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('[data-slot="skeleton"]').length
+    ).toBeGreaterThan(0);
   });
 
   it('renders the error message and retries', async () => {

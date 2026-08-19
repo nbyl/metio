@@ -1,124 +1,89 @@
-import type { ReactNode } from 'react';
+import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
 import { Tabs as TabsPrimitive } from 'radix-ui';
+
 import { cn } from '@/lib/utils';
 
-export interface TabsProps {
-  /** Currently active tab value */
-  value: string;
-  /** Callback when a tab is selected */
-  onValueChange: (value: string) => void;
-  /** Additional CSS classes */
-  className?: string;
-  children: ReactNode;
-}
-
-/**
- * Accessible tabs container that ties together {@link TabList}, {@link Tab}
- * and {@link TabPanel}. Built on Radix UI's Tabs primitive (roving tabindex,
- * arrow-key navigation, ARIA wiring).
- *
- * @example
- * ```tsx
- * <Tabs value={active} onValueChange={setActive}>
- *   <TabList>
- *     <Tab value="settings">Settings</Tab>
- *     <Tab value="backup">Backup</Tab>
- *   </TabList>
- *   <TabPanel value="settings">...</TabPanel>
- * </Tabs>
- * ```
- */
-export function Tabs({ value, onValueChange, className, children }: TabsProps) {
+function Tabs({
+  className,
+  orientation = 'horizontal',
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      value={value}
-      onValueChange={onValueChange}
-      className={cn('tabs', className)}
-    >
-      {children}
-    </TabsPrimitive.Root>
-  );
-}
-
-export interface TabListProps {
-  /** Additional CSS classes */
-  className?: string;
-  children: ReactNode;
-}
-
-/**
- * Horizontal list of {@link Tab} triggers. Supports arrow-key and Home/End
- * keyboard navigation between tabs.
- */
-export function TabList({ className, children }: TabListProps) {
-  return (
-    <TabsPrimitive.List
-      data-slot="tablist"
-      className={cn('tablist', className)}
-    >
-      {children}
-    </TabsPrimitive.List>
-  );
-}
-
-export interface TabProps {
-  /** Value that activates this tab when selected */
-  value: string;
-  /** Whether the tab is disabled */
-  disabled?: boolean;
-  /** Additional CSS classes */
-  className?: string;
-  children: ReactNode;
-}
-
-/**
- * A selectable tab trigger. The active tab is styled with an underline accent.
- */
-export function Tab({
-  value,
-  disabled = false,
-  className,
-  children,
-}: TabProps) {
-  return (
-    <TabsPrimitive.Trigger
-      data-slot="tab"
-      value={value}
-      disabled={disabled}
+      data-orientation={orientation}
       className={cn(
-        'inline-flex items-center px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-0',
-        'data-[state=active]:border-green-500 data-[state=active]:text-white',
-        'data-[state=inactive]:border-transparent data-[state=inactive]:text-slate-400 hover:text-slate-200',
-        'disabled:opacity-50',
+        'group/tabs flex gap-2 data-horizontal:flex-col',
         className
       )}
-    >
-      {children}
-    </TabsPrimitive.Trigger>
+      {...props}
+    />
   );
 }
 
-export interface TabPanelProps {
-  /** Value of the tab this panel belongs to */
-  value: string;
-  /** Additional CSS classes */
-  className?: string;
-  children: ReactNode;
+const tabsListVariants = cva(
+  'group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none',
+  {
+    variants: {
+      variant: {
+        default: 'bg-muted',
+        line: 'gap-1 bg-transparent',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
+
+function TabsList({
+  className,
+  variant = 'default',
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.List> &
+  VariantProps<typeof tabsListVariants>) {
+  return (
+    <TabsPrimitive.List
+      data-slot="tabs-list"
+      data-variant={variant}
+      className={cn(tabsListVariants({ variant }), className)}
+      {...props}
+    />
+  );
 }
 
-/**
- * Content shown for the tab with the matching {@link TabPanelProps.value}.
- */
-export function TabPanel({ value, className, children }: TabPanelProps) {
+function TabsTrigger({
+  className,
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+  return (
+    <TabsPrimitive.Trigger
+      data-slot="tabs-trigger"
+      className={cn(
+        "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        'group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent',
+        'data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground',
+        'after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100',
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function TabsContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.Content>) {
   return (
     <TabsPrimitive.Content
-      data-slot="tabpanel"
-      value={value}
-      className={cn('tabpanel', className)}
-    >
-      {children}
-    </TabsPrimitive.Content>
+      data-slot="tabs-content"
+      className={cn('flex-1 text-sm outline-none', className)}
+      {...props}
+    />
   );
 }
+
+// eslint-disable-next-line react-refresh/only-export-components
+export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants };

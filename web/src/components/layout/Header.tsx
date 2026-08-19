@@ -1,5 +1,6 @@
 import { Gamepad2 } from 'lucide-react';
 import { useServerOptions } from '../../hooks/useServerOptions';
+import { Button } from '../ui/Button';
 
 export interface HeaderProps {
   /** User email to display */
@@ -40,9 +41,9 @@ export function Header({ email, showUser = false }: HeaderProps) {
       {showUser && email && (
         <div className="header-user">
           <span className="user-email">{email}</span>
-          <a href="/auth/logout" className="btn btn-outline btn-sm">
-            Logout
-          </a>
+          <Button asChild variant="outline" size="sm">
+            <a href="/auth/logout">Logout</a>
+          </Button>
         </div>
       )}
     </div>

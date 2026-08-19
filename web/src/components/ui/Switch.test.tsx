@@ -5,36 +5,33 @@ import { Switch } from './Switch';
 
 describe('Switch', () => {
   it('renders a switch with the correct ARIA role', () => {
-    render(<Switch checked={false} onChange={() => {}} />);
+    render(<Switch />);
     expect(screen.getByRole('switch')).toBeInTheDocument();
   });
 
   it('exposes checked state via aria-checked', () => {
-    render(<Switch checked={true} onChange={() => {}} />);
+    render(<Switch checked />);
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('calls onChange with the new value when toggled', async () => {
+  it('calls onCheckedChange with the new value when toggled', async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
-    render(<Switch checked={false} onChange={handleChange} />);
+    render(<Switch onCheckedChange={handleChange} />);
 
     await user.click(screen.getByRole('switch'));
     expect(handleChange).toHaveBeenCalledWith(true);
   });
 
-  it('is reachable via keyboard tab order', async () => {
-    const user = userEvent.setup();
-    render(<Switch checked={false} onChange={() => {}} />);
-
-    await user.tab();
-    expect(screen.getByRole('switch')).toHaveFocus();
+  it('supports the small size', () => {
+    render(<Switch size="sm" />);
+    expect(screen.getByRole('switch')).toHaveAttribute('data-size', 'sm');
   });
 
-  it('is disabled when disabled prop is set and does not toggle', async () => {
+  it('is disabled when disabled is set and does not toggle', async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
-    render(<Switch checked={false} onChange={handleChange} disabled />);
+    render(<Switch onCheckedChange={handleChange} disabled />);
 
     const switcher = screen.getByRole('switch');
     expect(switcher).toBeDisabled();
@@ -44,13 +41,7 @@ describe('Switch', () => {
   });
 
   it('exposes an accessible label', () => {
-    render(
-      <Switch
-        checked={false}
-        onChange={() => {}}
-        aria-label="Toggle whitelist"
-      />
-    );
+    render(<Switch aria-label="Toggle whitelist" />);
     expect(
       screen.getByRole('switch', { name: 'Toggle whitelist' })
     ).toBeInTheDocument();

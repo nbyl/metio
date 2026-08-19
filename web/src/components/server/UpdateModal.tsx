@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import type { ServerConfig, UpdateServerRequest } from '../../types/server';
 import { Button } from '../ui/Button';
-import { Tabs, TabList, Tab, TabPanel } from '../ui/Tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { useServerOptions } from '../../hooks/useServerOptions';
 import { cn } from '../../lib/utils';
 import { BackupSettingsPanel } from './BackupSettingsPanel';
@@ -128,11 +128,11 @@ export function UpdateModal({
           onValueChange={(value) => setActiveTab(value as SettingsTab)}
           className="px-6"
         >
-          <TabList>
-            <Tab value="settings">Settings</Tab>
-            <Tab value="backup">Backup</Tab>
-          </TabList>
-          <TabPanel value="settings" className="py-4">
+          <TabsList variant="line">
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="backup">Backup</TabsTrigger>
+          </TabsList>
+          <TabsContent value="settings" className="py-4">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm text-slate-300 block">
@@ -209,18 +209,18 @@ export function UpdateModal({
                 </Button>
                 <Button
                   type="submit"
-                  variant="primary"
+                  variant="default"
                   disabled={(!hasChanges && !outdated) || isPending}
-                  loading={isPending}
                 >
+                  {isPending && <Loader2 className="animate-spin" />}
                   Update Server
                 </Button>
               </div>
             </form>
-          </TabPanel>
-          <TabPanel value="backup" className="py-4">
+          </TabsContent>
+          <TabsContent value="backup" className="py-4">
             <BackupSettingsPanel serverId={serverId} serverName={serverName} />
-          </TabPanel>
+          </TabsContent>
         </Tabs>
       </div>
     </div>

@@ -22,7 +22,7 @@ export function EmptyState({ onCreateServer, className }: EmptyStateProps) {
             configure the region, machine type, and version during setup.
           </p>
           {onCreateServer && (
-            <Button variant="primary" onClick={onCreateServer}>
+            <Button variant="default" onClick={onCreateServer}>
               <Plus className="h-4 w-4" />
               Create Server
             </Button>

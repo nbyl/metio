@@ -3,41 +3,40 @@ import { render, screen } from '@testing-library/react';
 import { Badge } from './Badge';
 
 describe('Badge', () => {
-  it('renders with children', () => {
-    render(<Badge variant="online">Status</Badge>);
-    expect(screen.getByText('Status')).toBeInTheDocument();
-  });
+  it('renders with the default variant', () => {
+    render(<Badge>Status</Badge>);
 
-  it('applies online variant', () => {
-    render(<Badge variant="online">Online</Badge>);
-    expect(screen.getByText('Online')).toHaveAttribute(
+    expect(screen.getByText('Status')).toHaveAttribute(
       'data-variant',
-      'online'
+      'default'
     );
   });
 
-  it('applies offline variant', () => {
-    render(<Badge variant="offline">Offline</Badge>);
-    expect(screen.getByText('Offline')).toHaveAttribute(
-      'data-variant',
-      'offline'
+  it('supports the canonical variants', () => {
+    render(
+      <>
+        <Badge variant="secondary">Secondary</Badge>
+        <Badge variant="destructive">Destructive</Badge>
+        <Badge variant="outline">Outline</Badge>
+      </>
     );
-  });
 
-  it('applies transitioning variant', () => {
-    render(<Badge variant="transitioning">Starting...</Badge>);
-    expect(screen.getByText('Starting...')).toHaveAttribute(
+    expect(screen.getByText('Secondary')).toHaveAttribute(
       'data-variant',
-      'transitioning'
+      'secondary'
+    );
+    expect(screen.getByText('Destructive')).toHaveAttribute(
+      'data-variant',
+      'destructive'
+    );
+    expect(screen.getByText('Outline')).toHaveAttribute(
+      'data-variant',
+      'outline'
     );
   });
 
   it('forwards extra props', () => {
-    render(
-      <Badge variant="online" data-testid="badge">
-        Custom
-      </Badge>
-    );
+    render(<Badge data-testid="badge">Custom</Badge>);
     expect(screen.getByTestId('badge')).toBeInTheDocument();
   });
 });

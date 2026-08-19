@@ -40,7 +40,12 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Separator } from '../ui/Separator';
 import { Skeleton } from '../ui/Skeleton';
-import { Tooltip } from '../ui/Tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/Tooltip';
 import { Switch } from '../ui/Switch';
 import { StatsGrid, type StatItem } from '../layout/StatsGrid';
 import { ServerConfigPanel } from './ServerConfigPanel';
@@ -60,19 +65,20 @@ export interface ServerDashboardProps {
   className?: string;
 }
 
-function getStatusBadgeVariant(
-  state: ServerState
-): 'online' | 'offline' | 'transitioning' {
+function getStatusBadgeVariant(state: ServerState): {
+  variant: 'default' | 'destructive' | 'secondary';
+  className?: string;
+} {
   switch (state) {
     case 'RUNNING':
-      return 'online';
+      return { variant: 'default', className: 'bg-green-600 text-white' };
     case 'STOPPED':
-      return 'offline';
+      return { variant: 'destructive' };
     case 'STARTING':
     case 'STOPPING':
-      return 'transitioning';
+      return { variant: 'secondary', className: 'bg-yellow-600 text-white' };
     default:
-      return 'offline';
+      return { variant: 'destructive' };
   }
 }
 
@@ -182,7 +188,7 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
         {whitelist && (
           <Switch
             checked={whitelist.enabled}
-            onChange={handleToggle}
+            onCheckedChange={handleToggle}
             disabled={isToggling}
             aria-label="Toggle whitelist"
           />
@@ -208,11 +214,11 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
                 />
                 <Button
                   type="submit"
-                  variant="primary"
+                  variant="default"
                   disabled={isAdding || !newUsername.trim()}
-                  loading={isAdding}
-                  className="btn-sm"
+                  size="sm"
                 >
+                  {isAdding && <Loader2 className="animate-spin" />}
                   Add
                 </Button>
               </form>
@@ -222,17 +228,22 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
                   {whitelist.players.map((player) => (
                     <div key={player.uuid} className="whitelist-player">
                       <div>
-                        <Tooltip
-                          content={`UUID: ${player.uuid}\nAdded by: ${player.addedBy}`}
-                        >
-                          <span className="whitelist-player-name">
-                            {player.username}
-                          </span>
-                        </Tooltip>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="whitelist-player-name">
+                                {player.username}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="whitespace-pre-line">
+                              {`UUID: ${player.uuid}\nAdded by: ${player.addedBy}`}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <Button
                         variant="outline"
-                        className="btn-sm"
+                        size="sm"
                         onClick={() => handleRemovePlayer(player)}
                         disabled={removePlayerMutation.isPending}
                         aria-label={`Remove ${player.username}`}
@@ -343,7 +354,7 @@ function ScheduledShutdownSection({
           Scheduled Shutdown
         </button>
         {hasScheduledShutdown && (
-          <Badge variant="transitioning">
+          <Badge variant="secondary" className="bg-yellow-600 text-white">
             {getTimeUntilShutdown(scheduledShutdown)}
           </Badge>
         )}
@@ -365,9 +376,10 @@ function ScheduledShutdownSection({
                 variant="outline"
                 onClick={handleCancelShutdown}
                 disabled={isCancelling}
-                loading={isCancelling}
-                className="btn-sm mt-2"
+                size="sm"
+                className="mt-2"
               >
+                {isCancelling && <Loader2 className="animate-spin" />}
                 Cancel Shutdown
               </Button>
             </div>
@@ -382,11 +394,11 @@ function ScheduledShutdownSection({
               />
               <Button
                 type="submit"
-                variant="danger"
+                variant="destructive"
                 disabled={isScheduling || !shutdownTime}
-                loading={isScheduling}
-                className="btn-sm"
+                size="sm"
               >
+                {isScheduling && <Loader2 className="animate-spin" />}
                 Schedule
               </Button>
             </form>
@@ -522,11 +534,11 @@ function ServerCard({ server }: ServerCardProps) {
           </span>
           <span className="flex items-center gap-2">
             {currentStatus?.serverState ? (
-              <Badge variant={getStatusBadgeVariant(currentStatus.serverState)}>
+              <Badge {...getStatusBadgeVariant(currentStatus.serverState)}>
                 {getStatusLabel(currentStatus.serverState)}
               </Badge>
             ) : (
-              <Badge variant="offline">Unknown</Badge>
+              <Badge variant="destructive">Unknown</Badge>
             )}
             <Button
               variant="outline"
@@ -588,11 +600,11 @@ function ServerCard({ server }: ServerCardProps) {
         <div className="flex flex-wrap gap-3">
           {isStopped && (
             <Button
-              variant="primary"
+              variant="default"
               onClick={() => startMutation.mutate()}
               disabled={isMutating || isProvisioning}
-              loading={startMutation.isPending}
             >
+              {startMutation.isPending && <Loader2 className="animate-spin" />}
               Start Server
             </Button>
           )}
@@ -605,11 +617,11 @@ function ServerCard({ server }: ServerCardProps) {
           )}
           {isRunning && (
             <Button
-              variant="danger"
+              variant="destructive"
               onClick={() => stopMutation.mutate()}
               disabled={isMutating || isProvisioning}
-              loading={stopMutation.isPending}
             >
+              {stopMutation.isPending && <Loader2 className="animate-spin" />}
               Stop Server
             </Button>
           )}
@@ -633,7 +645,7 @@ function ServerCard({ server }: ServerCardProps) {
             </Button>
           )}
           <Button
-            variant={server.outdated ? 'primary' : 'outline'}
+            variant={server.outdated ? 'default' : 'outline'}
             disabled={isProvisioning}
             onClick={() => setShowUpdate(true)}
           >
@@ -642,9 +654,8 @@ function ServerCard({ server }: ServerCardProps) {
           </Button>
           {server.outdatedMachineAgent && (
             <Button
-              variant="primary"
+              variant="default"
               disabled={isProvisioning || updateAgentMutation.isPending}
-              loading={updateAgentMutation.isPending}
               onClick={() => {
                 updateAgentMutation.mutate(undefined, {
                   onSuccess: () => {
@@ -658,11 +669,14 @@ function ServerCard({ server }: ServerCardProps) {
                 });
               }}
             >
+              {updateAgentMutation.isPending && (
+                <Loader2 className="animate-spin" />
+              )}
               Update Agent
             </Button>
           )}
           <Button
-            variant="danger"
+            variant="destructive"
             disabled={isProvisioning}
             onClick={() => setShowDestroy(true)}
           >
@@ -743,7 +757,7 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
   return (
     <div className={cn('space-y-6', className)}>
       <div className="flex justify-end">
-        <Button variant="primary" onClick={() => navigate('/servers/new')}>
+        <Button variant="default" onClick={() => navigate('/servers/new')}>
           <Plus className="h-4 w-4" />
           Create Server
         </Button>
