@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,6 +106,14 @@ func TestBackupMethod(t *testing.T) {
 	})
 }
 
+func TestManifestFilename(t *testing.T) {
+	assert.Equal(t, "manifest-20260817T103000Z.json", manifestFilename("2026-08-17T10:30:00Z"))
+	assert.Equal(t, "manifest-20260817T133000Z.json", manifestFilename("2026-08-17T15:30:00+02:00"))
+	assert.Equal(t, "manifest-20260817T103000Z.json", manifestFilename("2026-08-17T10:30:00.123456Z"))
+	now := time.Now().UTC().Format("20060102T150405Z")
+	assert.Equal(t, "manifest-"+now+".json", manifestFilename("not-a-timestamp"))
+}
+
 func TestWriteManifest(t *testing.T) {
 	dir := t.TempDir()
 	manifest := Manifest{
@@ -114,15 +123,27 @@ func TestWriteManifest(t *testing.T) {
 		Method:     "restic",
 	}
 
-	require.NoError(t, writeManifest(dir, manifest))
+	filename, err := writeManifest(dir, manifest)
+	require.NoError(t, err)
+	assert.Equal(t, "manifest-20260817T103000Z.json", filename)
 
-	data, err := os.ReadFile(filepath.Join(dir, "latest.json"))
+	path := filepath.Join(dir, filename)
+	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.True(t, strings.HasSuffix(string(data), "\n"))
 
 	var got Manifest
 	require.NoError(t, json.Unmarshal(data, &got))
 	assert.Equal(t, manifest, got)
+
+	// A second successful backup must not overwrite the first.
+	manifest.Timestamp = "2026-08-18T11:00:00Z"
+	manifest.SnapshotID = "deadbeef"
+	filename2, err := writeManifest(dir, manifest)
+	require.NoError(t, err)
+	assert.NotEqual(t, filename, filename2)
+	require.FileExists(t, path)
+	require.FileExists(t, filepath.Join(dir, filename2))
 }
 
 func TestRun(t *testing.T) {
@@ -137,7 +158,7 @@ func TestRun(t *testing.T) {
 			return nil, nil
 		}
 		assert.Equal(t, 0, run([]string{"post-backup", "1", "/dev/null"}))
-		require.NoFileExists(t, filepath.Join(dir, "latest.json"))
+		assertEmptyDir(t, dir)
 	})
 
 	t.Run("writes manifest from log snapshot id", func(t *testing.T) {
@@ -153,7 +174,7 @@ func TestRun(t *testing.T) {
 		assert.Equal(t, 0, run([]string{"post-backup", "0", logPath}))
 
 		var got Manifest
-		requireFileJSON(t, filepath.Join(dir, "latest.json"), &got)
+		requireFileJSON(t, filepath.Join(dir, "manifest-20260817T103000Z.json"), &got)
 		assert.Equal(t, "2026-08-17T10:30:00Z", got.Timestamp)
 		assert.Equal(t, "0123abcd", got.SnapshotID)
 		assert.Equal(t, int64(42), got.SizeBytes)
@@ -170,7 +191,7 @@ func TestRun(t *testing.T) {
 		assert.Equal(t, 0, run([]string{"post-backup", "0", "/dev/null"}))
 
 		var got Manifest
-		requireFileJSON(t, filepath.Join(dir, "latest.json"), &got)
+		requireFileJSON(t, filepath.Join(dir, "manifest-20260817T103000Z.json"), &got)
 		assert.Equal(t, "cafebabe", got.SnapshotID)
 	})
 
@@ -186,8 +207,10 @@ func TestRun(t *testing.T) {
 
 		assert.Equal(t, 0, run([]string{"post-backup", "0", logPath}))
 
+		files := listManifestFiles(t, dir)
+		require.Len(t, files, 1)
 		var got Manifest
-		requireFileJSON(t, filepath.Join(dir, "latest.json"), &got)
+		requireFileJSON(t, files[0], &got)
 		assert.Equal(t, "0123abcd", got.SnapshotID)
 		assert.Equal(t, int64(0), got.SizeBytes)
 	})
@@ -200,8 +223,47 @@ func TestRun(t *testing.T) {
 		}
 
 		assert.Equal(t, 0, run([]string{"post-backup", "0", "/dev/null"}))
-		require.NoFileExists(t, filepath.Join(dir, "latest.json"))
+		assertEmptyDir(t, dir)
 	})
+
+	t.Run("accumulates one file per successful backup", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("MANIFEST_DIR", dir)
+		logPath := filepath.Join(t.TempDir(), "backup.log")
+		require.NoError(t, os.WriteFile(logPath, []byte("snapshot 11111111 saved\n"), 0o644))
+
+		runRestic = func(ctx context.Context, args ...string) ([]byte, error) {
+			return []byte(`[{"id":"aaaa0001","time":"2026-08-17T10:30:00Z","summary":{"total_size":1}}]`), nil
+		}
+		assert.Equal(t, 0, run([]string{"post-backup", "0", logPath}))
+
+		require.NoError(t, os.WriteFile(logPath, []byte("snapshot 22222222 saved\n"), 0o644))
+		runRestic = func(ctx context.Context, args ...string) ([]byte, error) {
+			return []byte(`[{"id":"aaaa0002","time":"2026-08-18T11:00:00Z","summary":{"total_size":2}}]`), nil
+		}
+		assert.Equal(t, 0, run([]string{"post-backup", "0", logPath}))
+
+		files, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Len(t, files, 2)
+		paths := []string{files[0].Name(), files[1].Name()}
+		assert.Contains(t, paths, "manifest-20260817T103000Z.json")
+		assert.Contains(t, paths, "manifest-20260818T110000Z.json")
+	})
+}
+
+func assertEmptyDir(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func listManifestFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(dir, "manifest-*.json"))
+	require.NoError(t, err)
+	return paths
 }
 
 func requireFileJSON(t *testing.T, path string, v any) {

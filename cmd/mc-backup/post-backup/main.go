@@ -5,9 +5,11 @@
 //	$1 = backup exit code
 //	$2 = path to the backup tool's output log
 //
-// On success it atomically writes $MANIFEST_DIR/latest.json describing the most
-// recent backup. The machine-agent mounts the same directory at /manifests. A
-// failed backup leaves the previous manifest in place so the dashboard keeps
+// On success it atomically writes $MANIFEST_DIR/manifest-<timestamp>.json
+// describing the most recent backup; each backup produces its own file so a
+// slow ingestion process can never miss a snapshot by a file being
+// overwritten. The machine-agent mounts the same directory at /manifests. A
+// failed backup leaves the previous manifests in place so the dashboard keeps
 // reporting the last known-good backup.
 package main
 
@@ -31,7 +33,8 @@ const (
 
 var snapshotSavedRegex = regexp.MustCompile(`snapshot ([a-f0-9]{8,}) saved`)
 
-// Manifest is the JSON document written to $MANIFEST_DIR/latest.json.
+// Manifest is the JSON document written to a timestamped file in
+// $MANIFEST_DIR (e.g. manifest-20260817T103000Z.json).
 type Manifest struct {
 	Timestamp  string `json:"timestamp"`
 	SnapshotID string `json:"snapshot_id"`
@@ -108,12 +111,13 @@ func run(args []string) int {
 	if manifestDir == "" {
 		manifestDir = defaultManifestDir
 	}
-	if err := writeManifest(manifestDir, manifest); err != nil {
+	filename, err := writeManifest(manifestDir, manifest)
+	if err != nil {
 		fmt.Printf("%sfailed to write manifest: %v\n", manifestPrefix, err)
 		return 1
 	}
 
-	fmt.Printf("%swrote %s (snapshot %s)\n", manifestPrefix, filepath.Join(manifestDir, "latest.json"), manifest.SnapshotID)
+	fmt.Printf("%swrote %s (snapshot %s)\n", manifestPrefix, filepath.Join(manifestDir, filename), manifest.SnapshotID)
 	return 0
 }
 
@@ -173,20 +177,37 @@ func backupMethod() string {
 	return "restic"
 }
 
-// writeManifest atomically writes the manifest to dir/latest.json.
-func writeManifest(dir string, m Manifest) error {
+// manifestFilename renders a filename-safe timestamp (manifest-<UTC time>.json)
+// from an RFC3339 manifest timestamp, falling back to the current time when the
+// string cannot be parsed. Each successful backup gets a distinct name so
+// multiple snapshot manifests accumulate instead of overwriting each other.
+func manifestFilename(ts string) string {
+	t := time.Now().UTC()
+	if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
+		t = parsed.UTC()
+	}
+	return fmt.Sprintf("manifest-%s.json", t.Format("20060102T150405Z"))
+}
+
+// writeManifest atomically writes the manifest to dir/<timestamped file>. It
+// returns the filename written.
+func writeManifest(dir string, m Manifest) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
-		return err
+		return "", err
 	}
 	data = append(data, '\n')
 
-	tmp := filepath.Join(dir, "latest.json.tmp")
+	filename := manifestFilename(m.Timestamp)
+	tmp := filepath.Join(dir, filename+".tmp")
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
+		return "", err
 	}
-	return os.Rename(tmp, filepath.Join(dir, "latest.json"))
+	if err := os.Rename(tmp, filepath.Join(dir, filename)); err != nil {
+		return "", err
+	}
+	return filename, nil
 }
