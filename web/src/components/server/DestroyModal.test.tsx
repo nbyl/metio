@@ -19,12 +19,6 @@ function renderModal(
   );
 }
 
-function getCloseButton(container: HTMLElement) {
-  return Array.from(container.querySelectorAll('button')).find(
-    (button) => button.textContent?.trim() === ''
-  );
-}
-
 describe('DestroyModal', () => {
   it('renders nothing when closed', () => {
     const { container } = renderModal({ open: false });
@@ -34,6 +28,8 @@ describe('DestroyModal', () => {
   it('shows the warning step and deletion list by default', () => {
     renderModal();
 
+    const dialog = screen.getByRole('alertdialog', { name: 'Destroy Server' });
+    expect(dialog).toHaveAttribute('aria-labelledby');
     expect(screen.getByText('Destroy Server')).toBeInTheDocument();
     expect(
       screen.getByText(/This action will permanently destroy/)
@@ -62,12 +58,19 @@ describe('DestroyModal', () => {
   it('closes when the close icon is clicked', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    const { container } = renderModal({ onClose });
+    renderModal({ onClose });
 
-    const closeButton = getCloseButton(container);
-    expect(closeButton).toBeDefined();
-    await user.click(closeButton as HTMLButtonElement);
+    await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('closes through Escape and resets the controlled dialog', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderModal({ onClose });
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('advances to the confirm step when Continue is clicked', async () => {
@@ -80,7 +83,7 @@ describe('DestroyModal', () => {
       screen.getByText('Type the server name to confirm:')
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText('survival')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '← Back' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
     const destroyButton = screen.getByRole('button', {
       name: 'Destroy Server',
     });
@@ -110,7 +113,7 @@ describe('DestroyModal', () => {
     renderModal();
 
     await user.click(screen.getByRole('button', { name: 'Continue →' }));
-    await user.click(screen.getByRole('button', { name: '← Back' }));
+    await user.click(screen.getByRole('button', { name: 'Back' }));
 
     expect(screen.getByText('Continue →')).toBeInTheDocument();
     expect(screen.queryByText('Type the server name to confirm:')).toBeNull();
@@ -139,7 +142,7 @@ describe('DestroyModal', () => {
     });
     expect(destroyButton).toBeDisabled();
     expect(destroyButton.querySelector('.animate-spin')).not.toBeNull();
-    expect(screen.getByRole('button', { name: '← Back' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
   });
 });
 
@@ -172,7 +175,7 @@ describe('DestroyModal internal', () => {
       screen.getByText('Type the server name to confirm:')
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '← Back' }));
+    await user.click(screen.getByRole('button', { name: 'Back' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Destroy Server')).toBeNull();
 

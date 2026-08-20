@@ -11,6 +11,7 @@ import {
 import { cn } from '../../lib/utils';
 import { useServerProvisioning } from '../../hooks/useServerProvisioning';
 import type { ProvisioningStep } from '../../types/server';
+import { Progress } from '../ui/Progress';
 
 interface ProvisioningProgressProps {
   serverId: string;
@@ -231,17 +232,19 @@ export function ProvisioningProgress({
                 {data.progress}%
               </span>
             </div>
-            <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all duration-500 ease-in-out',
-                  isComplete && 'bg-green-500',
-                  isFailed && 'bg-red-500',
-                  !isComplete && !isFailed && 'bg-blue-500'
-                )}
-                style={{ width: `${data.progress}%` }}
-              />
-            </div>
+            <Progress
+              value={data.progress}
+              aria-valuenow={data.progress}
+              aria-label="Provisioning progress"
+              className={cn(
+                'h-2',
+                isComplete && '[&>[data-slot=progress-indicator]]:bg-green-500',
+                isFailed && '[&>[data-slot=progress-indicator]]:bg-red-500',
+                !isComplete &&
+                  !isFailed &&
+                  '[&>[data-slot=progress-indicator]]:bg-blue-500'
+              )}
+            />
           </div>
 
           {isFailed && data.error && (
