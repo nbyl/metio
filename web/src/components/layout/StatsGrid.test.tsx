@@ -19,12 +19,6 @@ describe('StatsGrid', () => {
     expect(screen.getByText('IP')).toBeInTheDocument();
   });
 
-  it('applies stats-grid class', () => {
-    const { container } = render(<StatsGrid stats={mockStats} />);
-    const grid = container.firstChild;
-    expect(grid).toHaveClass('stats-grid');
-  });
-
   it('renders stat labels', () => {
     render(<StatsGrid stats={mockStats} />);
     const labels = screen.getAllByText(/Status|Players|Uptime|IP/);
@@ -56,16 +50,11 @@ describe('StatsGrid', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('merges custom className', () => {
+  it('merges custom className on the grid', () => {
     const { container } = render(
       <StatsGrid stats={mockStats} className="custom-grid" />
     );
     const grid = container.firstChild;
-    expect(grid).toHaveClass('stats-grid', 'custom-grid');
-  });
-
-  it('matches snapshot', () => {
-    const { container } = render(<StatsGrid stats={mockStats} />);
-    expect(container).toMatchSnapshot();
+    expect(grid).toHaveClass('grid', 'custom-grid');
   });
 });

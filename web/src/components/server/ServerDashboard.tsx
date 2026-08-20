@@ -110,9 +110,9 @@ function ServerListSkeleton({ className }: { className?: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="stats-grid">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[1, 2, 3, 4].map((j) => (
-                <div key={j} className="stat">
+                <div key={j} className="space-y-1">
                   <Skeleton className="h-4 w-16" />
                   <Skeleton className="h-5 w-20 mt-1" />
                 </div>

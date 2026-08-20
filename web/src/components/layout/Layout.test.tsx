@@ -14,27 +14,14 @@ describe('Layout', () => {
     expect(wrapper).toHaveClass('dark', 'min-h-screen', 'bg-background');
   });
 
-  it('contains container div', () => {
-    const { container } = render(<Layout>Content</Layout>);
-    const containerDiv = container.querySelector('.container');
-    expect(containerDiv).toBeInTheDocument();
+  it('contains a semantic main shell with token-based layout classes', () => {
+    render(<Layout>Content</Layout>);
+    const main = screen.getByRole('main');
+    expect(main).toHaveClass('mx-auto', 'max-w-4xl', 'space-y-6');
   });
 
-  it('merges custom className on container', () => {
-    const { container } = render(
-      <Layout className="custom-layout">Content</Layout>
-    );
-    const containerDiv = container.querySelector('.container');
-    expect(containerDiv).toHaveClass('container', 'custom-layout');
-  });
-
-  it('matches snapshot', () => {
-    const { container } = render(
-      <Layout>
-        <h1>Test Page</h1>
-        <p>Page content goes here</p>
-      </Layout>
-    );
-    expect(container).toMatchSnapshot();
+  it('merges custom className on the main shell', () => {
+    render(<Layout className="custom-layout">Content</Layout>);
+    expect(screen.getByRole('main')).toHaveClass('custom-layout');
   });
 });

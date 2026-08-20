@@ -130,56 +130,6 @@
 }
 
 @layer components {
-  /* Layout */
-  .container {
-    @apply max-w-4xl mx-auto space-y-6;
-  }
-
-  .page-header {
-    @apply flex items-center justify-between;
-  }
-
-  .page-header > div:first-child {
-    @apply text-center flex-1;
-  }
-
-  .header-user {
-    @apply flex items-center gap-3 absolute right-0;
-  }
-
-  .page-header {
-    @apply relative;
-  }
-
-  .user-email {
-    @apply text-slate-400 text-sm;
-  }
-
-  .title {
-    @apply text-4xl font-bold text-white flex items-center justify-center gap-3;
-  }
-
-  .subtitle {
-    @apply text-slate-400;
-  }
-
-  /* Stats */
-  .stats-grid {
-    @apply grid grid-cols-2 md:grid-cols-4 gap-4;
-  }
-
-  .stat {
-    @apply space-y-1;
-  }
-
-  .stat-label {
-    @apply flex items-center gap-2 font-medium text-slate-400 text-sm;
-  }
-
-  .stat-value {
-    @apply flex items-center gap-2 text-white;
-  }
-
   .controls {
     @apply flex gap-3;
   }

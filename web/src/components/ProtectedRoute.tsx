@@ -28,7 +28,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         <Header />
         <Card>
           <CardContent>
-            <p className="text-muted">Checking authentication...</p>
+            <p className="text-muted-foreground">Checking authentication...</p>
           </CardContent>
         </Card>
       </Layout>
@@ -42,7 +42,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         <Header />
         <Card>
           <CardContent>
-            <p className="text-muted">Redirecting to login...</p>
+            <p className="text-muted-foreground">Redirecting to login...</p>
           </CardContent>
         </Card>
       </Layout>

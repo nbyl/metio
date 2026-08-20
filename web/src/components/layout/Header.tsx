@@ -25,27 +25,27 @@ export function Header({ email, showUser = false }: HeaderProps) {
   const { data: options } = useServerOptions();
 
   return (
-    <div className="page-header">
-      <div>
-        <h1 className="title">
+    <header className="relative flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="flex items-center justify-center gap-3 text-4xl font-bold text-foreground">
           <Gamepad2 className="h-10 w-10" aria-hidden="true" />
           Metio
         </h1>
-        <p className="subtitle">Minecraft Server Controller</p>
+        <p className="text-muted-foreground">Minecraft Server Controller</p>
         {options?.controllerVersion && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground/70">
             Version {options.controllerVersion}
           </p>
         )}
       </div>
       {showUser && email && (
-        <div className="header-user">
-          <span className="user-email">{email}</span>
+        <div className="absolute right-0 flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">{email}</span>
           <Button asChild variant="outline" size="sm">
             <a href="/auth/logout">Logout</a>
           </Button>
         </div>
       )}
-    </div>
+    </header>
   );
 }
