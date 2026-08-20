@@ -666,12 +666,13 @@ describe('ServerDashboard provisioning banner', () => {
   it('renders the creating banner with progress', async () => {
     const user = userEvent.setup();
     mockProvisioning('CREATE');
-    const { container } = renderDashboard();
+    renderDashboard();
 
     expect(screen.getByText('Creating...')).toBeInTheDocument();
     expect(screen.getByText('42%')).toBeInTheDocument();
-    const bar = container.querySelector('.bg-green-500');
-    expect(bar).toHaveStyle({ width: '42%' });
+    expect(
+      screen.getByRole('progressbar', { name: 'create progress' })
+    ).toHaveAttribute('aria-valuenow', '42');
 
     await user.click(screen.getByText('Creating...'));
     expect(mockNavigate).toHaveBeenCalledWith('/servers/srv1/provisioning', {

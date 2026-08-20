@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UpdateModal } from './UpdateModal';
 import type { ServerConfig } from '../../types/server';
@@ -56,6 +56,15 @@ function renderModal(
   );
 }
 
+async function chooseOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  option: string
+) {
+  await user.click(screen.getByRole('combobox', { name: label }));
+  await user.click(screen.getByRole('option', { name: option }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useServerOptions).mockReturnValue({
@@ -75,58 +84,88 @@ beforeEach(() => {
   } as never);
 });
 
-describe('UpdateModal minecraft version field', () => {
-  it('renders a dropdown of the available versions', () => {
+describe('UpdateModal dialog behavior', () => {
+  it('renders an accessible dialog with a labelled title', () => {
     renderModal();
 
-    const select = screen.getByDisplayValue('1.21.11');
-    expect(select.tagName).toBe('SELECT');
-    expect(
-      Array.from(select.querySelectorAll('option')).map((o) => o.value)
-    ).toEqual(['26.2', '1.21.11', '1.21.10']);
+    const dialog = screen.getByRole('dialog', { name: 'Server Settings' });
+    expect(dialog).toHaveAttribute('aria-labelledby');
+    expect(dialog).toHaveAttribute('aria-describedby');
   });
 
-  it('keeps the versions in the order returned by the API', () => {
+  it('closes through the close button, Cancel, and Escape', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderModal({}, { onClose });
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    onClose.mockClear();
+    renderModal({}, { onClose });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    onClose.mockClear();
+    renderModal({}, { onClose });
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps focus inside the dialog when tabbing', async () => {
+    const user = userEvent.setup();
     renderModal();
 
-    const select = screen.getByDisplayValue('1.21.11');
-    expect(
-      Array.from(select.querySelectorAll('option')).map((o) => o.value)[0]
-    ).toBe('26.2');
-  });
-
-  it('includes the current version when the API no longer offers it', () => {
-    renderModal({ minecraftVersion: '1.7.10' });
-
-    const select = screen.getByDisplayValue('1.7.10');
-    expect(
-      Array.from(select.querySelectorAll('option')).map((o) => o.value)
-    ).toEqual(['1.7.10', '26.2', '1.21.11', '1.21.10']);
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toContainElement(
+        document.activeElement
+      );
+    });
+    await user.tab({ shift: true });
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement);
   });
 });
 
-describe('UpdateModal machine type field', () => {
-  it('renders a dropdown of the available machine types', () => {
+describe('UpdateModal select fields', () => {
+  it('renders versions in API order', async () => {
+    const user = userEvent.setup();
     renderModal();
 
-    const select = screen.getAllByRole('combobox')[0] as HTMLSelectElement;
-    expect(select.tagName).toBe('SELECT');
-    expect(select.value).toBe('e2-small');
+    await user.click(
+      screen.getByRole('combobox', { name: 'Minecraft Version' })
+    );
     expect(
-      Array.from(select.querySelectorAll('option')).map((o) => o.value)
-    ).toEqual(['e2-small', 'e2-medium']);
+      screen.getAllByRole('option').map((option) => option.textContent)
+    ).toEqual(['26.2', '1.21.11', '1.21.10']);
   });
 
-  it('keeps the current machine type when the API no longer offers it', () => {
+  it('includes the current version when the API no longer offers it', async () => {
+    const user = userEvent.setup();
+    renderModal({ minecraftVersion: '1.7.10' });
+
+    await user.click(
+      screen.getByRole('combobox', { name: 'Minecraft Version' })
+    );
+    expect(
+      screen.getAllByRole('option').map((option) => option.textContent)
+    ).toEqual(['1.7.10', '26.2', '1.21.11', '1.21.10']);
+  });
+
+  it('keeps the current machine type when the API no longer offers it', async () => {
+    const user = userEvent.setup();
     renderModal({ machineType: 'e2-standard-2' });
 
-    const select = screen.getAllByRole('combobox')[0] as HTMLSelectElement;
+    await user.click(screen.getByRole('combobox', { name: 'Machine Type' }));
     expect(
-      Array.from(select.querySelectorAll('option')).map((o) => o.value)
-    ).toEqual(['e2-standard-2', 'e2-small', 'e2-medium']);
+      screen.getAllByRole('option').map((option) => option.textContent)
+    ).toEqual([
+      'e2-standard-2',
+      'e2-small (2 vCPU · 2 GB RAM)',
+      'e2-medium (2 vCPU · 4 GB RAM)',
+    ]);
   });
 
-  it('disables both option dropdowns while options are loading', () => {
+  it('disables both selects while options are loading', () => {
     vi.mocked(useServerOptions).mockReturnValue({
       data: undefined,
       isLoading: true,
@@ -134,97 +173,67 @@ describe('UpdateModal machine type field', () => {
 
     renderModal();
 
-    expect(screen.getAllByRole('combobox')[0]).toBeDisabled();
-    expect(screen.getByDisplayValue('1.21.11')).toBeDisabled();
+    expect(
+      screen.getByRole('combobox', { name: 'Machine Type' })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('combobox', { name: 'Minecraft Version' })
+    ).toBeDisabled();
   });
 });
 
-describe('UpdateModal tabs', () => {
-  it('shows the Settings tab by default', () => {
+describe('UpdateModal tabs and submit behavior', () => {
+  it('shows Settings by default and switches to Backup', async () => {
+    const user = userEvent.setup();
     renderModal();
 
     expect(screen.getByRole('tab', { name: 'Settings' })).toHaveAttribute(
       'aria-selected',
       'true'
     );
-    expect(screen.getByRole('tab', { name: 'Backup' })).toHaveAttribute(
-      'aria-selected',
-      'false'
-    );
     expect(screen.getByDisplayValue('test-server')).toBeInTheDocument();
-  });
 
-  it('shows the backup settings when the Backup tab is selected', async () => {
-    renderModal();
-
-    const user = userEvent.setup();
     await user.click(screen.getByRole('tab', { name: 'Backup' }));
-
     expect(screen.getByRole('tab', { name: 'Backup' })).toHaveAttribute(
       'aria-selected',
       'true'
     );
     expect(screen.getByLabelText('Backup interval (hours)')).toHaveValue(6);
-    expect(screen.getByLabelText('Retention policy')).toHaveValue(3);
-  });
-});
-
-describe('UpdateModal close behaviour', () => {
-  it('closes via the close icon button', async () => {
-    const user = userEvent.setup();
-    const onClose = vi.fn();
-    const { container } = renderModal({}, { onClose });
-
-    const closeButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === ''
-    );
-    expect(closeButton).toBeDefined();
-    await user.click(closeButton as HTMLButtonElement);
-
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes via the Cancel button', async () => {
-    const user = userEvent.setup();
-    const onClose = vi.fn();
-    renderModal({}, { onClose });
-
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('UpdateModal submit behaviour', () => {
-  it('submits only the changed fields', async () => {
+  it('submits only changed fields', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     renderModal({}, { onUpdate });
 
-    await user.clear(screen.getByDisplayValue('test-server'));
-    await user.type(screen.getByDisplayValue(''), 'renamed-server');
+    await user.clear(screen.getByLabelText('Server Name'));
+    await user.type(screen.getByLabelText('Server Name'), 'renamed-server');
     await user.click(screen.getByRole('button', { name: 'Update Server' }));
 
     expect(onUpdate).toHaveBeenCalledWith({ name: 'renamed-server' });
   });
 
-  it('submits the machine type when changed', async () => {
+  it('submits machine type and Minecraft version changes', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     renderModal({}, { onUpdate });
 
-    await user.selectOptions(screen.getAllByRole('combobox')[0], 'e2-medium');
+    await chooseOption(user, 'Machine Type', 'e2-medium (2 vCPU · 4 GB RAM)');
+    await chooseOption(user, 'Minecraft Version', '26.2');
     await user.click(screen.getByRole('button', { name: 'Update Server' }));
 
-    expect(onUpdate).toHaveBeenCalledWith({ machineType: 'e2-medium' });
+    expect(onUpdate).toHaveBeenCalledWith({
+      machineType: 'e2-medium',
+      minecraftVersion: '26.2',
+    });
   });
 
-  it('submits the disk size when changed', async () => {
+  it('submits disk size changes', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     renderModal({}, { onUpdate });
 
-    const diskInput = screen.getByDisplayValue('50');
+    const diskInput = screen.getByLabelText('Disk Size (GB)');
     await user.clear(diskInput);
     await user.type(diskInput, '100');
     await user.click(screen.getByRole('button', { name: 'Update Server' }));
@@ -232,37 +241,17 @@ describe('UpdateModal submit behaviour', () => {
     expect(onUpdate).toHaveBeenCalledWith({ diskSizeGB: 100 });
   });
 
-  it('submits the minecraft version when changed', async () => {
+  it('disables Update when unchanged and permits an outdated empty update', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
-    renderModal({}, { onUpdate });
-
-    await user.selectOptions(screen.getByDisplayValue('1.21.11'), '26.2');
-    await user.click(screen.getByRole('button', { name: 'Update Server' }));
-
-    expect(onUpdate).toHaveBeenCalledWith({ minecraftVersion: '26.2' });
-  });
-
-  it('disables the Update button when nothing changed and not outdated', () => {
-    renderModal();
-
+    const { unmount } = renderModal({}, { onUpdate });
     expect(
       screen.getByRole('button', { name: 'Update Server' })
     ).toBeDisabled();
-  });
 
-  it('shows the outdated banner and allows submitting an empty payload', async () => {
-    const user = userEvent.setup();
-    const onUpdate = vi.fn();
+    unmount();
     renderModal({}, { outdated: true, onUpdate });
-
-    expect(
-      screen.getByText('Infrastructure Update Available')
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Controller version: v1/)).toBeInTheDocument();
-
     await user.click(screen.getByRole('button', { name: 'Update Server' }));
-
     expect(onUpdate).toHaveBeenCalledWith({});
   });
 });

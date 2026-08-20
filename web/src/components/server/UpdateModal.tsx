@@ -1,10 +1,27 @@
 import { useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { ServerConfig, UpdateServerRequest } from '../../types/server';
 import { Button } from '../ui/Button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/Dialog';
+import { Input } from '../ui/Input';
+import { Label } from '../ui/Label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/Select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { useServerOptions } from '../../hooks/useServerOptions';
-import { cn } from '../../lib/utils';
 import { BackupSettingsPanel } from './BackupSettingsPanel';
 
 export interface UpdateModalProps {
@@ -41,16 +58,14 @@ export function UpdateModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>('settings');
   const { data: options, isLoading: optionsLoading } = useServerOptions();
 
-  // Always offer the server's current version, even if Mojang no longer lists
-  // it, so opening the modal cannot silently switch the server to another
-  // version.
+  // Always offer the current version so opening the modal cannot silently
+  // switch the server when the API no longer lists that version.
   const availableVersions = options?.minecraftVersions ?? [];
   const versionOptions = availableVersions.includes(config.minecraftVersion)
     ? availableVersions
     : [config.minecraftVersion, ...availableVersions];
 
-  // Same for machine types: keep the current type selectable even if the
-  // dynamic list no longer offers it.
+  // Keep the current machine type selectable when the dynamic list changes.
   const availableMachineTypes = options?.machineTypes ?? [];
   const machineTypeOptions = (() => {
     const withSpecs = availableMachineTypes.map((mt) => ({
@@ -63,8 +78,6 @@ export function UpdateModal({
       ...withSpecs,
     ];
   })();
-
-  if (!open) return null;
 
   const hasChanges =
     name !== config.name ||
@@ -86,143 +99,135 @@ export function UpdateModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        className={cn(
-          'bg-slate-800 rounded-xl border border-slate-700 shadow-xl',
-          'w-full max-w-lg mx-4'
-        )}
-      >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 className="text-lg font-semibold text-white">Server Settings</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Server Settings</DialogTitle>
+          <DialogDescription className="sr-only">
+            Update settings for {serverName}.
+          </DialogDescription>
+        </DialogHeader>
 
         {outdated && (
-          <div className="px-6 pb-4">
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 space-y-1">
-              <p className="text-sm text-yellow-400 font-medium">
-                Infrastructure Update Available
-              </p>
-              <p className="text-xs text-yellow-300/70">
-                Server version: v{config.infraVersion ?? '?'} → Controller
-                version: v{currentInfraVersion}
-              </p>
-              <p className="text-xs text-slate-400">
-                The server will continue running during the update. No
-                configuration changes are required — submitting will trigger the
-                upgrade.
-              </p>
-            </div>
+          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 -mt-2 space-y-1">
+            <p className="text-sm font-medium text-yellow-400">
+              Infrastructure Update Available
+            </p>
+            <p className="text-xs text-yellow-300/70">
+              Server version: v{config.infraVersion ?? '?'} → Controller
+              version: v{currentInfraVersion}
+            </p>
+            <p className="text-xs text-slate-400">
+              The server will continue running during the update. No
+              configuration changes are required — submitting will trigger the
+              upgrade.
+            </p>
           </div>
         )}
 
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as SettingsTab)}
-          className="px-6"
         >
           <TabsList variant="line">
             <TabsTrigger value="settings">Settings</TabsTrigger>
             <TabsTrigger value="backup">Backup</TabsTrigger>
           </TabsList>
-          <TabsContent value="settings" className="py-4">
+          <TabsContent value="settings" className="py-2">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm text-slate-300 block">
-                  Server Name
-                </label>
-                <input
+                <Label htmlFor="server-name">Server Name</Label>
+                <Input
+                  id="server-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm text-slate-300 block">
-                  Machine Type
-                </label>
-                <select
-                  value={machineType}
-                  onChange={(e) => setMachineType(e.target.value)}
-                  disabled={optionsLoading}
-                  className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
-                >
-                  {machineTypeOptions.map((mt) => (
-                    <option key={mt.id} value={mt.id}>
-                      {mt.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-500">
+                <Label htmlFor="machine-type">Machine Type</Label>
+                <Select value={machineType} onValueChange={setMachineType}>
+                  <SelectTrigger
+                    id="machine-type"
+                    className="w-full"
+                    disabled={optionsLoading}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {machineTypeOptions.map((mt) => (
+                      <SelectItem key={mt.id} value={mt.id}>
+                        {mt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
                   Changing the machine type will stop and restart the server.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm text-slate-300 block">
-                  Disk Size (GB)
-                </label>
-                <input
+                <Label htmlFor="disk-size">Disk Size (GB)</Label>
+                <Input
+                  id="disk-size"
                   type="number"
                   value={diskSizeGB}
                   onChange={(e) => setDiskSizeGB(Number(e.target.value))}
                   min={20}
-                  className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm text-slate-300 block">
-                  Minecraft Version
-                </label>
-                <select
+                <Label htmlFor="minecraft-version">Minecraft Version</Label>
+                <Select
                   value={minecraftVersion}
-                  onChange={(e) => setMinecraftVersion(e.target.value)}
-                  disabled={optionsLoading}
-                  className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+                  onValueChange={setMinecraftVersion}
                 >
-                  {versionOptions.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id="minecraft-version"
+                    className="w-full"
+                    disabled={optionsLoading}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {versionOptions.map((version) => (
+                      <SelectItem key={version} value={version}>
+                        {version}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onClose}
-                  disabled={isPending}
-                >
-                  Cancel
-                </Button>
+              <DialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" disabled={isPending}>
+                    Cancel
+                  </Button>
+                </DialogClose>
                 <Button
                   type="submit"
-                  variant="default"
                   disabled={(!hasChanges && !outdated) || isPending}
                 >
                   {isPending && <Loader2 className="animate-spin" />}
                   Update Server
                 </Button>
-              </div>
+              </DialogFooter>
             </form>
           </TabsContent>
-          <TabsContent value="backup" className="py-4">
+          <TabsContent value="backup" className="py-2">
             <BackupSettingsPanel serverId={serverId} serverName={serverName} />
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

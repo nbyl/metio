@@ -12,3 +12,15 @@ if (!('ResizeObserver' in globalThis)) {
   globalThis.ResizeObserver =
     ResizeObserverStub as unknown as typeof ResizeObserver;
 }
+
+// Radix Select uses pointer capture while opening its trigger. jsdom does not
+// implement these HTMLElement methods.
+if (!HTMLElement.prototype.hasPointerCapture) {
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.setPointerCapture = () => {};
+  HTMLElement.prototype.releasePointerCapture = () => {};
+}
+
+if (!HTMLElement.prototype.scrollIntoView) {
+  HTMLElement.prototype.scrollIntoView = () => {};
+}

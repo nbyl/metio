@@ -47,6 +47,7 @@ import {
   TooltipTrigger,
 } from '../ui/Tooltip';
 import { Switch } from '../ui/Switch';
+import { Progress } from '../ui/Progress';
 import { StatsGrid, type StatItem } from '../layout/StatsGrid';
 import { ServerConfigPanel } from './ServerConfigPanel';
 import { UpdateModal } from './UpdateModal';
@@ -586,12 +587,12 @@ function ServerCard({ server }: ServerCardProps) {
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-green-500 transition-all duration-500"
-                style={{ width: `${provisioning.progress}%` }}
-              />
-            </div>
+            <Progress
+              value={provisioning.progress}
+              aria-valuenow={provisioning.progress}
+              aria-label={`${provisioning.operation.toLowerCase()} progress`}
+              className="h-1.5 [&>[data-slot=progress-indicator]]:bg-green-500"
+            />
           </div>
         )}
 
