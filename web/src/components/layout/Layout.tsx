@@ -24,7 +24,9 @@ export function Layout({ children, className }: LayoutProps) {
   return (
     <div className="dark min-h-screen bg-background p-8">
       <TooltipProvider>
-        <div className={cn('container', className)}>{children}</div>
+        <main className={cn('mx-auto max-w-4xl space-y-6', className)}>
+          {children}
+        </main>
       </TooltipProvider>
     </div>
   );

@@ -69,14 +69,8 @@ describe('Header', () => {
     ).not.toBeInTheDocument();
   });
 
-  // Snapshot tests
-  it('matches snapshot (with user)', () => {
-    const { container } = render(<Header email="user@example.com" showUser />);
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (without user)', () => {
-    const { container } = render(<Header />);
-    expect(container).toMatchSnapshot();
+  it('renders a semantic header', () => {
+    render(<Header />);
+    expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 });

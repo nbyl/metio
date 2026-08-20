@@ -79,32 +79,40 @@ export function ServerConfigPanel({
             <div className="space-y-3 pt-3">
               <Separator />
               <div className="grid grid-cols-1 gap-3 text-sm">
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Globe className="h-3.5 w-3.5" />
                     Region
                   </span>
-                  <span className="stat-value">
+                  <span className="flex items-center gap-2 text-foreground">
                     {config.region}/{config.zone}
                   </span>
                 </div>
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Cpu className="h-3.5 w-3.5" />
                     Machine Type
                   </span>
-                  <span className="stat-value">{config.machineType}</span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.machineType}
+                  </span>
                 </div>
-                <div className="stat">
-                  <span className="stat-label">Minecraft Version</span>
-                  <span className="stat-value">{config.minecraftVersion}</span>
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    Minecraft Version
+                  </span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.minecraftVersion}
+                  </span>
                 </div>
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <HardDrive className="h-3.5 w-3.5" />
                     Disk Size
                   </span>
-                  <span className="stat-value">{config.diskSizeGB} GB</span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.diskSizeGB} GB
+                  </span>
                 </div>
               </div>
             </div>
@@ -149,48 +157,62 @@ export function ServerConfigPanel({
               <Separator />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Globe className="h-3.5 w-3.5" />
                     Name
                   </span>
-                  <span className="stat-value">{config.name}</span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.name}
+                  </span>
                 </div>
 
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Globe className="h-3.5 w-3.5" />
                     Location
                   </span>
-                  <span className="stat-value">
+                  <span className="flex items-center gap-2 text-foreground">
                     {config.region}/{config.zone}
                   </span>
                 </div>
 
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Cpu className="h-3.5 w-3.5" />
                     Machine Type
                   </span>
-                  <span className="stat-value">{config.machineType}</span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.machineType}
+                  </span>
                 </div>
 
-                <div className="stat">
-                  <span className="stat-label">
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <HardDrive className="h-3.5 w-3.5" />
                     Disk Size
                   </span>
-                  <span className="stat-value">{config.diskSizeGB} GB</span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.diskSizeGB} GB
+                  </span>
                 </div>
 
-                <div className="stat">
-                  <span className="stat-label">Minecraft Version</span>
-                  <span className="stat-value">{config.minecraftVersion}</span>
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    Minecraft Version
+                  </span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    {config.minecraftVersion}
+                  </span>
                 </div>
 
-                <div className="stat">
-                  <span className="stat-label">Infra Version</span>
-                  <span className="stat-value">v{infrahVersion}</span>
+                <div className="space-y-1">
+                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    Infra Version
+                  </span>
+                  <span className="flex items-center gap-2 text-foreground">
+                    v{infrahVersion}
+                  </span>
                 </div>
               </div>
 

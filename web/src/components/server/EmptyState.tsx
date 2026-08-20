@@ -14,10 +14,10 @@ export function EmptyState({ onCreateServer, className }: EmptyStateProps) {
       <CardContent>
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Server className="h-16 w-16 text-slate-600 mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">
+          <h2 className="mb-2 text-xl font-semibold text-foreground">
             No Servers Yet
-          </h3>
-          <p className="text-slate-400 max-w-md mb-6">
+          </h2>
+          <p className="mb-6 max-w-md text-muted-foreground">
             Get started by creating your first Minecraft server. You can
             configure the region, machine type, and version during setup.
           </p>

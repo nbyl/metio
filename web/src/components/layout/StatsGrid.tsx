@@ -38,16 +38,18 @@ export function StatsGrid({ stats, className }: StatsGridProps) {
   }
 
   return (
-    <div className={cn('stats-grid', className)}>
+    <dl className={cn('grid grid-cols-2 gap-4 md:grid-cols-4', className)}>
       {stats.map((stat) => (
-        <div key={stat.label} className="stat">
-          <span className="stat-label">
+        <div key={stat.label} className="space-y-1">
+          <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             {stat.icon}
             {stat.label}
-          </span>
-          <span className="stat-value">{stat.value}</span>
+          </dt>
+          <dd className="flex items-center gap-2 text-foreground">
+            {stat.value}
+          </dd>
         </div>
       ))}
-    </div>
+    </dl>
   );
 }
