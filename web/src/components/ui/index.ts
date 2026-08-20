@@ -66,3 +66,13 @@ export {
 } from './Select';
 export { Label } from './Label';
 export { Progress } from './Progress';
+export {
+  useFormField,
+  Form,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormDescription,
+  FormMessage,
+  FormField,
+} from './Form';
