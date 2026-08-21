@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images build-machine-agent-image build-mc-backup-image build-controller-image deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -187,42 +187,6 @@ clean:
 	rm -rf build/
 	rm -rf static/dist/
 
-# Build machine-agent Docker image and save tag to file
-build-machine-agent-image:
-	@mkdir -p build
-	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
-	echo "Building Docker image for machine-agent with timestamp: $${TIMESTAMP}..." ;\
-	MACHINE_AGENT_BUILD_ID=$$(gcloud builds submit . --config cmd/machine-agent/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
-	echo "Build ID: $${MACHINE_AGENT_BUILD_ID}" ;\
-	MACHINE_AGENT_IMAGE_TAG=$$(gcloud builds describe $${MACHINE_AGENT_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
-	echo "Built image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
-	echo "$${MACHINE_AGENT_IMAGE_TAG}" > build/machine-agent-image.txt ;\
-	echo "Machine agent image tag saved to build/machine-agent-image.txt"
-
-# Build mc-backup Docker image and save tag to file
-build-mc-backup-image:
-	@mkdir -p build
-	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
-	echo "Building Docker image for mc-backup with timestamp: $${TIMESTAMP}..." ;\
-	MC_BACKUP_BUILD_ID=$$(gcloud builds submit . --config cmd/mc-backup/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
-	echo "Build ID: $${MC_BACKUP_BUILD_ID}" ;\
-	MC_BACKUP_IMAGE_TAG=$$(gcloud builds describe $${MC_BACKUP_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
-	echo "Built image: $${MC_BACKUP_IMAGE_TAG}" ;\
-	echo "$${MC_BACKUP_IMAGE_TAG}" > build/mc-backup-image.txt ;\
-	echo "mc-backup image tag saved to build/mc-backup-image.txt"
-
-# Build controller Docker image and save tag to file
-build-controller-image:
-	@mkdir -p build
-	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S) ;\
-	echo "Building Docker image for controller with timestamp: $${TIMESTAMP}..." ;\
-	CONTROLLER_BUILD_ID=$$(gcloud builds submit . --config cmd/controller/cloudbuild.yaml --format="value(id)" --region europe-west3 --substitutions=COMMIT_SHA="$(USERNAME)-local-$${TIMESTAMP}" --polling-interval=3) ;\
-	echo "Build ID: $${CONTROLLER_BUILD_ID}" ;\
-	CONTROLLER_IMAGE_TAG=$$(gcloud builds describe $${CONTROLLER_BUILD_ID} --format="value(images[0])" --region europe-west3) ;\
-	echo "Built image: $${CONTROLLER_IMAGE_TAG}" ;\
-	echo "$${CONTROLLER_IMAGE_TAG}" > build/controller-image.txt ;\
-	echo "Controller image tag saved to build/controller-image.txt"
-
 # CI controller image build — tag for ghcr.io, load into local daemon (no push)
 ci-controller-image:
 	@SHA=$$(git rev-parse --short HEAD); \
@@ -372,10 +336,10 @@ deploy-infrastructure:
 	tofu -chdir=deploy apply "$$@" -auto-approve
 
 # Deploy machine-agent only: build machine-agent image and deploy infrastructure
-deploy-machine-agent: build-machine-agent-image
+deploy-machine-agent: machine-agent-image
 	@set -e ;\
 	if [ ! -f "build/machine-agent-image.txt" ]; then \
-		echo "Error: Machine agent image tag file not found. Run 'make build-machine-agent-image' first." ;\
+		echo "Error: Machine agent image tag file not found. Run 'make machine-agent-image' first." ;\
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
@@ -460,9 +424,6 @@ help:
 	@echo "  ci-daprd-image          - Build daprd image for CI (ghcr.io tag, no push)"
 	@echo "  push-images             - Push images to ghcr.io"
 	@echo "  promote                 - Retag image (make promote FROM=<sha> TO=<tag>)"
-	@echo "  build-machine-agent-image - Build machine-agent via gcloud builds (legacy)"
-	@echo "  build-mc-backup-image   - Build mc-backup via gcloud builds (legacy)"
-	@echo "  build-controller-image  - Build controller via gcloud builds (legacy)"
 	@echo "  build-images            - Build all Docker images (controller, machine-agent, mc-backup, daprd)"
 	@echo ""
 	@echo "Test targets:"

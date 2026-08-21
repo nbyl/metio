@@ -19,16 +19,22 @@ RUN apk add --no-cache curl && \
     curl -fsSL "https://github.com/pulumi/pulumi/releases/download/v${PULUMI_VERSION}/pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz" | \
     tar -xz -C /usr/local/bin --strip-components=1 pulumi/pulumi
 
+# Download Go dependencies before the frontend COPY so web changes do not
+# invalidate the module layers
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
 # Copy built frontend assets from frontend stage
 COPY --from=frontend-builder /app/static/dist ./static/dist
 COPY static/embed.go ./static/
 
 # Build Go binary
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
 ARG VERSION=local
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.Version=${VERSION}" -o build/controller ./cmd/controller
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.Version=${VERSION}" -o build/controller ./cmd/controller
 
 # Stage 3: Runtime
 FROM alpine:3.24

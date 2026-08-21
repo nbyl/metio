@@ -452,7 +452,7 @@ restore/clone flows that build on this infrastructure.
 #### Controller Update (UI changes)
 
 ```bash
-make build-controller-image
+make controller-image
 make deploy-controller
 ```
 
@@ -461,7 +461,7 @@ This updates only the Cloud Run service without touching other infrastructure. T
 #### Machine-Agent Update
 
 ```bash
-make build-machine-agent-image
+make machine-agent-image
 make deploy-machine-agent
 ```
 
@@ -479,7 +479,7 @@ infrastructure.
 #### mc-backup Image Update
 
 ```bash
-make build-mc-backup-image
+make mc-backup-image
 ```
 
 The Metio `mc-backup` image wraps the upstream `itzg/mc-backup` plus a `/manifests` hook (see
