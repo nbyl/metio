@@ -256,7 +256,7 @@ function SpecsStep({
                       className={cn(
                         'rounded-lg border p-4 text-left transition-all',
                         selected
-                          ? 'border-green-500 bg-green-500/10 ring-1 ring-green-500'
+                          ? 'border-green-600 bg-green-600/10 ring-1 ring-green-600'
                           : 'border-border bg-muted hover:border-ring'
                       )}
                     >
@@ -327,7 +327,7 @@ function SpecsStep({
                 max={100}
                 value={field.value}
                 onChange={(event) => field.onChange(Number(event.target.value))}
-                className="accent-green-500"
+                className="accent-green-600"
               />
             </FormControl>
             <div className="flex justify-between text-xs text-muted-foreground">

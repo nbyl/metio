@@ -204,7 +204,7 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
         <div>
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
@@ -605,7 +605,7 @@ function ServerCard({ server }: ServerCardProps) {
 
         {isProvisioning && provisioning && (
           <div
-            className="mt-4 p-3 -m-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors"
+            className="mt-4 p-3 -m-3 rounded-lg cursor-pointer hover:bg-muted transition-colors"
             onClick={() =>
               navigate(`/servers/${server.id}/provisioning`, {
                 state: { serverName: server.config.name },
@@ -613,12 +613,12 @@ function ServerCard({ server }: ServerCardProps) {
             }
           >
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-green-400 font-medium hover:underline">
+              <span className="text-green-600 font-medium hover:underline">
                 {provisioning.operation === 'CREATE' && 'Creating...'}
                 {provisioning.operation === 'UPDATE' && 'Updating...'}
                 {provisioning.operation === 'DESTROY' && 'Destroying...'}
               </span>
-              <span className="flex items-center gap-1 text-slate-400">
+              <span className="flex items-center gap-1 text-muted-foreground">
                 {provisioning.progress}%
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
@@ -771,7 +771,7 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
     return (
       <Card className={className}>
         <CardContent>
-          <p className="text-red-500">Error: {error.message}</p>
+          <p className="text-destructive">Error: {error.message}</p>
           <div className="mt-4 flex gap-3">
             <Button variant="outline" onClick={() => refetch()}>
               Retry

@@ -22,7 +22,7 @@ function Dashboard() {
     return (
       <Layout>
         <Header email={user?.email} showUser />
-        <div className="flex items-center justify-center py-12 text-slate-400">
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
           Loading...
         </div>
       </Layout>

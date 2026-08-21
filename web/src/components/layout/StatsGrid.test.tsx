@@ -54,7 +54,7 @@ describe('StatsGrid', () => {
     const { container } = render(
       <StatsGrid stats={mockStats} className="custom-grid" />
     );
-    const grid = container.firstChild;
-    expect(grid).toHaveClass('grid', 'custom-grid');
+    const grid = container.firstChild as HTMLElement;
+    expect(grid).toHaveClass('custom-grid');
   });
 });

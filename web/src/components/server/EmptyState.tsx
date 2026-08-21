@@ -13,7 +13,7 @@ export function EmptyState({ onCreateServer, className }: EmptyStateProps) {
     <Card className={cn(className)}>
       <CardContent>
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Server className="h-16 w-16 text-slate-600 mb-4" />
+          <Server className="h-16 w-16 text-muted-foreground mb-4" />
           <h2 className="mb-2 text-xl font-semibold text-foreground">
             No Servers Yet
           </h2>

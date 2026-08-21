@@ -40,34 +40,34 @@ function WarningStep({
 }) {
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 rounded-lg border border-red-800/50 bg-red-900/20 px-4 py-3">
-        <AlertTriangle className="h-5 w-5 shrink-0 text-red-400" />
-        <p className="text-sm text-red-300">
+      <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+        <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+        <p className="text-sm text-foreground">
           This action will permanently destroy{' '}
-          <strong className="text-white">{serverName}</strong> and all
+          <strong className="text-destructive">{serverName}</strong> and all
           associated resources. This cannot be undone!
         </p>
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-300">
+        <p className="text-sm font-medium text-foreground">
           The following will be deleted:
         </p>
         <ul className="space-y-2">
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <Terminal className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <Terminal className="h-4 w-4 text-muted-foreground" />
             The Minecraft server VM
           </li>
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <HardDrive className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <HardDrive className="h-4 w-4 text-muted-foreground" />
             All world data and configurations
           </li>
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <Database className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <Database className="h-4 w-4 text-muted-foreground" />
             Backup bucket and backups
           </li>
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <Globe className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <Globe className="h-4 w-4 text-muted-foreground" />
             Static IP address
           </li>
         </ul>
@@ -100,7 +100,7 @@ function ConfirmStep({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="destroy-confirm" className="text-red-400">
+        <Label htmlFor="destroy-confirm" className="text-destructive">
           Type the server name to confirm:
         </Label>
         <Input
@@ -179,7 +179,7 @@ export function DestroyModal({
         </AlertDialogCancel>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-400" />
+            <AlertTriangle className="h-5 w-5 text-destructive" />
             Destroy Server
           </AlertDialogTitle>
           <AlertDialogDescription className="sr-only">

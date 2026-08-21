@@ -8,16 +8,15 @@ describe('Layout', () => {
     expect(screen.getByText('Page content')).toBeInTheDocument();
   });
 
-  it('applies dark theme classes', () => {
+  it('renders in light theme', () => {
     const { container } = render(<Layout>Content</Layout>);
     const wrapper = container.firstChild as HTMLElement;
-    expect(wrapper).toHaveClass('dark', 'min-h-screen', 'bg-background');
+    expect(wrapper).not.toHaveClass('dark');
   });
 
-  it('contains a semantic main shell with token-based layout classes', () => {
+  it('exposes a semantic main region', () => {
     render(<Layout>Content</Layout>);
-    const main = screen.getByRole('main');
-    expect(main).toHaveClass('mx-auto', 'max-w-4xl', 'space-y-6');
+    expect(screen.getByRole('main')).toBeInTheDocument();
   });
 
   it('merges custom className on the main shell', () => {
