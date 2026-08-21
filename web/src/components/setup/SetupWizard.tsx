@@ -23,7 +23,7 @@ function WelcomeStep({ status, isLoading }: StepProps) {
   return (
     <CardContent>
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <Server className="h-16 w-16 text-green-500 mb-4" />
+        <Server className="h-16 w-16 text-green-600 mb-4" />
         <h3 className="mb-2 text-xl font-semibold text-foreground">
           Welcome to Metio
         </h3>
@@ -38,7 +38,7 @@ function WelcomeStep({ status, isLoading }: StepProps) {
             Checking setup status...
           </div>
         ) : status?.initialized ? (
-          <div className="flex items-center gap-2 mt-4 text-green-400">
+          <div className="flex items-center gap-2 mt-4 text-green-600">
             <CheckCircle className="h-5 w-5" />
             Already initialized
           </div>
@@ -69,7 +69,7 @@ function ValidationStep({ status, isLoading }: StepProps) {
         </div>
       ) : !checks ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
-          <AlertCircle className="h-12 w-12 text-yellow-400 mb-4" />
+          <AlertCircle className="h-12 w-12 text-yellow-600 mb-4" />
           <p className="mb-2 text-foreground">
             Validation is temporarily unavailable
           </p>
@@ -83,7 +83,9 @@ function ValidationStep({ status, isLoading }: StepProps) {
             <span className="text-foreground">GCP APIs</span>
             <span
               className={
-                enabledApis === apiCount ? 'text-green-400' : 'text-yellow-400'
+                enabledApis === apiCount
+                  ? 'text-green-600'
+                  : 'text-yellow-600'
               }
             >
               {enabledApis}/{apiCount} enabled
@@ -97,9 +99,9 @@ function ValidationStep({ status, isLoading }: StepProps) {
               >
                 <span className="text-muted-foreground">{api}</span>
                 {result.enabled ? (
-                  <CheckCircle className="h-4 w-4 text-green-400" />
+                  <CheckCircle className="h-4 w-4 text-green-600" />
                 ) : (
-                  <AlertCircle className="h-4 w-4 text-red-400" />
+                  <AlertCircle className="h-4 w-4 text-destructive" />
                 )}
               </div>
             ))}
@@ -111,8 +113,8 @@ function ValidationStep({ status, isLoading }: StepProps) {
               <span
                 className={
                   grantedPerms === permCount
-                    ? 'text-green-400'
-                    : 'text-yellow-400'
+                    ? 'text-green-600'
+                    : 'text-yellow-600'
                 }
               >
                 {grantedPerms}/{permCount} granted
@@ -126,9 +128,9 @@ function ValidationStep({ status, isLoading }: StepProps) {
                 >
                   <span className="text-muted-foreground">{perm}</span>
                   {result.granted ? (
-                    <CheckCircle className="h-4 w-4 text-green-400" />
+                    <CheckCircle className="h-4 w-4 text-green-600" />
                   ) : (
-                    <AlertCircle className="h-4 w-4 text-red-400" />
+                    <AlertCircle className="h-4 w-4 text-destructive" />
                   )}
                 </div>
               ))}
@@ -137,11 +139,11 @@ function ValidationStep({ status, isLoading }: StepProps) {
 
           {checks.fixes.length > 0 && (
             <div className="border-t border-border pt-4">
-              <p className="text-yellow-400 text-sm mb-2">Required fixes:</p>
+              <p className="text-yellow-600 text-sm mb-2">Required fixes:</p>
               <div className="space-y-2">
                 {checks.fixes.map((fix, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <AlertCircle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
+                    <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
                     <span className="text-muted-foreground">
                       {fix.type === 'enable_api' && `Enable API: ${fix.api}`}
                       {fix.type === 'grant_role' &&
@@ -158,7 +160,7 @@ function ValidationStep({ status, isLoading }: StepProps) {
           )}
 
           {checks.valid && (
-            <div className="flex items-center justify-center gap-2 text-green-400 pt-2">
+            <div className="flex items-center justify-center gap-2 text-green-600 pt-2">
               <CheckCircle className="h-5 w-5" />
               All checks passed
             </div>
@@ -198,8 +200,8 @@ function InitializeStep() {
           </div>
         ) : initializeMutation.isError ? (
           <div className="flex flex-col items-center gap-2">
-            <AlertCircle className="h-8 w-8 text-red-400" />
-            <p className="text-red-400 text-sm">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <p className="text-destructive text-sm">
               {initializeMutation.error.message}
             </p>
             <Button variant="outline" onClick={handleInitialize}>
@@ -207,7 +209,7 @@ function InitializeStep() {
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-green-400">
+          <div className="flex items-center gap-2 text-green-600">
             <CheckCircle className="h-6 w-6" />
             State bucket ready
           </div>
@@ -223,7 +225,7 @@ function CompleteStep() {
   return (
     <CardContent>
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
+        <CheckCircle className="h-16 w-16 text-green-600 mb-4" />
         <h3 className="mb-2 text-xl font-semibold text-foreground">
           Setup Complete
         </h3>
@@ -289,7 +291,7 @@ export function SetupWizard() {
                     i === step
                       ? 'bg-primary text-primary-foreground'
                       : i < step
-                        ? 'bg-green-900 text-green-300'
+                        ? 'bg-green-100 text-green-700'
                         : 'bg-muted text-muted-foreground'
                   )}
                 >

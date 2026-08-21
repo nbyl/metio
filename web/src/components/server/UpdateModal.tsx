@@ -122,7 +122,7 @@ export function UpdateModal({
               Server version: v{config.infraVersion ?? '?'} → Controller
               version: v{currentInfraVersion}
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-muted-foreground">
               The server will continue running during the update. No
               configuration changes are required — submitting will trigger the
               upgrade.

@@ -252,7 +252,7 @@ function BackupSettingsForm({
           )}
         />
 
-        <p className="text-xs text-slate-500 mb-3">
+        <p className="text-xs text-muted-foreground mb-3">
           Zero values use the deployment defaults. Saving re-provisions the
           server to apply the backup service changes.
         </p>
@@ -281,7 +281,7 @@ export function BackupSettingsPanel({
     <div>
       {isLoading || !data ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <BackupSettingsForm
