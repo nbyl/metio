@@ -11,6 +11,22 @@
       rel="stylesheet"
     />
     <title>Metio</title>
+    <script>
+      // Resolve the theme before first paint to avoid a flash of the wrong
+      // theme. Must stay in sync with components/theme-provider.tsx.
+      (function () {
+        var theme = null;
+        try {
+          theme = localStorage.getItem('metio-theme');
+        } catch (e) {}
+        var dark =
+          theme === 'dark' ||
+          ((theme === null || theme === 'system') &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

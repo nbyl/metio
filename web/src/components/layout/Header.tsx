@@ -1,12 +1,54 @@
-import { Gamepad2 } from 'lucide-react';
+import { Gamepad2, Moon, Sun } from 'lucide-react';
 import { useServerOptions } from '../../hooks/useServerOptions';
 import { Button } from '../ui/Button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '../ui';
+import { useTheme } from '../theme-provider';
 
 export interface HeaderProps {
   /** User email to display */
   email?: string;
   /** Whether to show user section with logout */
   showUser?: boolean;
+}
+
+/**
+ * Theme mode switcher (Light / Dark / System) using the resolved theme to
+ * pick the visible icon.
+ */
+function ThemeSwitcher() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="relative"
+          aria-label="Change theme"
+        >
+          <Sun className="h-4 w-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+          <Moon className="absolute h-4 w-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup
+          value={theme}
+          onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+        >
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 /**
@@ -44,6 +86,7 @@ export function Header({ email, showUser = false }: HeaderProps) {
           <Button asChild variant="outline" size="sm">
             <a href="/auth/logout">Logout</a>
           </Button>
+          <ThemeSwitcher />
         </div>
       )}
     </header>
