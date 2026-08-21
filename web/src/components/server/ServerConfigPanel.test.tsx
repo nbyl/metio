@@ -73,7 +73,9 @@ describe('ServerConfigPanel compact', () => {
     const user = userEvent.setup();
     const { container } = renderPanel({ compact: true });
 
-    const content = container.querySelector('.collapsible-content');
+    const content = container.querySelector(
+      '[data-slot="collapsible-content"]'
+    );
     expect(content).toHaveAttribute('data-state', 'closed');
 
     await user.click(screen.getByText('Configuration'));

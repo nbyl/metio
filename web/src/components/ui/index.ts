@@ -76,3 +76,8 @@ export {
   FormMessage,
   FormField,
 } from './Form';
+export {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from './Collapsible';

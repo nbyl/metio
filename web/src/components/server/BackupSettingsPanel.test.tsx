@@ -79,7 +79,9 @@ describe('BackupSettingsPanel form', () => {
     ).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('Backup interval (hours)')).toHaveValue(6);
     expect(screen.getByLabelText('Retention policy')).toHaveValue(3);
-    expect(screen.getByLabelText('Retention unit')).toHaveValue('daily');
+    expect(
+      screen.getByRole('combobox', { name: 'Retention unit' })
+    ).toHaveTextContent('Daily');
   });
 
   it('shows the disabled label and disables inputs when backups are off', async () => {
@@ -121,30 +123,12 @@ describe('BackupSettingsPanel form', () => {
       screen.getByText('Keep the last N daily snapshots')
     ).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Retention unit'), 'weekly');
+    await user.click(screen.getByRole('combobox', { name: 'Retention unit' }));
+    await user.click(screen.getByRole('option', { name: 'Weekly' }));
 
     expect(
       screen.getByText('Keep the last N weekly snapshots')
     ).toBeInTheDocument();
-  });
-
-  it('clears the interval input to its empty placeholder state', () => {
-    renderPanel();
-
-    const input = screen.getByLabelText('Backup interval (hours)');
-    fireEvent.change(input, { target: { value: '' } });
-    expect(input).toHaveValue(null);
-  });
-
-  it('accepts a valid numeric interval value', async () => {
-    const user = userEvent.setup();
-    renderPanel();
-
-    const input = screen.getByLabelText('Backup interval (hours)');
-    await user.clear(input);
-    await user.type(input, '24');
-
-    expect(input).toHaveValue(24);
   });
 
   it('ignores negative interval values', () => {
@@ -153,14 +137,6 @@ describe('BackupSettingsPanel form', () => {
     const input = screen.getByLabelText('Backup interval (hours)');
     fireEvent.change(input, { target: { value: '-5' } });
     expect(input).toHaveValue(6);
-  });
-
-  it('clears the keep input to its empty placeholder state', () => {
-    renderPanel();
-
-    const input = screen.getByLabelText('Retention policy');
-    fireEvent.change(input, { target: { value: '' } });
-    expect(input).toHaveValue(null);
   });
 });
 

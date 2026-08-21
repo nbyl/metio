@@ -1,17 +1,13 @@
-import { useState } from 'react';
-import {
-  ChevronDown,
-  ChevronRight,
-  Settings2,
-  Globe,
-  Cpu,
-  HardDrive,
-  Calendar,
-} from 'lucide-react';
+import { Settings2, Globe, Cpu, HardDrive, Calendar } from 'lucide-react';
 import type { ServerConfig } from '../../types/server';
 import { Card, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Separator } from '../ui/Separator';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../ui/Collapsible';
 import { cn } from '../../lib/utils';
 
 export interface ServerConfigPanelProps {
@@ -43,194 +39,124 @@ export function ServerConfigPanel({
   compact,
   className,
 }: ServerConfigPanelProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
   if (compact) {
     return (
-      <div className={cn('space-y-3', className)}>
-        <button
-          type="button"
-          className="collapsible-trigger"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-300">
-            <Settings2 className="h-4 w-4 text-slate-400" />
+      <Collapsible className={cn('space-y-3', className)}>
+        <CollapsibleTrigger className="flex w-full items-center justify-between py-2 text-left">
+          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
             Configuration
           </span>
-          <span className="flex items-center gap-2">
-            {outdated && (
-              <Badge variant="secondary" className="bg-yellow-600 text-white">
-                Update Available
-              </Badge>
-            )}
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            )}
-          </span>
-        </button>
-
-        <div
-          className="collapsible-content"
-          data-state={isOpen ? 'open' : 'closed'}
-        >
-          {isOpen && (
-            <div className="space-y-3 pt-3">
-              <Separator />
-              <div className="grid grid-cols-1 gap-3 text-sm">
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Globe className="h-3.5 w-3.5" />
-                    Region
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.region}/{config.zone}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Cpu className="h-3.5 w-3.5" />
-                    Machine Type
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.machineType}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    Minecraft Version
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.minecraftVersion}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <HardDrive className="h-3.5 w-3.5" />
-                    Disk Size
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.diskSizeGB} GB
-                  </span>
-                </div>
-              </div>
+          {outdated && <Badge variant="secondary">Update Available</Badge>}
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3 pt-3">
+          <Separator />
+          <dl className="grid grid-cols-1 gap-3 text-sm">
+            <div>
+              <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                <Globe className="h-3.5 w-3.5" />
+                Region
+              </dt>
+              <dd className="text-foreground">
+                {config.region}/{config.zone}
+              </dd>
             </div>
-          )}
-        </div>
-      </div>
+            <div>
+              <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                <Cpu className="h-3.5 w-3.5" />
+                Machine Type
+              </dt>
+              <dd className="text-foreground">{config.machineType}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">
+                Minecraft Version
+              </dt>
+              <dd className="text-foreground">{config.minecraftVersion}</dd>
+            </div>
+            <div>
+              <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                <HardDrive className="h-3.5 w-3.5" />
+                Disk Size
+              </dt>
+              <dd className="text-foreground">{config.diskSizeGB} GB</dd>
+            </div>
+          </dl>
+        </CollapsibleContent>
+      </Collapsible>
     );
   }
 
   return (
     <Card className={cn(className)}>
       <CardContent>
-        <button
-          type="button"
-          className="collapsible-trigger"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-300">
-            <Settings2 className="h-4 w-4" />
-            Server Configuration
-          </span>
-          <span className="flex items-center gap-2">
-            {outdated && (
-              <Badge variant="secondary" className="bg-yellow-600 text-white">
-                Update Available
-              </Badge>
-            )}
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            )}
-          </span>
-        </button>
-
-        <div
-          className="collapsible-content"
-          data-state={isOpen ? 'open' : 'closed'}
-        >
-          {isOpen && (
-            <div className="space-y-3 pt-3">
-              <Separator />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Globe className="h-3.5 w-3.5" />
-                    Name
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.name}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Globe className="h-3.5 w-3.5" />
-                    Location
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.region}/{config.zone}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Cpu className="h-3.5 w-3.5" />
-                    Machine Type
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.machineType}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <HardDrive className="h-3.5 w-3.5" />
-                    Disk Size
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.diskSizeGB} GB
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    Minecraft Version
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    {config.minecraftVersion}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    Infra Version
-                  </span>
-                  <span className="flex items-center gap-2 text-foreground">
-                    v{infrahVersion}
-                  </span>
-                </div>
+        <Collapsible>
+          <CollapsibleTrigger className="flex w-full items-center justify-between py-2 text-left">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Settings2 className="h-4 w-4" />
+              Server Configuration
+            </span>
+            {outdated && <Badge variant="secondary">Update Available</Badge>}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-3">
+            <Separator />
+            <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+              <div>
+                <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <Globe className="h-3.5 w-3.5" />
+                  Name
+                </dt>
+                <dd className="text-foreground">{config.name}</dd>
               </div>
-
-              <Separator />
-
-              <div className="text-xs text-slate-500 space-y-1">
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Created: {formatDate(config.createdAt)}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Updated: {formatDate(config.updatedAt)}
-                </div>
+              <div>
+                <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <Globe className="h-3.5 w-3.5" />
+                  Location
+                </dt>
+                <dd className="text-foreground">
+                  {config.region}/{config.zone}
+                </dd>
+              </div>
+              <div>
+                <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <Cpu className="h-3.5 w-3.5" />
+                  Machine Type
+                </dt>
+                <dd className="text-foreground">{config.machineType}</dd>
+              </div>
+              <div>
+                <dt className="flex items-center gap-2 font-medium text-muted-foreground">
+                  <HardDrive className="h-3.5 w-3.5" />
+                  Disk Size
+                </dt>
+                <dd className="text-foreground">{config.diskSizeGB} GB</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">
+                  Minecraft Version
+                </dt>
+                <dd className="text-foreground">{config.minecraftVersion}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">
+                  Infra Version
+                </dt>
+                <dd className="text-foreground">v{infrahVersion}</dd>
+              </div>
+            </dl>
+            <Separator />
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                Created: {formatDate(config.createdAt)}
+              </div>
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                Updated: {formatDate(config.updatedAt)}
               </div>
             </div>
-          )}
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
