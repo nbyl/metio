@@ -125,13 +125,11 @@ metio/
 ├── cmd/
 │   ├── controller/           # Go HTTP server (Cloud Run)
 │   │   ├── main.go           # Entry point, server setup
-│   │   ├── Dockerfile        # Multi-stage build (Node → Go → Alpine)
-│   │   └── cloudbuild.yaml   # Cloud Build config
+│   │   └── Dockerfile        # Multi-stage build (Node → Go → Alpine)
 │   └── machine-agent/        # VM status reporter
 │       ├── main.go           # Entry point, status sync loop
 │       ├── main_test.go
-│       ├── Dockerfile
-│       └── cloudbuild.yaml
+│       └── Dockerfile
 ├── internal/
 │   ├── config/               # Viper-based env var loading
 │   │   ├── config.go         # Config struct, Load()

@@ -8,8 +8,8 @@
 - **Run tests**: `make test` (generates coverage report at build/coverage.html)
 - **Run single test**: `go test ./path/to/package -run TestName`
 - **Clean build artifacts**: `make clean`
-- **Docker build Controller**: `make build-controller-image`
-- **Docker build machine-agent**: `make build-machine-agent-image`
+- **Docker build Controller**: `make controller-image`
+- **Docker build machine-agent**: `make machine-agent-image`
 
 ## Local Deployment Command
 - **Full system**: `make deploy`
