@@ -1,6 +1,6 @@
 # Ignore build output
-/build
-/tmp
+build
+tmp
 
 # Ignore Go build cache and modules
 *.out
