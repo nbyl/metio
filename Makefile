@@ -187,17 +187,21 @@ clean:
 	rm -rf build/
 	rm -rf static/dist/
 
+# Version baked into controller/machine-agent binaries via ldflags
+# (git describe, e.g. "1.7.0" or "1.7.0-3-gabc1234"; override with VERSION=x make ...)
+VERSION ?= $(shell git describe --tags --always 2>/dev/null | sed 's/^v//' || echo local)
+
 # CI controller image build — tag for ghcr.io, load into local daemon (no push)
 ci-controller-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	echo "Building controller image for CI: ghcr.io/nbyl/metio/controller:$${SHA}"; \
-	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/controller:$${SHA} -f cmd/controller/Dockerfile --load .
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/controller:$${SHA} --build-arg VERSION=$(VERSION) -f cmd/controller/Dockerfile --load .
 
 # CI machine-agent image build — tag for ghcr.io, load into local daemon (no push)
 ci-machine-agent-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	echo "Building machine-agent image for CI: ghcr.io/nbyl/metio/machine-agent:$${SHA}"; \
-	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} -f cmd/machine-agent/Dockerfile --load .
+	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} --build-arg VERSION=$(VERSION) -f cmd/machine-agent/Dockerfile --load .
 
 # CI mc-backup image build — tag for ghcr.io, load into local daemon (no push)
 ci-mc-backup-image:
@@ -217,7 +221,7 @@ controller-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/controller:$${SHA}"; \
 	echo "Building controller image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t $${IMAGE} --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . ; \
 	echo "$${IMAGE}" > build/controller-image.txt
 
 # Local machine-agent image build + push to Artifact Registry
@@ -226,7 +230,7 @@ machine-agent-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:$${SHA}"; \
 	echo "Building machine-agent image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . ; \
 	echo "$${IMAGE}" > build/machine-agent-image.txt
 
 # Local mc-backup image build + push to Artifact Registry

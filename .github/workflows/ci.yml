@@ -31,7 +31,13 @@ jobs:
       - run: tofu -chdir=deploy validate
 
   docker:
-    needs: test
+    # Runs even when the release job is skipped (PRs, no new release) —
+    # only tests must have passed. IMAGE_VERSION carries the release-please
+    # version on release builds so it is baked into the binaries via ldflags.
+    needs: [test, release]
+    if: always() && !cancelled() && needs.test.result == 'success'
+    env:
+      IMAGE_VERSION: ${{ needs.release.outputs.release_created == 'true' && needs.release.outputs.version || 'local' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,16 +45,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - run: make ci-controller-image
-      - run: make ci-machine-agent-image
-      - run: make ci-mc-backup-image
-      - run: make ci-daprd-image
+      - run: make ci-controller-image VERSION=$IMAGE_VERSION
+      - run: make ci-machine-agent-image VERSION=$IMAGE_VERSION
+      - run: make ci-mc-backup-image VERSION=$IMAGE_VERSION
+      - run: make ci-daprd-image VERSION=$IMAGE_VERSION
       - if: github.ref == 'refs/heads/main'
         run: make push-images
 
   release:
+    # Release Please runs before the image build so the computed version can be
+    # injected at build time instead of only retagging afterwards (#422).
     if: github.ref == 'refs/heads/main'
-    needs: docker
+    needs: [test]
     environment: main
     runs-on: ubuntu-latest
     permissions:
@@ -65,8 +73,8 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
   promote-images:
-    if: github.ref == 'refs/heads/main' && needs.release.outputs.release_created == 'true'
-    needs: release
+    if: always() && !cancelled() && needs.docker.result == 'success' && github.ref == 'refs/heads/main' && needs.release.outputs.release_created == 'true'
+    needs: [docker, release]
     environment: main
     runs-on: ubuntu-latest
     permissions:
