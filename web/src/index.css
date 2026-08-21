@@ -130,10 +130,6 @@
 }
 
 @layer components {
-  .controls {
-    @apply flex gap-3;
-  }
-
   /* Loading */
   .loading {
     @apply w-4 h-4 mr-2;
@@ -146,91 +142,5 @@
 
   .instruction-group-title {
     @apply font-semibold text-white;
-  }
-
-  /* Collapsible */
-  .collapsible-trigger {
-    @apply flex items-center justify-between w-full py-2 text-left cursor-pointer;
-  }
-
-  .collapsible-content {
-    @apply overflow-hidden;
-  }
-
-  .collapsible-content[data-state='closed'] {
-    @apply hidden;
-  }
-
-  /* Whitelist */
-  .whitelist-section {
-    @apply border-t border-slate-700 pt-3;
-  }
-
-  .whitelist-header {
-    @apply flex items-center justify-between mb-3;
-  }
-
-  .whitelist-title {
-    @apply flex items-center gap-2 text-sm font-medium text-slate-300 cursor-pointer;
-  }
-
-  .whitelist-form {
-    @apply flex gap-2 mb-3;
-  }
-
-  .whitelist-input {
-    @apply flex-1 px-3 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400;
-    @apply focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent;
-  }
-
-  .whitelist-player {
-    @apply flex items-center justify-between py-1.5 px-2 rounded hover:bg-slate-700/50;
-  }
-
-  .whitelist-player-name {
-    @apply text-sm text-white cursor-help;
-  }
-
-  .whitelist-player-meta {
-    @apply text-xs text-slate-400;
-  }
-
-  .whitelist-empty {
-    @apply text-sm text-slate-400 text-center py-2;
-  }
-
-  /* Scheduled Shutdown */
-  .scheduled-shutdown-active {
-    @apply py-2;
-  }
-
-  .scheduled-shutdown-info {
-    @apply text-sm text-white;
-  }
-
-  .scheduled-shutdown-warning {
-    @apply text-xs text-slate-400 mt-1;
-  }
-
-  /* Backup settings */
-  .backup-grid {
-    @apply grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3;
-  }
-
-  .backup-field {
-    @apply space-y-1;
-  }
-
-  .backup-field-label {
-    @apply block text-xs text-slate-400;
-  }
-
-  .backup-field-hint {
-    @apply block text-[10px] text-slate-500;
-  }
-
-  .backup-number-input {
-    @apply w-full px-2 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-md text-white;
-    @apply focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent;
   }
 }

@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm, useWatch } from 'react-hook-form';
+import { z } from 'zod';
 import {
   Copy,
   Check,
-  ChevronDown,
   ChevronRight,
   X,
   Loader2,
@@ -48,6 +50,19 @@ import {
 } from '../ui/Tooltip';
 import { Switch } from '../ui/Switch';
 import { Progress } from '../ui/Progress';
+import { Input } from '../ui/Input';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from '../ui/Form';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../ui/Collapsible';
 import { StatsGrid, type StatItem } from '../layout/StatsGrid';
 import { ServerConfigPanel } from './ServerConfigPanel';
 import { UpdateModal } from './UpdateModal';
@@ -119,7 +134,7 @@ function ServerListSkeleton({ className }: { className?: string }) {
               ))}
             </div>
             <Separator />
-            <div className="controls mt-4">
+            <div className="mt-4 flex gap-3">
               <Skeleton className="h-9 w-24" />
               <Skeleton className="h-9 w-24" />
             </div>
@@ -136,9 +151,14 @@ interface WhitelistSectionProps {
 }
 
 function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
-
+  const form = useForm<{ username: string }>({
+    resolver: zodResolver(
+      z.object({ username: z.string().trim().min(1, 'Username is required') })
+    ),
+    defaultValues: { username: '' },
+    mode: 'onTouched',
+  });
+  const username = useWatch({ control: form.control, name: 'username' });
   const { data: whitelist, isLoading } = useWhitelist(serverId);
   const addPlayerMutation = useAddPlayer(serverId);
   const removePlayerMutation = useRemovePlayer(serverId);
@@ -147,15 +167,6 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
   if (!isRunning) {
     return null;
   }
-
-  const handleAddPlayer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUsername.trim()) return;
-
-    addPlayerMutation.mutate(newUsername.trim(), {
-      onSuccess: () => setNewUsername(''),
-    });
-  };
 
   const handleToggle = (enabled: boolean) => {
     toggleWhitelistMutation.mutate(enabled);
@@ -169,23 +180,16 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
   const isAdding = addPlayerMutation.isPending;
 
   return (
-    <div className="whitelist-section">
-      <div className="whitelist-header">
-        <button
-          type="button"
-          className="whitelist-title"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-          Whitelist
+    <Collapsible className="border-t border-border pt-3">
+      <div className="mb-3 flex items-center justify-between">
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-foreground">
+          Whitelist{' '}
           {whitelist && (
-            <span className="text-slate-500">({whitelist.players.length})</span>
+            <span className="text-muted-foreground">
+              ({whitelist.players.length})
+            </span>
           )}
-        </button>
+        </CollapsibleTrigger>
         {whitelist && (
           <Switch
             checked={whitelist.enabled}
@@ -196,7 +200,7 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
         )}
       </div>
 
-      {isExpanded && (
+      <CollapsibleContent>
         <div>
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -204,35 +208,55 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
             </div>
           ) : (
             <>
-              <form onSubmit={handleAddPlayer} className="whitelist-form">
-                <input
-                  type="text"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  placeholder="Minecraft username"
-                  className="whitelist-input"
-                  disabled={isAdding}
-                />
-                <Button
-                  type="submit"
-                  variant="default"
-                  disabled={isAdding || !newUsername.trim()}
-                  size="sm"
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(({ username }) =>
+                    addPlayerMutation.mutate(username.trim(), {
+                      onSuccess: () => form.reset(),
+                    })
+                  )}
+                  className="mb-3 flex gap-2"
                 >
-                  {isAdding && <Loader2 className="animate-spin" />}
-                  Add
-                </Button>
-              </form>
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Minecraft username"
+                            disabled={isAdding}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    variant="default"
+                    disabled={isAdding || !username.trim()}
+                    size="sm"
+                  >
+                    {isAdding && <Loader2 className="animate-spin" />}
+                    Add
+                  </Button>
+                </form>
+              </Form>
 
               {whitelist && whitelist.players.length > 0 ? (
                 <div className="space-y-1">
                   {whitelist.players.map((player) => (
-                    <div key={player.uuid} className="whitelist-player">
+                    <div
+                      key={player.uuid}
+                      className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-muted/50"
+                    >
                       <div>
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="whitelist-player-name">
+                              <span className="cursor-help text-sm text-foreground">
                                 {player.username}
                               </span>
                             </TooltipTrigger>
@@ -255,13 +279,15 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
                   ))}
                 </div>
               ) : (
-                <p className="whitelist-empty">No players in whitelist</p>
+                <p className="py-2 text-center text-sm text-muted-foreground">
+                  No players in whitelist
+                </p>
               )}
             </>
           )}
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -276,9 +302,17 @@ function ScheduledShutdownSection({
   isRunning,
   scheduledShutdown,
 }: ScheduledShutdownSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [shutdownTime, setShutdownTime] = useState('');
-
+  const form = useForm<{ shutdownTime: string }>({
+    resolver: zodResolver(
+      z.object({ shutdownTime: z.string().min(1, 'Shutdown time is required') })
+    ),
+    defaultValues: { shutdownTime: '' },
+    mode: 'onTouched',
+  });
+  const shutdownTime = useWatch({
+    control: form.control,
+    name: 'shutdownTime',
+  });
   const scheduleShutdownMutation = useScheduleShutdown(serverId);
   const cancelShutdownMutation = useCancelScheduledShutdown(serverId);
 
@@ -288,10 +322,11 @@ function ScheduledShutdownSection({
 
   const hasScheduledShutdown = !!scheduledShutdown;
 
-  const handleScheduleShutdown = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shutdownTime) return;
-
+  const handleScheduleShutdown = ({
+    shutdownTime,
+  }: {
+    shutdownTime: string;
+  }) => {
     const today = new Date();
     const [hours, minutes] = shutdownTime.split(':').map(Number);
     const scheduledDate = new Date(
@@ -305,7 +340,7 @@ function ScheduledShutdownSection({
     );
 
     scheduleShutdownMutation.mutate(scheduledDate.toISOString(), {
-      onSuccess: () => setShutdownTime(''),
+      onSuccess: () => form.reset(),
     });
   };
 
@@ -339,21 +374,12 @@ function ScheduledShutdownSection({
   const isCancelling = cancelShutdownMutation.isPending;
 
   return (
-    <div className="whitelist-section">
-      <div className="whitelist-header">
-        <button
-          type="button"
-          className="whitelist-title"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
+    <Collapsible className="border-t border-border pt-3">
+      <div className="mb-3 flex items-center justify-between">
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Clock className="h-4 w-4" />
           Scheduled Shutdown
-        </button>
+        </CollapsibleTrigger>
         {hasScheduledShutdown && (
           <Badge variant="secondary" className="bg-yellow-600 text-white">
             {getTimeUntilShutdown(scheduledShutdown)}
@@ -361,15 +387,15 @@ function ScheduledShutdownSection({
         )}
       </div>
 
-      {isExpanded && (
+      <CollapsibleContent>
         <div>
           {hasScheduledShutdown ? (
-            <div className="scheduled-shutdown-active">
-              <p className="scheduled-shutdown-info">
+            <div className="py-2">
+              <p className="text-sm text-foreground">
                 Server will shut down at{' '}
                 <strong>{formatScheduledTime(scheduledShutdown)}</strong>
               </p>
-              <p className="scheduled-shutdown-warning">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Players will receive warnings at 5 minutes and 1 minute before
                 shutdown.
               </p>
@@ -385,28 +411,38 @@ function ScheduledShutdownSection({
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleScheduleShutdown} className="whitelist-form">
-              <input
-                type="time"
-                value={shutdownTime}
-                onChange={(e) => setShutdownTime(e.target.value)}
-                className="whitelist-input"
-                disabled={isScheduling}
-              />
-              <Button
-                type="submit"
-                variant="destructive"
-                disabled={isScheduling || !shutdownTime}
-                size="sm"
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleScheduleShutdown)}
+                className="flex gap-2"
               >
-                {isScheduling && <Loader2 className="animate-spin" />}
-                Schedule
-              </Button>
-            </form>
+                <FormField
+                  control={form.control}
+                  name="shutdownTime"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input {...field} type="time" disabled={isScheduling} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={isScheduling || !shutdownTime}
+                  size="sm"
+                >
+                  {isScheduling && <Loader2 className="animate-spin" />}
+                  Schedule
+                </Button>
+              </form>
+            </Form>
           )}
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -736,7 +772,7 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
       <Card className={className}>
         <CardContent>
           <p className="text-red-500">Error: {error.message}</p>
-          <div className="controls mt-4">
+          <div className="mt-4 flex gap-3">
             <Button variant="outline" onClick={() => refetch()}>
               Retry
             </Button>
