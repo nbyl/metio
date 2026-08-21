@@ -12,9 +12,12 @@
 FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY cmd/mc-backup/post-backup ./cmd/mc-backup/post-backup
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /post-backup ./cmd/mc-backup/post-backup
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /post-backup ./cmd/mc-backup/post-backup
 
 FROM ghcr.io/itzg/mc-backup:latest
 
