@@ -259,10 +259,7 @@ export function ProvisioningProgress({
         </div>
 
         <div className="bg-muted/50 px-6 py-4 border-t border-border flex justify-end gap-3">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/')}
-          >
+          <Button variant="outline" onClick={() => navigate('/')}>
             <ArrowLeft />
             {isComplete || isFailed ? 'Back to Dashboard' : 'Dashboard'}
           </Button>

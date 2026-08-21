@@ -83,9 +83,7 @@ function ValidationStep({ status, isLoading }: StepProps) {
             <span className="text-foreground">GCP APIs</span>
             <span
               className={
-                enabledApis === apiCount
-                  ? 'text-green-600'
-                  : 'text-yellow-600'
+                enabledApis === apiCount ? 'text-green-600' : 'text-yellow-600'
               }
             >
               {enabledApis}/{apiCount} enabled
