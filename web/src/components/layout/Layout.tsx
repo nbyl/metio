@@ -10,7 +10,7 @@ export interface LayoutProps {
 }
 
 /**
- * Full page layout wrapper with dark theme and centered container.
+ * Full page layout wrapper with light theme and centered container.
  *
  * @example
  * ```tsx
@@ -22,7 +22,7 @@ export interface LayoutProps {
  */
 export function Layout({ children, className }: LayoutProps) {
   return (
-    <div className="dark min-h-screen bg-background p-8">
+    <div className="min-h-screen bg-background p-8">
       <TooltipProvider>
         <main className={cn('mx-auto max-w-4xl space-y-6', className)}>
           {children}
