@@ -7,10 +7,13 @@ RUN mkdir /app/build
 
 RUN apk add --no-cache git
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY . .
 ARG VERSION=local
-RUN go build -ldflags "-X main.Version=${VERSION}" -o build/machine-agent ./cmd/machine-agent
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -ldflags "-X main.Version=${VERSION}" -o build/machine-agent ./cmd/machine-agent
 
 # Runtime stage
 FROM debian:13-slim

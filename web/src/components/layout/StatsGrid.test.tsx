@@ -19,12 +19,6 @@ describe('StatsGrid', () => {
     expect(screen.getByText('IP')).toBeInTheDocument();
   });
 
-  it('applies stats-grid class', () => {
-    const { container } = render(<StatsGrid stats={mockStats} />);
-    const grid = container.firstChild;
-    expect(grid).toHaveClass('stats-grid');
-  });
-
   it('renders stat labels', () => {
     render(<StatsGrid stats={mockStats} />);
     const labels = screen.getAllByText(/Status|Players|Uptime|IP/);
@@ -41,7 +35,11 @@ describe('StatsGrid', () => {
 
   it('renders icons when provided', () => {
     const statsWithIcon = [
-      { label: 'Status', value: 'Running', icon: <Activity data-testid="status-icon" /> },
+      {
+        label: 'Status',
+        value: 'Running',
+        icon: <Activity data-testid="status-icon" />,
+      },
     ];
     render(<StatsGrid stats={statsWithIcon} />);
     expect(screen.getByTestId('status-icon')).toBeInTheDocument();
@@ -52,14 +50,11 @@ describe('StatsGrid', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('merges custom className', () => {
-    const { container } = render(<StatsGrid stats={mockStats} className="custom-grid" />);
-    const grid = container.firstChild;
-    expect(grid).toHaveClass('stats-grid', 'custom-grid');
-  });
-
-  it('matches snapshot', () => {
-    const { container } = render(<StatsGrid stats={mockStats} />);
-    expect(container).toMatchSnapshot();
+  it('merges custom className on the grid', () => {
+    const { container } = render(
+      <StatsGrid stats={mockStats} className="custom-grid" />
+    );
+    const grid = container.firstChild as HTMLElement;
+    expect(grid).toHaveClass('custom-grid');
   });
 });

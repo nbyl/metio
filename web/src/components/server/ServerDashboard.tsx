@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm, useWatch } from 'react-hook-form';
+import { z } from 'zod';
 import {
   Copy,
   Check,
-  ChevronDown,
   ChevronRight,
   X,
   Loader2,
@@ -14,80 +16,100 @@ import {
   Settings,
   Trash2,
   Plus,
-} from 'lucide-react'
-import { useServers } from '../../hooks/useServers'
-import { useServerStatus } from '../../hooks/useServerStatus'
-import { useServerProvisioning } from '../../hooks/useServerProvisioning'
-import { useStartServer, useStopServer } from '../../hooks/useServerMutations'
+} from 'lucide-react';
+import { useServers } from '../../hooks/useServers';
+import { useServerStatus } from '../../hooks/useServerStatus';
+import { useServerProvisioning } from '../../hooks/useServerProvisioning';
+import { useStartServer, useStopServer } from '../../hooks/useServerMutations';
 import {
   useUpdateServer,
   useUpdateAgent,
   useDeleteServer,
-} from '../../hooks/useServerMutations'
+} from '../../hooks/useServerMutations';
 import {
   useWhitelist,
   useAddPlayer,
   useRemovePlayer,
   useToggleWhitelist,
-} from '../../hooks/useWhitelist'
+} from '../../hooks/useWhitelist';
 import {
   useScheduleShutdown,
   useCancelScheduledShutdown,
-} from '../../hooks/useScheduledShutdown'
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card'
-import { Button } from '../ui/Button'
-import { Badge } from '../ui/Badge'
-import { Separator } from '../ui/Separator'
-import { Skeleton } from '../ui/Skeleton'
-import { Tooltip } from '../ui/Tooltip'
-import { Switch } from '../ui/Switch'
-import { StatsGrid, type StatItem } from '../layout/StatsGrid'
-import { ServerConfigPanel } from './ServerConfigPanel'
-import { UpdateModal } from './UpdateModal'
-import { DestroyModal } from './DestroyModal'
-import { EmptyState } from './EmptyState'
+} from '../../hooks/useScheduledShutdown';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
+import { Separator } from '../ui/Separator';
+import { Skeleton } from '../ui/Skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/Tooltip';
+import { Switch } from '../ui/Switch';
+import { Progress } from '../ui/Progress';
+import { Input } from '../ui/Input';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from '../ui/Form';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../ui/Collapsible';
+import { StatsGrid, type StatItem } from '../layout/StatsGrid';
+import { ServerConfigPanel } from './ServerConfigPanel';
+import { UpdateModal } from './UpdateModal';
+import { DestroyModal } from './DestroyModal';
+import { EmptyState } from './EmptyState';
 import type {
   ServerState,
   UpdateServerRequest,
   ServerConfig,
   StatusResponse,
-} from '../../types/server'
-import type { WhitelistPlayer } from '../../types/whitelist'
-import { cn } from '../../lib/utils'
+} from '../../types/server';
+import type { WhitelistPlayer } from '../../types/whitelist';
+import { cn } from '../../lib/utils';
 
 export interface ServerDashboardProps {
-  className?: string
+  className?: string;
 }
 
-function getStatusBadgeVariant(
-  state: ServerState
-): 'online' | 'offline' | 'transitioning' {
+function getStatusBadgeVariant(state: ServerState): {
+  variant: 'default' | 'destructive' | 'secondary';
+  className?: string;
+} {
   switch (state) {
     case 'RUNNING':
-      return 'online'
+      return { variant: 'default', className: 'bg-green-600 text-white' };
     case 'STOPPED':
-      return 'offline'
+      return { variant: 'destructive' };
     case 'STARTING':
     case 'STOPPING':
-      return 'transitioning'
+      return { variant: 'secondary', className: 'bg-yellow-600 text-white' };
     default:
-      return 'offline'
+      return { variant: 'destructive' };
   }
 }
 
 function getStatusLabel(state: ServerState): string {
   switch (state) {
     case 'RUNNING':
-      return 'Online'
+      return 'Online';
     case 'STOPPED':
-      return 'Offline'
+      return 'Offline';
     case 'STARTING':
-      return 'Starting...'
+      return 'Starting...';
     case 'STOPPING':
-      return 'Stopping...'
+      return 'Stopping...';
     default:
-      return 'Unknown'
+      return 'Unknown';
   }
 }
 
@@ -103,16 +125,16 @@ function ServerListSkeleton({ className }: { className?: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="stats-grid">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[1, 2, 3, 4].map((j) => (
-                <div key={j} className="stat">
+                <div key={j} className="space-y-1">
                   <Skeleton className="h-4 w-16" />
                   <Skeleton className="h-5 w-20 mt-1" />
                 </div>
               ))}
             </div>
             <Separator />
-            <div className="controls mt-4">
+            <div className="mt-4 flex gap-3">
               <Skeleton className="h-9 w-24" />
               <Skeleton className="h-9 w-24" />
             </div>
@@ -120,119 +142,133 @@ function ServerListSkeleton({ className }: { className?: string }) {
         </Card>
       ))}
     </div>
-  )
+  );
 }
 
 interface WhitelistSectionProps {
-  serverId: string
-  isRunning: boolean
+  serverId: string;
+  isRunning: boolean;
 }
 
 function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [newUsername, setNewUsername] = useState('')
-
-  const { data: whitelist, isLoading } = useWhitelist(serverId)
-  const addPlayerMutation = useAddPlayer(serverId)
-  const removePlayerMutation = useRemovePlayer(serverId)
-  const toggleWhitelistMutation = useToggleWhitelist(serverId)
+  const form = useForm<{ username: string }>({
+    resolver: zodResolver(
+      z.object({ username: z.string().trim().min(1, 'Username is required') })
+    ),
+    defaultValues: { username: '' },
+    mode: 'onTouched',
+  });
+  const username = useWatch({ control: form.control, name: 'username' });
+  const { data: whitelist, isLoading } = useWhitelist(serverId);
+  const addPlayerMutation = useAddPlayer(serverId);
+  const removePlayerMutation = useRemovePlayer(serverId);
+  const toggleWhitelistMutation = useToggleWhitelist(serverId);
 
   if (!isRunning) {
-    return null
-  }
-
-  const handleAddPlayer = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newUsername.trim()) return
-
-    addPlayerMutation.mutate(newUsername.trim(), {
-      onSuccess: () => setNewUsername(''),
-    })
+    return null;
   }
 
   const handleToggle = (enabled: boolean) => {
-    toggleWhitelistMutation.mutate(enabled)
-  }
+    toggleWhitelistMutation.mutate(enabled);
+  };
 
   const handleRemovePlayer = (player: WhitelistPlayer) => {
-    removePlayerMutation.mutate(player.uuid)
-  }
+    removePlayerMutation.mutate(player.uuid);
+  };
 
-  const isToggling = toggleWhitelistMutation.isPending
-  const isAdding = addPlayerMutation.isPending
+  const isToggling = toggleWhitelistMutation.isPending;
+  const isAdding = addPlayerMutation.isPending;
 
   return (
-    <div className="whitelist-section">
-      <div className="whitelist-header">
-        <button
-          type="button"
-          className="whitelist-title"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-          Whitelist
+    <Collapsible className="border-t border-border pt-3">
+      <div className="mb-3 flex items-center justify-between">
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-foreground">
+          Whitelist{' '}
           {whitelist && (
-            <span className="text-slate-500">({whitelist.players.length})</span>
+            <span className="text-muted-foreground">
+              ({whitelist.players.length})
+            </span>
           )}
-        </button>
+        </CollapsibleTrigger>
         {whitelist && (
           <Switch
             checked={whitelist.enabled}
-            onChange={handleToggle}
+            onCheckedChange={handleToggle}
             disabled={isToggling}
             aria-label="Toggle whitelist"
           />
         )}
       </div>
 
-      {isExpanded && (
+      <CollapsibleContent>
         <div>
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
-              <form onSubmit={handleAddPlayer} className="whitelist-form">
-                <input
-                  type="text"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  placeholder="Minecraft username"
-                  className="whitelist-input"
-                  disabled={isAdding}
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={isAdding || !newUsername.trim()}
-                  loading={isAdding}
-                  className="btn-sm"
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(({ username }) =>
+                    addPlayerMutation.mutate(username.trim(), {
+                      onSuccess: () => form.reset(),
+                    })
+                  )}
+                  className="mb-3 flex gap-2"
                 >
-                  Add
-                </Button>
-              </form>
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Minecraft username"
+                            disabled={isAdding}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    variant="default"
+                    disabled={isAdding || !username.trim()}
+                    size="sm"
+                  >
+                    {isAdding && <Loader2 className="animate-spin" />}
+                    Add
+                  </Button>
+                </form>
+              </Form>
 
               {whitelist && whitelist.players.length > 0 ? (
                 <div className="space-y-1">
                   {whitelist.players.map((player) => (
-                    <div key={player.uuid} className="whitelist-player">
+                    <div
+                      key={player.uuid}
+                      className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-muted/50"
+                    >
                       <div>
-                        <Tooltip
-                          content={`UUID: ${player.uuid}\nAdded by: ${player.addedBy}`}
-                        >
-                          <span className="whitelist-player-name">
-                            {player.username}
-                          </span>
-                        </Tooltip>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help text-sm text-foreground">
+                                {player.username}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="whitespace-pre-line">
+                              {`UUID: ${player.uuid}\nAdded by: ${player.addedBy}`}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <Button
                         variant="outline"
-                        className="btn-sm"
+                        size="sm"
                         onClick={() => handleRemovePlayer(player)}
                         disabled={removePlayerMutation.isPending}
                         aria-label={`Remove ${player.username}`}
@@ -243,20 +279,22 @@ function WhitelistSection({ serverId, isRunning }: WhitelistSectionProps) {
                   ))}
                 </div>
               ) : (
-                <p className="whitelist-empty">No players in whitelist</p>
+                <p className="py-2 text-center text-sm text-muted-foreground">
+                  No players in whitelist
+                </p>
               )}
             </>
           )}
         </div>
-      )}
-    </div>
-  )
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 interface ScheduledShutdownSectionProps {
-  serverId: string
-  isRunning: boolean
-  scheduledShutdown?: string
+  serverId: string;
+  isRunning: boolean;
+  scheduledShutdown?: string;
 }
 
 function ScheduledShutdownSection({
@@ -264,24 +302,33 @@ function ScheduledShutdownSection({
   isRunning,
   scheduledShutdown,
 }: ScheduledShutdownSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [shutdownTime, setShutdownTime] = useState('')
-
-  const scheduleShutdownMutation = useScheduleShutdown(serverId)
-  const cancelShutdownMutation = useCancelScheduledShutdown(serverId)
+  const form = useForm<{ shutdownTime: string }>({
+    resolver: zodResolver(
+      z.object({ shutdownTime: z.string().min(1, 'Shutdown time is required') })
+    ),
+    defaultValues: { shutdownTime: '' },
+    mode: 'onTouched',
+  });
+  const shutdownTime = useWatch({
+    control: form.control,
+    name: 'shutdownTime',
+  });
+  const scheduleShutdownMutation = useScheduleShutdown(serverId);
+  const cancelShutdownMutation = useCancelScheduledShutdown(serverId);
 
   if (!isRunning) {
-    return null
+    return null;
   }
 
-  const hasScheduledShutdown = !!scheduledShutdown
+  const hasScheduledShutdown = !!scheduledShutdown;
 
-  const handleScheduleShutdown = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!shutdownTime) return
-
-    const today = new Date()
-    const [hours, minutes] = shutdownTime.split(':').map(Number)
+  const handleScheduleShutdown = ({
+    shutdownTime,
+  }: {
+    shutdownTime: string;
+  }) => {
+    const today = new Date();
+    const [hours, minutes] = shutdownTime.split(':').map(Number);
     const scheduledDate = new Date(
       today.getFullYear(),
       today.getMonth(),
@@ -290,74 +337,65 @@ function ScheduledShutdownSection({
       minutes,
       0,
       0
-    )
+    );
 
     scheduleShutdownMutation.mutate(scheduledDate.toISOString(), {
-      onSuccess: () => setShutdownTime(''),
-    })
-  }
+      onSuccess: () => form.reset(),
+    });
+  };
 
   const handleCancelShutdown = () => {
-    cancelShutdownMutation.mutate()
-  }
+    cancelShutdownMutation.mutate();
+  };
 
   const formatScheduledTime = (isoString: string): string => {
-    const date = new Date(isoString)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+    const date = new Date(isoString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   const getTimeUntilShutdown = (isoString: string): string => {
-    const shutdownDate = new Date(isoString)
-    const now = new Date()
-    const diffMs = shutdownDate.getTime() - now.getTime()
+    const shutdownDate = new Date(isoString);
+    const now = new Date();
+    const diffMs = shutdownDate.getTime() - now.getTime();
 
-    if (diffMs <= 0) return 'imminent'
+    if (diffMs <= 0) return 'imminent';
 
-    const diffMinutes = Math.floor(diffMs / 60000)
+    const diffMinutes = Math.floor(diffMs / 60000);
     if (diffMinutes < 60) {
-      return `${diffMinutes} min`
+      return `${diffMinutes} min`;
     }
 
-    const diffHours = Math.floor(diffMinutes / 60)
-    const remainingMinutes = diffMinutes % 60
-    return `${diffHours}h ${remainingMinutes}m`
-  }
+    const diffHours = Math.floor(diffMinutes / 60);
+    const remainingMinutes = diffMinutes % 60;
+    return `${diffHours}h ${remainingMinutes}m`;
+  };
 
-  const isScheduling = scheduleShutdownMutation.isPending
-  const isCancelling = cancelShutdownMutation.isPending
+  const isScheduling = scheduleShutdownMutation.isPending;
+  const isCancelling = cancelShutdownMutation.isPending;
 
   return (
-    <div className="whitelist-section">
-      <div className="whitelist-header">
-        <button
-          type="button"
-          className="whitelist-title"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
+    <Collapsible className="border-t border-border pt-3">
+      <div className="mb-3 flex items-center justify-between">
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Clock className="h-4 w-4" />
           Scheduled Shutdown
-        </button>
+        </CollapsibleTrigger>
         {hasScheduledShutdown && (
-          <Badge variant="transitioning">
+          <Badge variant="secondary" className="bg-yellow-600 text-white">
             {getTimeUntilShutdown(scheduledShutdown)}
           </Badge>
         )}
       </div>
 
-      {isExpanded && (
+      <CollapsibleContent>
         <div>
           {hasScheduledShutdown ? (
-            <div className="scheduled-shutdown-active">
-              <p className="scheduled-shutdown-info">
+            <div className="py-2">
+              <p className="text-sm text-foreground">
                 Server will shut down at{' '}
                 <strong>{formatScheduledTime(scheduledShutdown)}</strong>
               </p>
-              <p className="scheduled-shutdown-warning">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Players will receive warnings at 5 minutes and 1 minute before
                 shutdown.
               </p>
@@ -365,85 +403,96 @@ function ScheduledShutdownSection({
                 variant="outline"
                 onClick={handleCancelShutdown}
                 disabled={isCancelling}
-                loading={isCancelling}
-                className="btn-sm mt-2"
+                size="sm"
+                className="mt-2"
               >
+                {isCancelling && <Loader2 className="animate-spin" />}
                 Cancel Shutdown
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleScheduleShutdown} className="whitelist-form">
-              <input
-                type="time"
-                value={shutdownTime}
-                onChange={(e) => setShutdownTime(e.target.value)}
-                className="whitelist-input"
-                disabled={isScheduling}
-              />
-              <Button
-                type="submit"
-                variant="danger"
-                disabled={isScheduling || !shutdownTime}
-                loading={isScheduling}
-                className="btn-sm"
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleScheduleShutdown)}
+                className="flex gap-2"
               >
-                Schedule
-              </Button>
-            </form>
+                <FormField
+                  control={form.control}
+                  name="shutdownTime"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input {...field} type="time" disabled={isScheduling} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={isScheduling || !shutdownTime}
+                  size="sm"
+                >
+                  {isScheduling && <Loader2 className="animate-spin" />}
+                  Schedule
+                </Button>
+              </form>
+            </Form>
           )}
         </div>
-      )}
-    </div>
-  )
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 interface ServerCardProps {
   server: {
-    id: string
-    config: ServerConfig
-    status?: StatusResponse
-    currentInfraVersion: number
-    outdated: boolean
-    outdatedMachineAgent?: boolean
-  }
+    id: string;
+    config: ServerConfig;
+    status?: StatusResponse;
+    currentInfraVersion: number;
+    outdated: boolean;
+    outdatedMachineAgent?: boolean;
+  };
 }
 
 function ServerCard({ server }: ServerCardProps) {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { data: status } = useServerStatus(server.id)
-  const { data: provisioning } = useServerProvisioning(server.id)
-  const startMutation = useStartServer(server.id)
-  const stopMutation = useStopServer(server.id)
-  const updateMutation = useUpdateServer()
-  const deleteMutation = useDeleteServer()
-  const updateAgentMutation = useUpdateAgent(server.id)
-  const { copy, copied } = useCopyToClipboard()
-  const [showUpdate, setShowUpdate] = useState(false)
-  const [showDestroy, setShowDestroy] = useState(false)
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { data: status } = useServerStatus(server.id);
+  const { data: provisioning } = useServerProvisioning(server.id);
+  const startMutation = useStartServer(server.id);
+  const stopMutation = useStopServer(server.id);
+  const updateMutation = useUpdateServer();
+  const deleteMutation = useDeleteServer();
+  const updateAgentMutation = useUpdateAgent(server.id);
+  const { copy, copied } = useCopyToClipboard();
+  const [showUpdate, setShowUpdate] = useState(false);
+  const [showDestroy, setShowDestroy] = useState(false);
 
-  const isMutating = startMutation.isPending || stopMutation.isPending
+  const isMutating = startMutation.isPending || stopMutation.isPending;
   const isProvisioning =
     provisioning &&
     provisioning.state !== 'COMPLETED' &&
-    provisioning.state !== 'FAILED'
+    provisioning.state !== 'FAILED';
 
   const handleCopyIP = async (ip: string) => {
-    const success = await copy(ip)
+    const success = await copy(ip);
     if (success) {
-      toast.success('IP copied to clipboard!')
+      toast.success('IP copied to clipboard!');
     } else {
-      toast.error('Failed to copy IP')
+      toast.error('Failed to copy IP');
     }
-  }
+  };
 
-  const currentStatus = (status ?? server.status) as StatusResponse | undefined
+  const currentStatus = (status ?? server.status) as StatusResponse | undefined;
 
-  const isRunning = currentStatus?.serverState === 'RUNNING'
-  const isStopped = currentStatus?.serverState === 'STOPPED'
+  const isRunning = currentStatus?.serverState === 'RUNNING';
+  const isStopped = currentStatus?.serverState === 'STOPPED';
   const isTransitioning =
     currentStatus?.serverState === 'STARTING' ||
-    currentStatus?.serverState === 'STOPPING'
+    currentStatus?.serverState === 'STOPPING';
 
   const stats: StatItem[] = [
     {
@@ -468,7 +517,7 @@ function ServerCard({ server }: ServerCardProps) {
       label: 'IP',
       value: currentStatus?.instanceIP || '-',
     },
-  ]
+  ];
 
   const handleUpdate = (data: UpdateServerRequest) => {
     updateMutation.mutate(
@@ -477,14 +526,14 @@ function ServerCard({ server }: ServerCardProps) {
         onSuccess: () => {
           queryClient.removeQueries({
             queryKey: ['serverProvisioning', server.id],
-          })
+          });
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
-          })
+          });
         },
       }
-    )
-  }
+    );
+  };
 
   const handleDestroy = () => {
     deleteMutation.mutate(
@@ -493,14 +542,14 @@ function ServerCard({ server }: ServerCardProps) {
         onSuccess: () => {
           queryClient.removeQueries({
             queryKey: ['serverProvisioning', server.id],
-          })
+          });
           navigate(`/servers/${server.id}/provisioning`, {
             state: { serverName: server.config.name },
-          })
+          });
         },
       }
-    )
-  }
+    );
+  };
 
   return (
     <Card>
@@ -522,11 +571,11 @@ function ServerCard({ server }: ServerCardProps) {
           </span>
           <span className="flex items-center gap-2">
             {currentStatus?.serverState ? (
-              <Badge variant={getStatusBadgeVariant(currentStatus.serverState)}>
+              <Badge {...getStatusBadgeVariant(currentStatus.serverState)}>
                 {getStatusLabel(currentStatus.serverState)}
               </Badge>
             ) : (
-              <Badge variant="offline">Unknown</Badge>
+              <Badge variant="destructive">Unknown</Badge>
             )}
             <Button
               variant="outline"
@@ -556,7 +605,7 @@ function ServerCard({ server }: ServerCardProps) {
 
         {isProvisioning && provisioning && (
           <div
-            className="mt-4 p-3 -m-3 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors"
+            className="mt-4 p-3 -m-3 rounded-lg cursor-pointer hover:bg-muted transition-colors"
             onClick={() =>
               navigate(`/servers/${server.id}/provisioning`, {
                 state: { serverName: server.config.name },
@@ -564,22 +613,22 @@ function ServerCard({ server }: ServerCardProps) {
             }
           >
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-green-400 font-medium hover:underline">
+              <span className="text-green-600 font-medium hover:underline">
                 {provisioning.operation === 'CREATE' && 'Creating...'}
                 {provisioning.operation === 'UPDATE' && 'Updating...'}
                 {provisioning.operation === 'DESTROY' && 'Destroying...'}
               </span>
-              <span className="flex items-center gap-1 text-slate-400">
+              <span className="flex items-center gap-1 text-muted-foreground">
                 {provisioning.progress}%
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
             </div>
-            <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-green-500 transition-all duration-500"
-                style={{ width: `${provisioning.progress}%` }}
-              />
-            </div>
+            <Progress
+              value={provisioning.progress}
+              aria-valuenow={provisioning.progress}
+              aria-label={`${provisioning.operation.toLowerCase()} progress`}
+              className="h-1.5 [&>[data-slot=progress-indicator]]:bg-green-500"
+            />
           </div>
         )}
 
@@ -588,11 +637,11 @@ function ServerCard({ server }: ServerCardProps) {
         <div className="flex flex-wrap gap-3">
           {isStopped && (
             <Button
-              variant="primary"
+              variant="default"
               onClick={() => startMutation.mutate()}
               disabled={isMutating || isProvisioning}
-              loading={startMutation.isPending}
             >
+              {startMutation.isPending && <Loader2 className="animate-spin" />}
               Start Server
             </Button>
           )}
@@ -605,11 +654,11 @@ function ServerCard({ server }: ServerCardProps) {
           )}
           {isRunning && (
             <Button
-              variant="danger"
+              variant="destructive"
               onClick={() => stopMutation.mutate()}
               disabled={isMutating || isProvisioning}
-              loading={stopMutation.isPending}
             >
+              {stopMutation.isPending && <Loader2 className="animate-spin" />}
               Stop Server
             </Button>
           )}
@@ -633,7 +682,7 @@ function ServerCard({ server }: ServerCardProps) {
             </Button>
           )}
           <Button
-            variant={server.outdated ? 'primary' : 'outline'}
+            variant={server.outdated ? 'default' : 'outline'}
             disabled={isProvisioning}
             onClick={() => setShowUpdate(true)}
           >
@@ -642,27 +691,29 @@ function ServerCard({ server }: ServerCardProps) {
           </Button>
           {server.outdatedMachineAgent && (
             <Button
-              variant="primary"
+              variant="default"
               disabled={isProvisioning || updateAgentMutation.isPending}
-              loading={updateAgentMutation.isPending}
               onClick={() => {
                 updateAgentMutation.mutate(undefined, {
                   onSuccess: () => {
                     queryClient.removeQueries({
                       queryKey: ['serverProvisioning', server.id],
-                    })
+                    });
                     navigate(`/servers/${server.id}/provisioning`, {
                       state: { serverName: server.config.name },
-                    })
+                    });
                   },
-                })
+                });
               }}
             >
+              {updateAgentMutation.isPending && (
+                <Loader2 className="animate-spin" />
+              )}
               Update Agent
             </Button>
           )}
           <Button
-            variant="danger"
+            variant="destructive"
             disabled={isProvisioning}
             onClick={() => setShowDestroy(true)}
           >
@@ -688,8 +739,8 @@ function ServerCard({ server }: ServerCardProps) {
         outdated={server.outdated}
         onClose={() => setShowUpdate(false)}
         onUpdate={(data) => {
-          handleUpdate(data)
-          setShowUpdate(false)
+          handleUpdate(data);
+          setShowUpdate(false);
         }}
         isPending={updateMutation.isPending}
       />
@@ -698,37 +749,37 @@ function ServerCard({ server }: ServerCardProps) {
         serverName={server.config.name}
         onClose={() => setShowDestroy(false)}
         onConfirm={() => {
-          handleDestroy()
-          setShowDestroy(false)
+          handleDestroy();
+          setShowDestroy(false);
         }}
         isPending={deleteMutation.isPending}
       />
     </Card>
-  )
+  );
 }
 
 export function ServerDashboard({ className }: ServerDashboardProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const { data: servers, isLoading, error, refetch } = useServers()
+  const { data: servers, isLoading, error, refetch } = useServers();
 
   if (isLoading) {
-    return <ServerListSkeleton className={className} />
+    return <ServerListSkeleton className={className} />;
   }
 
   if (error) {
     return (
       <Card className={className}>
         <CardContent>
-          <p className="text-red-500">Error: {error.message}</p>
-          <div className="controls mt-4">
+          <p className="text-destructive">Error: {error.message}</p>
+          <div className="mt-4 flex gap-3">
             <Button variant="outline" onClick={() => refetch()}>
               Retry
             </Button>
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (!servers || servers.length === 0) {
@@ -737,13 +788,13 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
         className={className}
         onCreateServer={() => navigate('/servers/new')}
       />
-    )
+    );
   }
 
   return (
     <div className={cn('space-y-6', className)}>
       <div className="flex justify-end">
-        <Button variant="primary" onClick={() => navigate('/servers/new')}>
+        <Button variant="default" onClick={() => navigate('/servers/new')}>
           <Plus className="h-4 w-4" />
           Create Server
         </Button>
@@ -752,5 +803,5 @@ export function ServerDashboard({ className }: ServerDashboardProps) {
         <ServerCard key={server.id} server={server} />
       ))}
     </div>
-  )
+  );
 }

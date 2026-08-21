@@ -5,7 +5,11 @@ import { Layout } from './components/layout/Layout';
 import { Header } from './components/layout/Header';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { useSetupStatus } from './hooks/useSetupStatus';
-import { ServerDashboard, ServerSetupWizard, ProvisioningProgress } from './components/server';
+import {
+  ServerDashboard,
+  ServerSetupWizard,
+  ProvisioningProgress,
+} from './components/server';
 
 /**
  * Dashboard component - main server control panel
@@ -18,7 +22,7 @@ function Dashboard() {
     return (
       <Layout>
         <Header email={user?.email} showUser />
-        <div className="flex items-center justify-center py-12 text-slate-400">
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
           Loading...
         </div>
       </Layout>

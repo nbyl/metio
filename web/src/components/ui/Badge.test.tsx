@@ -3,55 +3,40 @@ import { render, screen } from '@testing-library/react';
 import { Badge } from './Badge';
 
 describe('Badge', () => {
-  // Behavioral tests
-  it('renders with children', () => {
-    render(<Badge variant="online">Status</Badge>);
-    expect(screen.getByText('Status')).toBeInTheDocument();
+  it('renders with the default variant', () => {
+    render(<Badge>Status</Badge>);
+
+    expect(screen.getByText('Status')).toHaveAttribute(
+      'data-variant',
+      'default'
+    );
   });
 
-  it('applies online variant', () => {
-    render(<Badge variant="online">Online</Badge>);
-    const badge = screen.getByText('Online');
-    expect(badge).toHaveClass('badge', 'badge-online');
-  });
-
-  it('applies offline variant', () => {
-    render(<Badge variant="offline">Offline</Badge>);
-    const badge = screen.getByText('Offline');
-    expect(badge).toHaveClass('badge', 'badge-offline');
-  });
-
-  it('applies transitioning variant', () => {
-    render(<Badge variant="transitioning">Starting...</Badge>);
-    const badge = screen.getByText('Starting...');
-    expect(badge).toHaveClass('badge', 'badge-transitioning');
-  });
-
-  it('merges custom className', () => {
+  it('supports the canonical variants', () => {
     render(
-      <Badge variant="online" className="custom-class">
-        Custom
-      </Badge>
+      <>
+        <Badge variant="secondary">Secondary</Badge>
+        <Badge variant="destructive">Destructive</Badge>
+        <Badge variant="outline">Outline</Badge>
+      </>
     );
-    const badge = screen.getByText('Custom');
-    expect(badge).toHaveClass('badge', 'badge-online', 'custom-class');
-  });
 
-  // Snapshot tests
-  it('matches snapshot (online)', () => {
-    const { container } = render(<Badge variant="online">Online</Badge>);
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (offline)', () => {
-    const { container } = render(<Badge variant="offline">Offline</Badge>);
-    expect(container).toMatchSnapshot();
-  });
-
-  it('matches snapshot (transitioning)', () => {
-    const { container } = render(
-      <Badge variant="transitioning">Starting...</Badge>
+    expect(screen.getByText('Secondary')).toHaveAttribute(
+      'data-variant',
+      'secondary'
     );
-    expect(container).toMatchSnapshot();
+    expect(screen.getByText('Destructive')).toHaveAttribute(
+      'data-variant',
+      'destructive'
+    );
+    expect(screen.getByText('Outline')).toHaveAttribute(
+      'data-variant',
+      'outline'
+    );
+  });
+
+  it('forwards extra props', () => {
+    render(<Badge data-testid="badge">Custom</Badge>);
+    expect(screen.getByTestId('badge')).toBeInTheDocument();
   });
 });

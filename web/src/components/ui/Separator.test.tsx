@@ -3,25 +3,21 @@ import { render, screen } from '@testing-library/react';
 import { Separator } from './Separator';
 
 describe('Separator', () => {
-  it('renders separator element', () => {
-    render(<Separator />);
-    expect(screen.getByRole('separator')).toBeInTheDocument();
+  it('renders a decorative separator by default', () => {
+    render(<Separator data-testid="separator" />);
+
+    expect(screen.getByTestId('separator')).toHaveAttribute(
+      'data-slot',
+      'separator'
+    );
   });
 
-  it('applies separator class', () => {
-    render(<Separator />);
-    const separator = screen.getByRole('separator');
-    expect(separator).toHaveClass('separator');
-  });
+  it('can expose the separator role when non-decorative', () => {
+    render(<Separator decorative={false} data-testid="separator" />);
 
-  it('merges custom className', () => {
-    render(<Separator className="my-4" />);
-    const separator = screen.getByRole('separator');
-    expect(separator).toHaveClass('separator', 'my-4');
-  });
-
-  it('matches snapshot', () => {
-    const { container } = render(<Separator />);
-    expect(container).toMatchSnapshot();
+    expect(screen.getByRole('separator')).toHaveAttribute(
+      'data-orientation',
+      'horizontal'
+    );
   });
 });

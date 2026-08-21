@@ -1,6 +1,26 @@
 import { useState } from 'react';
-import { X, AlertTriangle, HardDrive, Database, Globe, Terminal } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Database,
+  Globe,
+  HardDrive,
+  Loader2,
+  Terminal,
+  X,
+} from 'lucide-react';
 import { Button } from '../ui/Button';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
+import { Input } from '../ui/Input';
+import { Label } from '../ui/Label';
 import { cn } from '../../lib/utils';
 
 export interface DestroyModalProps {
@@ -11,46 +31,54 @@ export interface DestroyModalProps {
   isPending: boolean;
 }
 
-function WarningStep({ serverName, onNext, onCancel }: { serverName: string; onNext: () => void; onCancel: () => void }) {
+function WarningStep({
+  serverName,
+  onNext,
+}: {
+  serverName: string;
+  onNext: () => void;
+}) {
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 rounded-lg bg-red-900/20 border border-red-800/50 px-4 py-3">
-        <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-        <p className="text-sm text-red-300">
-          This action will permanently destroy <strong className="text-white">{serverName}</strong> and all associated resources. This cannot be undone!
+      <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+        <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+        <p className="text-sm text-foreground">
+          This action will permanently destroy{' '}
+          <strong className="text-destructive">{serverName}</strong> and all
+          associated resources. This cannot be undone!
         </p>
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-300">The following will be deleted:</p>
+        <p className="text-sm font-medium text-foreground">
+          The following will be deleted:
+        </p>
         <ul className="space-y-2">
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <Terminal className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <Terminal className="h-4 w-4 text-muted-foreground" />
             The Minecraft server VM
           </li>
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <HardDrive className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <HardDrive className="h-4 w-4 text-muted-foreground" />
             All world data and configurations
           </li>
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <Database className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <Database className="h-4 w-4 text-muted-foreground" />
             Backup bucket and backups
           </li>
-          <li className="flex items-center gap-3 text-sm text-slate-400">
-            <Globe className="h-4 w-4 text-slate-500" />
+          <li className="flex items-center gap-3 text-sm text-foreground">
+            <Globe className="h-4 w-4 text-muted-foreground" />
             Static IP address
           </li>
         </ul>
       </div>
 
-      <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="button" variant="danger" onClick={onNext}>
+      <AlertDialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0">
+        <AlertDialogCancel>Cancel</AlertDialogCancel>
+        <Button type="button" variant="destructive" onClick={onNext}>
           Continue →
         </Button>
-      </div>
+      </AlertDialogFooter>
     </div>
   );
 }
@@ -72,37 +100,39 @@ function ConfirmStep({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <p className="text-sm text-red-400 font-medium">
+        <Label htmlFor="destroy-confirm" className="text-destructive">
           Type the server name to confirm:
-        </p>
-        <input
+        </Label>
+        <Input
+          id="destroy-confirm"
           type="text"
           value={confirmText}
           onChange={(e) => setConfirmText(e.target.value)}
           placeholder={serverName}
-          className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          className="focus-visible:ring-destructive/40"
         />
       </div>
 
-      <div className="flex justify-end gap-3 pt-2">
+      <AlertDialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0">
         <Button
           type="button"
           variant="outline"
           onClick={onBack}
           disabled={isPending}
         >
-          ← Back
+          <ArrowLeft />
+          Back
         </Button>
         <Button
           type="button"
-          variant="danger"
+          variant="destructive"
           disabled={!isConfirmed || isPending}
-          loading={isPending}
           onClick={onConfirm}
         >
+          {isPending && <Loader2 className="animate-spin" />}
           Destroy Server
         </Button>
-      </div>
+      </AlertDialogFooter>
     </div>
   );
 }
@@ -115,21 +145,14 @@ export function DestroyModal({
   isPending,
 }: DestroyModalProps) {
   const [step, setStep] = useState(0);
-
-  if (!open) return null;
-
   const totalSteps = 1;
 
   const handleNext = () => {
-    if (step < totalSteps) {
-      setStep(step + 1);
-    }
+    if (step < totalSteps) setStep((current) => current + 1);
   };
 
   const handleBack = () => {
-    if (step > 0) {
-      setStep(step - 1);
-    }
+    if (step > 0) setStep((current) => current - 1);
   };
 
   const handleClose = () => {
@@ -137,65 +160,57 @@ export function DestroyModal({
     onClose();
   };
 
-  const handleConfirm = () => {
-    onConfirm();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        className={cn(
-          'bg-slate-800 rounded-xl border border-slate-700 shadow-xl',
-          'w-full max-w-md mx-4'
-        )}
-      >
-        <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-400" />
+    <AlertDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) handleClose();
+      }}
+    >
+      <AlertDialogContent size="sm" className="max-w-md">
+        <AlertDialogCancel
+          aria-label="Close"
+          variant="ghost"
+          size="icon-sm"
+          className="absolute top-2 right-2"
+          disabled={isPending}
+        >
+          <X />
+        </AlertDialogCancel>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
             Destroy Server
-          </h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={isPending}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          </AlertDialogTitle>
+          <AlertDialogDescription className="sr-only">
+            Permanently destroy {serverName} and its associated resources.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="mb-2 flex gap-1">
+          {Array.from({ length: totalSteps + 1 }).map((_, index) => (
+            <div
+              key={index}
+              className={cn(
+                'h-1 flex-1 rounded-full transition-colors duration-300',
+                index <= step ? 'bg-red-500' : 'bg-muted'
+              )}
+            />
+          ))}
         </div>
 
-        <div className="mb-2 px-6">
-          <div className="flex gap-1">
-            {Array.from({ length: totalSteps + 1 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'h-1 flex-1 rounded-full transition-colors duration-300',
-                  i <= step ? 'bg-red-500' : 'bg-slate-700'
-                )}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="px-6 pb-6">
-          {step === 0 && (
-            <WarningStep
-              serverName={serverName}
-              onNext={handleNext}
-              onCancel={handleClose}
-            />
-          )}
-          {step === totalSteps && (
-            <ConfirmStep
-              serverName={serverName}
-              isPending={isPending}
-              onConfirm={handleConfirm}
-              onBack={handleBack}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+        {step === 0 && (
+          <WarningStep serverName={serverName} onNext={handleNext} />
+        )}
+        {step === totalSteps && (
+          <ConfirmStep
+            serverName={serverName}
+            isPending={isPending}
+            onConfirm={onConfirm}
+            onBack={handleBack}
+          />
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

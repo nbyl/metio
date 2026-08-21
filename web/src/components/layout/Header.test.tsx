@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Header } from './Header';
+import { ThemeProvider, useTheme } from '../theme-provider';
 
 vi.mock('../../hooks/useServerOptions', () => ({
   useServerOptions: vi.fn(() => ({ data: undefined })),
 }));
 
 import { useServerOptions } from '../../hooks/useServerOptions';
+
+function ThemeProbe() {
+  const { theme } = useTheme();
+  return <span data-testid="theme">{theme}</span>;
+}
 
 describe('Header', () => {
   beforeEach(() => {
@@ -57,22 +64,53 @@ describe('Header', () => {
   it('hides user section when showUser is false', () => {
     render(<Header email="test@example.com" showUser={false} />);
     expect(screen.queryByText('test@example.com')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Logout' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Logout' })
+    ).not.toBeInTheDocument();
   });
 
   it('hides user section when email is undefined', () => {
     render(<Header showUser />);
-    expect(screen.queryByRole('link', { name: 'Logout' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Logout' })
+    ).not.toBeInTheDocument();
   });
 
-  // Snapshot tests
-  it('matches snapshot (with user)', () => {
-    const { container } = render(<Header email="user@example.com" showUser />);
-    expect(container).toMatchSnapshot();
+  it('renders a semantic header', () => {
+    render(<Header />);
+    expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 
-  it('matches snapshot (without user)', () => {
-    const { container } = render(<Header />);
-    expect(container).toMatchSnapshot();
+  it('renders the theme switcher next to the logout button', () => {
+    render(<Header email="test@example.com" showUser />);
+    const logout = screen.getByRole('link', { name: 'Logout' });
+    const switcher = screen.getByRole('button', { name: 'Change theme' });
+    expect(switcher).toBeInTheDocument();
+    expect(logout.compareDocumentPosition(switcher) &
+      Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('hides the theme switcher with the user section', () => {
+    render(<Header email="test@example.com" showUser={false} />);
+    expect(
+      screen.queryByRole('button', { name: 'Change theme' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('switches the theme from the dropdown', async () => {
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <Header email="test@example.com" showUser />
+        <ThemeProbe />
+      </ThemeProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Change theme' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Dark' }));
+
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    expect(window.localStorage.getItem('metio-theme')).toBe('dark');
+    expect(document.documentElement).toHaveClass('dark');
   });
 });

@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Loader2, Server, ArrowRight } from 'lucide-react';
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Server,
+  ArrowRight,
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -17,21 +23,22 @@ function WelcomeStep({ status, isLoading }: StepProps) {
   return (
     <CardContent>
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <Server className="h-16 w-16 text-green-500 mb-4" />
-        <h3 className="text-xl font-semibold text-white mb-2">
+        <Server className="h-16 w-16 text-green-600 mb-4" />
+        <h3 className="mb-2 text-xl font-semibold text-foreground">
           Welcome to Metio
         </h3>
-        <p className="text-slate-400 max-w-md mb-2">
+        <p className="mb-2 max-w-md text-muted-foreground">
           Metio manages Minecraft servers on Google Cloud. Before you can create
-          servers, we need to verify that your GCP project is properly configured.
+          servers, we need to verify that your GCP project is properly
+          configured.
         </p>
         {isLoading ? (
-          <div className="flex items-center gap-2 mt-4 text-slate-400">
+          <div className="mt-4 flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Checking setup status...
           </div>
         ) : status?.initialized ? (
-          <div className="flex items-center gap-2 mt-4 text-green-400">
+          <div className="flex items-center gap-2 mt-4 text-green-600">
             <CheckCircle className="h-5 w-5" />
             Already initialized
           </div>
@@ -56,56 +63,72 @@ function ValidationStep({ status, isLoading }: StepProps) {
   return (
     <CardContent>
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-slate-400">
+        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           Running validation...
         </div>
       ) : !checks ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
-          <AlertCircle className="h-12 w-12 text-yellow-400 mb-4" />
-          <p className="text-slate-300 mb-2">
+          <AlertCircle className="h-12 w-12 text-yellow-600 mb-4" />
+          <p className="mb-2 text-foreground">
             Validation is temporarily unavailable
           </p>
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             Could not check GCP project configuration. The setup may still work.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-white">GCP APIs</span>
-            <span className={enabledApis === apiCount ? 'text-green-400' : 'text-yellow-400'}>
+            <span className="text-foreground">GCP APIs</span>
+            <span
+              className={
+                enabledApis === apiCount ? 'text-green-600' : 'text-yellow-600'
+              }
+            >
               {enabledApis}/{apiCount} enabled
             </span>
           </div>
           <div className="space-y-2">
             {Object.entries(checks.apis).map(([api, result]) => (
-              <div key={api} className="flex items-center justify-between text-sm">
-                <span className="text-slate-300">{api}</span>
+              <div
+                key={api}
+                className="flex items-center justify-between text-sm"
+              >
+                <span className="text-muted-foreground">{api}</span>
                 {result.enabled ? (
-                  <CheckCircle className="h-4 w-4 text-green-400" />
+                  <CheckCircle className="h-4 w-4 text-green-600" />
                 ) : (
-                  <AlertCircle className="h-4 w-4 text-red-400" />
+                  <AlertCircle className="h-4 w-4 text-destructive" />
                 )}
               </div>
             ))}
           </div>
 
-          <div className="border-t border-slate-700 pt-4">
+          <div className="border-t border-border pt-4">
             <div className="flex items-center justify-between">
-              <span className="text-white">IAM Permissions</span>
-              <span className={grantedPerms === permCount ? 'text-green-400' : 'text-yellow-400'}>
+              <span className="text-foreground">IAM Permissions</span>
+              <span
+                className={
+                  grantedPerms === permCount
+                    ? 'text-green-600'
+                    : 'text-yellow-600'
+                }
+              >
                 {grantedPerms}/{permCount} granted
               </span>
             </div>
             <div className="space-y-2 mt-2">
               {Object.entries(checks.permissions).map(([perm, result]) => (
-                <div key={perm} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-300">{perm}</span>
+                <div
+                  key={perm}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-muted-foreground">{perm}</span>
                   {result.granted ? (
-                    <CheckCircle className="h-4 w-4 text-green-400" />
+                    <CheckCircle className="h-4 w-4 text-green-600" />
                   ) : (
-                    <AlertCircle className="h-4 w-4 text-red-400" />
+                    <AlertCircle className="h-4 w-4 text-destructive" />
                   )}
                 </div>
               ))}
@@ -113,27 +136,29 @@ function ValidationStep({ status, isLoading }: StepProps) {
           </div>
 
           {checks.fixes.length > 0 && (
-            <div className="border-t border-slate-700 pt-4">
-              <p className="text-yellow-400 text-sm mb-2">Required fixes:</p>
+            <div className="border-t border-border pt-4">
+              <p className="text-yellow-600 text-sm mb-2">Required fixes:</p>
               <div className="space-y-2">
                 {checks.fixes.map((fix, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <AlertCircle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
-                    <span className="text-slate-300">
+                    <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+                    <span className="text-muted-foreground">
                       {fix.type === 'enable_api' && `Enable API: ${fix.api}`}
-                      {fix.type === 'grant_role' && `Grant role ${fix.role} (${fix.permission})`}
+                      {fix.type === 'grant_role' &&
+                        `Grant role ${fix.role} (${fix.permission})`}
                     </span>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-slate-500 mt-2">
-                Open the GCP console links above to fix these issues, then refresh.
+              <p className="mt-2 text-xs text-muted-foreground">
+                Open the GCP console links above to fix these issues, then
+                refresh.
               </p>
             </div>
           )}
 
           {checks.valid && (
-            <div className="flex items-center justify-center gap-2 text-green-400 pt-2">
+            <div className="flex items-center justify-center gap-2 text-green-600 pt-2">
               <CheckCircle className="h-5 w-5" />
               All checks passed
             </div>
@@ -156,31 +181,33 @@ function InitializeStep() {
   return (
     <CardContent>
       <div className="flex flex-col items-center text-center py-4">
-        <Server className="h-12 w-12 text-slate-500 mb-4" />
-        <p className="text-slate-300 mb-6 max-w-md">
+        <Server className="mb-4 h-12 w-12 text-muted-foreground" />
+        <p className="mb-6 max-w-md text-muted-foreground">
           We'll now create the Pulumi state bucket in your GCP project. This
           bucket stores the infrastructure state for your servers.
         </p>
         {!started ? (
-          <Button variant="primary" onClick={handleInitialize}>
+          <Button variant="default" onClick={handleInitialize}>
             Create State Bucket
             <ArrowRight className="h-4 w-4" />
           </Button>
         ) : initializeMutation.isPending ? (
-          <div className="flex items-center gap-2 text-slate-400">
+          <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
             Creating state bucket...
           </div>
         ) : initializeMutation.isError ? (
           <div className="flex flex-col items-center gap-2">
-            <AlertCircle className="h-8 w-8 text-red-400" />
-            <p className="text-red-400 text-sm">{initializeMutation.error.message}</p>
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <p className="text-destructive text-sm">
+              {initializeMutation.error.message}
+            </p>
             <Button variant="outline" onClick={handleInitialize}>
               Retry
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-green-400">
+          <div className="flex items-center gap-2 text-green-600">
             <CheckCircle className="h-6 w-6" />
             State bucket ready
           </div>
@@ -196,15 +223,15 @@ function CompleteStep() {
   return (
     <CardContent>
       <div className="flex flex-col items-center justify-center py-8 text-center">
-        <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-        <h3 className="text-xl font-semibold text-white mb-2">
+        <CheckCircle className="h-16 w-16 text-green-600 mb-4" />
+        <h3 className="mb-2 text-xl font-semibold text-foreground">
           Setup Complete
         </h3>
-        <p className="text-slate-400 max-w-md mb-6">
-          Your GCP project is now configured. You can start creating and managing
-          Minecraft servers.
+        <p className="mb-6 max-w-md text-muted-foreground">
+          Your GCP project is now configured. You can start creating and
+          managing Minecraft servers.
         </p>
-        <Button variant="primary" onClick={() => navigate('/')}>
+        <Button variant="default" onClick={() => navigate('/')}>
           Go to Dashboard
           <ArrowRight className="h-4 w-4" />
         </Button>
@@ -246,7 +273,7 @@ export function SetupWizard() {
         <CardHeader>
           <CardTitle>
             <span>Setup</span>
-            <span className="text-sm text-slate-400 font-normal">
+            <span className="text-sm font-normal text-muted-foreground">
               Step {step + 1} of {STEPS.length}
             </span>
           </CardTitle>
@@ -260,10 +287,10 @@ export function SetupWizard() {
                   className={cn(
                     'flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium transition-colors',
                     i === step
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : i < step
-                        ? 'bg-green-900 text-green-300'
-                        : 'bg-slate-700 text-slate-400'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-muted text-muted-foreground'
                   )}
                 >
                   {stepIcons[i]}
@@ -271,7 +298,7 @@ export function SetupWizard() {
                 <span
                   className={cn(
                     'text-sm hidden sm:inline',
-                    i === step ? 'text-white' : 'text-slate-500'
+                    i === step ? 'text-foreground' : 'text-muted-foreground'
                   )}
                 >
                   {label}
@@ -289,10 +316,7 @@ export function SetupWizard() {
         <div className="px-6 pb-6">
           <div className="flex justify-between">
             {step > 0 ? (
-              <Button
-                variant="outline"
-                onClick={() => setStep(step - 1)}
-              >
+              <Button variant="outline" onClick={() => setStep(step - 1)}>
                 Back
               </Button>
             ) : (
@@ -300,7 +324,7 @@ export function SetupWizard() {
             )}
             {step < STEPS.length - 1 && (
               <Button
-                variant="primary"
+                variant="default"
                 onClick={handleNext}
                 disabled={!canAdvance()}
               >
