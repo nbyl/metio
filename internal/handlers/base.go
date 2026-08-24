@@ -66,6 +66,10 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	r.HandleFunc("/auth/callback", callbackHandler).Methods("GET")
 	r.HandleFunc("/events", eventsHandler).Methods("POST")
 	r.HandleFunc("/api/auth/me", meHandler).Methods("GET")
+	r.HandleFunc("/api/backups/cleanup", HandleBackupCleanup).Methods("POST")
+
+	r.HandleFunc("/api/servers/{id}/backups/report", servers.HandleBackupReport).Methods("POST")
+	r.HandleFunc("/api/servers/{id}/backups", servers.ListServerBackups).Methods("GET")
 
 	if provisioningSvc != nil && cfg != nil && cfg.OperationMode == "cloudtasks" {
 		tasks.ProvisioningService = provisioningSvc
@@ -74,6 +78,8 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 
 	apiRouter := r.PathPrefix("/api").Subrouter()
 	apiRouter.Use(apiAuthMiddleware)
+
+	apiRouter.HandleFunc("/backups", servers.ListAllBackups).Methods("GET")
 
 	servers.RegisterRoutes(apiRouter)
 

@@ -1,6 +1,9 @@
 package db
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type DB interface {
 	UpdateStatus(ctx context.Context, instanceName string, status Status) error
@@ -27,4 +30,10 @@ type DB interface {
 	GetPulumiSettings(ctx context.Context) (*PulumiSettings, error)
 	SetPulumiSettings(ctx context.Context, settings *PulumiSettings) error
 	ListAllServerIDs(ctx context.Context) ([]string, error)
+	UpsertBackup(ctx context.Context, backup *Backup) error
+	GetBackup(ctx context.Context, serverID, snapshotID string) (*Backup, error)
+	ListBackupsByServer(ctx context.Context, serverID string) ([]*Backup, error)
+	ListBackups(ctx context.Context) ([]*Backup, error)
+	MarkServerBackupsDeleted(ctx context.Context, serverID string, sourceConfig *BackupSourceConfig, deletedAt time.Time, retentionUntil time.Time) error
+	DeleteServerBackups(ctx context.Context, serverID string) error
 }

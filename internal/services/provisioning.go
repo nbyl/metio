@@ -40,28 +40,30 @@ var errOperationInProgress = errors.New("operation already in progress")
 var errNoOperationInProgress = errors.New("no operation in progress")
 
 type ProvisioningService struct {
-	workspaceManager  pulumi.WorkspaceManagerInterface
-	db                db.DB
-	backupCoord       *BackupCoordinator
-	controllerVersion string
-	executor          OperationExecutor
-	retryAttempts     int
-	retryDelay        time.Duration
+	workspaceManager    pulumi.WorkspaceManagerInterface
+	db                  db.DB
+	backupCoord         *BackupCoordinator
+	controllerVersion   string
+	executor            OperationExecutor
+	retryAttempts       int
+	retryDelay          time.Duration
+	backupRetentionDays int
 }
 
 func (s *ProvisioningService) OperationTimeout() time.Duration {
 	return s.executor.OperationTimeout()
 }
 
-func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB, controllerVersion string, executor OperationExecutor) *ProvisioningService {
+func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, dbConn db.DB, controllerVersion string, executor OperationExecutor, backupRetentionDays int) *ProvisioningService {
 	return &ProvisioningService{
-		workspaceManager:  workspaceManager,
-		db:                dbConn,
-		backupCoord:       NewBackupCoordinator(dbConn),
-		controllerVersion: controllerVersion,
-		executor:          executor,
-		retryAttempts:     3,
-		retryDelay:        5 * time.Second,
+		workspaceManager:    workspaceManager,
+		db:                  dbConn,
+		backupCoord:         NewBackupCoordinator(dbConn),
+		controllerVersion:   controllerVersion,
+		executor:            executor,
+		retryAttempts:       3,
+		retryDelay:          5 * time.Second,
+		backupRetentionDays: backupRetentionDays,
 	}
 }
 
@@ -297,8 +299,29 @@ func (s *ProvisioningService) runDestroy(opCtx context.Context, status *db.Provi
 	status.State = db.ProvisioningStateCompleted
 	s.updateStatus(opCtx, serverID, status)
 
+	config, err := s.db.GetServerConfig(opCtx, serverID)
+	if err != nil {
+		log.Printf("Failed to load server config for %s before deletion; backups will be stamped without source config: %v", serverID, err)
+		config = nil
+	}
+
 	if err := s.db.DeleteServerConfig(opCtx, serverID); err != nil {
 		log.Printf("Failed to delete server config for %s: %v", serverID, err)
+	} else {
+		var sourceConfig *db.BackupSourceConfig
+		if config != nil {
+			sourceConfig = &db.BackupSourceConfig{
+				Region:           config.Region,
+				Zone:             config.Zone,
+				MachineType:      config.MachineType,
+				DiskSizeGB:       config.DiskSizeGB,
+				MinecraftVersion: config.MinecraftVersion,
+			}
+		}
+		retentionUntil := time.Now().AddDate(0, 0, s.backupRetentionDays)
+		if err := s.db.MarkServerBackupsDeleted(opCtx, serverID, sourceConfig, time.Now(), retentionUntil); err != nil {
+			log.Printf("Failed to mark backups deleted for %s: %v", serverID, err)
+		}
 	}
 
 	return nil

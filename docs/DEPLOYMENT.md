@@ -382,6 +382,27 @@ Retention:
   **30 days**) after deletion, controlled by the controller. Configure it at deploy time via
   `backup_deleted_server_retention_days` in `deploy/metio.auto.tfvars`.
 
+#### Deleted-server backup cleanup
+
+When a server is destroyed, its catalog records are stamped with `server_deleted_at`,
+`retention_until`, and a snapshot of the source configuration (region, zone, machine type, disk
+size, Minecraft version) so the deployment can later be recreated from any preserved backup. The
+records stay visible through the global backup API (`GET /api/backups`) until retention expires.
+
+A Cloud Scheduler job (`{environment}-backup-cleanup`) periodically POSTs to the controller's
+`/api/backups/cleanup` endpoint using OIDC (the controller service account, audience set to the
+controller URI). Each invocation sweeps the catalog for deleted servers whose retention has fully
+expired and, per server:
+
+1. Deletes all objects under `servers/{server-id}/restic/` in the central bucket (paginated,
+   tolerant of missing prefixes).
+2. Removes the server's catalog records and indexes — only after step 1 succeeded.
+
+Failures are logged and retried on the next scheduled run; partially deleted prefixes resume from
+where they stopped. The schedule defaults to hourly and is configurable via the
+`backup_cleanup_schedule` Terraform variable (cron expression). The endpoint returns
+501 outside cloud deployments (`OperationMode != cloudtasks`) since there is nothing to clean up.
+
 Backups run on the standard hourly schedule from `mc-backup`. A manual world save can be triggered
 from the dashboard with the **Save World** button.
 
@@ -419,10 +440,22 @@ provisioning page). The `mc-backup` image that renders the schedule/retention co
 Metio image from `cmd/mc-backup/`, which wraps the upstream
 [`itzg/mc-backup`](https://github.com/itzg/docker-mc-backup) and adds a post-backup hook — a Go
 binary at `cmd/mc-backup/post-backup/` — that writes a
-`/manifests/manifest-<timestamp>.json` file (timestamp, Restic snapshot id, size) after every
-successful backup. Each backup produces its own timestamped manifest, so a slow ingestion process
-never misses a snapshot because the file was overwritten. The machine-agent mounts the same directory
-to surface the backup history on the dashboard.
+`/manifests/manifest-<timestamp>.json` file (timestamp, snapshot id, server id, repository prefix,
+duration, file count, repository size, status) after every successful backup. Each backup produces
+its own timestamped manifest, so a slow ingestion process never misses a snapshot because the file
+was overwritten. Failed backups write no manifest, so the catalog keeps reporting the last
+known-good backup.
+
+The machine-agent mounts the same directory and relays each manifest to the controller's backup
+report API (`POST /api/servers/{id}/backups/report`, see ADR-0004). It follows an at-least-once
+strategy:
+
+- Manifests are **deleted only after the controller acknowledged** them (any 2xx response), so
+  controller outages or agent restarts never lose a record; pending files are simply retried on the
+  next tick.
+- Duplicate deliveries are harmless: the controller deduplicates reports by server and snapshot ID.
+- Unparsable manifests are quarantined as `*.invalid`, manifests the controller permanently rejects
+  (HTTP 400) as `*.rejected`; quarantined files stay on disk for inspection and are not retried.
 
 #### Manual Restic access
 

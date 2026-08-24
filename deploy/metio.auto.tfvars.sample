@@ -18,3 +18,7 @@ admin_users = "your-email@example.com"
 #
 # How long backups are kept after a server is deleted (ADR-0004). Defaults to 30 days.
 # backup_deleted_server_retention_days = 30
+#
+# Cloud Scheduler cron expression for the expired deleted-server backup cleanup
+# sweep (ADR-0004). Defaults to hourly.
+# backup_cleanup_schedule = "0 * * * *"

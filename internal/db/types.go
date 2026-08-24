@@ -5,13 +5,17 @@ import "github.com/nbyl/metio/internal/dbtypes"
 type ServerState = dbtypes.ServerState
 
 const (
-	ServerStateStopped  = dbtypes.ServerStateStopped
-	ServerStateStarting = dbtypes.ServerStateStarting
-	ServerStateRunning  = dbtypes.ServerStateRunning
-	ServerStateStopping = dbtypes.ServerStateStopping
+	ServerStateStopped    = dbtypes.ServerStateStopped
+	ServerStateStarting   = dbtypes.ServerStateStarting
+	ServerStateRunning    = dbtypes.ServerStateRunning
+	ServerStateStopping   = dbtypes.ServerStateStopping
+	BackupStatusCompleted = dbtypes.BackupStatusCompleted
 )
 
 type Players = dbtypes.Players
 type Status = dbtypes.Status
 type WhitelistEntry = dbtypes.WhitelistEntry
 type WhitelistConfig = dbtypes.WhitelistConfig
+type Backup = dbtypes.Backup
+type BackupStatus = dbtypes.BackupStatus
+type BackupSourceConfig = dbtypes.BackupSourceConfig
