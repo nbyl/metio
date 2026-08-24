@@ -13,30 +13,30 @@ import (
 )
 
 type reportRequest struct {
-	SnapshotID      string  `json:"snapshotId"`
+	SnapshotID       string `json:"snapshotId"`
 	RepositoryPrefix string `json:"repositoryPrefix"`
-	DurationSeconds int64   `json:"durationSeconds"`
-	FileCount       int64   `json:"fileCount"`
-	RepositorySize  int64   `json:"repositorySize"`
+	DurationSeconds  int64  `json:"durationSeconds"`
+	FileCount        int64  `json:"fileCount"`
+	RepositorySize   int64  `json:"repositorySize"`
 	MinecraftVersion string `json:"minecraftVersion"`
-	Status          string  `json:"status"`
+	Status           string `json:"status"`
 }
 
 type backupResponse struct {
-	ID               string                       `json:"id"`
-	ServerID         string                       `json:"server_id"`
-	ServerName       string                       `json:"server_name"`
-	SnapshotID       string                       `json:"snapshot_id"`
-	RepositoryPrefix string                       `json:"repository_prefix"`
-	CreatedAt        string                       `json:"created_at"`
-	DurationSeconds  int64                        `json:"duration_seconds"`
-	FileCount        int64                        `json:"file_count"`
-	RepositorySize   int64                        `json:"repository_size"`
-	MinecraftVersion string                       `json:"minecraft_version"`
-	Status           string                       `json:"status"`
-	ServerDeletedAt  string                       `json:"server_deleted_at,omitempty"`
-	RetentionUntil   string                       `json:"retention_until,omitempty"`
-	SourceConfig     *backupSourceConfigResponse  `json:"source_config,omitempty"`
+	ID               string                      `json:"id"`
+	ServerID         string                      `json:"server_id"`
+	ServerName       string                      `json:"server_name"`
+	SnapshotID       string                      `json:"snapshot_id"`
+	RepositoryPrefix string                      `json:"repository_prefix"`
+	CreatedAt        string                      `json:"created_at"`
+	DurationSeconds  int64                       `json:"duration_seconds"`
+	FileCount        int64                       `json:"file_count"`
+	RepositorySize   int64                       `json:"repository_size"`
+	MinecraftVersion string                      `json:"minecraft_version"`
+	Status           string                      `json:"status"`
+	ServerDeletedAt  string                      `json:"server_deleted_at,omitempty"`
+	RetentionUntil   string                      `json:"retention_until,omitempty"`
+	SourceConfig     *backupSourceConfigResponse `json:"source_config,omitempty"`
 }
 
 type backupSourceConfigResponse struct {
