@@ -83,3 +83,9 @@ variable "backup_deleted_server_retention_days" {
     error_message = "backup_deleted_server_retention_days must be a positive number of days."
   }
 }
+
+variable "backup_cleanup_schedule" {
+  description = "Cloud Scheduler cron expression driving the controller's backup cleanup sweep (POST /api/backups/cleanup)."
+  type        = string
+  default     = "0 * * * *"
+}

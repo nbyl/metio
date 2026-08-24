@@ -63,14 +63,18 @@ function WarningStep({
             All world data and configurations
           </li>
           <li className="flex items-center gap-3 text-sm text-foreground">
-            <Database className="h-4 w-4 text-muted-foreground" />
-            Backup bucket and backups
-          </li>
-          <li className="flex items-center gap-3 text-sm text-foreground">
             <Globe className="h-4 w-4 text-muted-foreground" />
             Static IP address
           </li>
         </ul>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
+        <Database className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">
+          Backups in the central catalog are preserved and expire automatically
+          once their retention period ends.
+        </p>
       </div>
 
       <AlertDialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0">
