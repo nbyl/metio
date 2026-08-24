@@ -15,3 +15,5 @@ type Players = dbtypes.Players
 type Status = dbtypes.Status
 type WhitelistEntry = dbtypes.WhitelistEntry
 type WhitelistConfig = dbtypes.WhitelistConfig
+type Backup = dbtypes.Backup
+type BackupStatus = dbtypes.BackupStatus

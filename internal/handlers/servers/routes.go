@@ -22,6 +22,8 @@ func RegisterRoutes(api *mux.Router) {
 	s.HandleFunc("/{id}/shutdown/schedule", CancelScheduledShutdownByID).Methods("DELETE")
 	s.HandleFunc("/{id}/settings/backup", GetBackupSettingsByID).Methods("GET")
 	s.HandleFunc("/{id}/settings/backup", UpdateBackupSettingsByID).Methods("PUT")
+	s.HandleFunc("/{id}/backups/report", HandleBackupReport).Methods("POST")
+	s.HandleFunc("/{id}/backups", ListServerBackups).Methods("GET")
 
 	api.HandleFunc("/options", ListOptions).Methods("GET")
 }

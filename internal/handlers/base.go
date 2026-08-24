@@ -67,6 +67,9 @@ func New(ps servers.ProvisioningServiceInterface, vs setup.ValidationServiceInte
 	r.HandleFunc("/events", eventsHandler).Methods("POST")
 	r.HandleFunc("/api/auth/me", meHandler).Methods("GET")
 
+	r.HandleFunc("/api/servers/{id}/backups/report", servers.HandleBackupReport).Methods("POST")
+	r.HandleFunc("/api/servers/{id}/backups", servers.ListServerBackups).Methods("GET")
+
 	if provisioningSvc != nil && cfg != nil && cfg.OperationMode == "cloudtasks" {
 		tasks.ProvisioningService = provisioningSvc
 		tasks.RegisterTaskRoutes(r)

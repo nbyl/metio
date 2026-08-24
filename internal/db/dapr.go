@@ -542,6 +542,229 @@ func (d *DaprDB) SetPulumiSettings(ctx context.Context, settings *PulumiSettings
 	return d.client.Save(ctx, d.stateStoreName, "pulumisettings", data)
 }
 
+type backupServerIndex struct {
+	SnapshotIDs []string `json:"snapshot_ids"`
+}
+
+type backupGlobalIndex struct {
+	RecordIDs []string `json:"record_ids"`
+}
+
+func backupKey(serverID, snapshotID string) string {
+	return fmt.Sprintf("backup:%s:%s", serverID, snapshotID)
+}
+
+func backupRecordID(serverID, snapshotID string) string {
+	return fmt.Sprintf("%s:%s", serverID, snapshotID)
+}
+
+func (d *DaprDB) UpsertBackup(ctx context.Context, backup *Backup) error {
+	data, err := json.Marshal(backup)
+	if err != nil {
+		return err
+	}
+
+	recordKey := backupKey(backup.ServerID, backup.SnapshotID)
+	if err := d.client.Save(ctx, d.stateStoreName, recordKey, data); err != nil {
+		return err
+	}
+
+	// Update per-server index
+	idxKey := fmt.Sprintf("backupidx:%s", backup.ServerID)
+	var sidx backupServerIndex
+	item, err := d.client.Get(ctx, d.stateStoreName, idxKey)
+	if err != nil {
+		return err
+	}
+	if item != nil && item.Value != nil {
+		if err := json.Unmarshal(item.Value, &sidx); err != nil {
+			return err
+		}
+	}
+
+	found := false
+	for _, sid := range sidx.SnapshotIDs {
+		if sid == backup.SnapshotID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		sidx.SnapshotIDs = append(sidx.SnapshotIDs, backup.SnapshotID)
+		data, err := json.Marshal(sidx)
+		if err != nil {
+			return err
+		}
+		if err := d.client.Save(ctx, d.stateStoreName, idxKey, data); err != nil {
+			return err
+		}
+	}
+
+	// Update global index
+	gidxKey := "backupindex"
+	var gidx backupGlobalIndex
+	gitem, err := d.client.Get(ctx, d.stateStoreName, gidxKey)
+	if err != nil {
+		return err
+	}
+	if gitem != nil && gitem.Value != nil {
+		if err := json.Unmarshal(gitem.Value, &gidx); err != nil {
+			return err
+		}
+	}
+
+	gFound := false
+	for _, rid := range gidx.RecordIDs {
+		if rid == backupKey(backup.ServerID, backup.SnapshotID) {
+			gFound = true
+			break
+		}
+	}
+	if !gFound {
+		gidx.RecordIDs = append(gidx.RecordIDs, backupKey(backup.ServerID, backup.SnapshotID))
+		data, err := json.Marshal(gidx)
+		if err != nil {
+			return err
+		}
+		if err := d.client.Save(ctx, d.stateStoreName, gidxKey, data); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("DaprDB: upserted backup %s for server %s", backup.SnapshotID, backup.ServerID)
+	return nil
+}
+
+func (d *DaprDB) GetBackup(ctx context.Context, serverID, snapshotID string) (*Backup, error) {
+	recordKey := backupKey(serverID, snapshotID)
+	item, err := d.client.Get(ctx, d.stateStoreName, recordKey)
+	if err != nil {
+		return nil, err
+	}
+	if item == nil || item.Value == nil {
+		return nil, fmt.Errorf("%w: backup not found for server %s snapshot %s", ErrNotFound, serverID, snapshotID)
+	}
+
+	var backup Backup
+	if err := json.Unmarshal(item.Value, &backup); err != nil {
+		return nil, err
+	}
+	backup.ID = backupRecordID(serverID, snapshotID)
+	return &backup, nil
+}
+
+func (d *DaprDB) ListBackupsByServer(ctx context.Context, serverID string) ([]*Backup, error) {
+	idxKey := fmt.Sprintf("backupidx:%s", serverID)
+	item, err := d.client.Get(ctx, d.stateStoreName, idxKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var snapshotIDs []string
+	if item != nil && item.Value != nil {
+		var sidx backupServerIndex
+		if err := json.Unmarshal(item.Value, &sidx); err != nil {
+			return nil, err
+		}
+		snapshotIDs = sidx.SnapshotIDs
+	}
+
+	if len(snapshotIDs) == 0 {
+		return []*Backup{}, nil
+	}
+
+	keys := make([]string, len(snapshotIDs))
+	for i, sid := range snapshotIDs {
+		keys[i] = backupKey(serverID, sid)
+	}
+
+	items, err := d.client.GetBulk(ctx, d.stateStoreName, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	var backups []*Backup
+	for _, item := range items {
+		if item.Error != "" {
+			continue
+		}
+		if item.Value == nil {
+			continue
+		}
+		var backup Backup
+		if err := json.Unmarshal(item.Value, &backup); err != nil {
+			continue
+		}
+		backup.ID = backupRecordID(serverID, backup.SnapshotID)
+		backups = append(backups, &backup)
+	}
+
+	return backups, nil
+}
+
+func (d *DaprDB) ListBackups(ctx context.Context) ([]*Backup, error) {
+	gitem, err := d.client.Get(ctx, d.stateStoreName, "backupindex")
+	if err != nil {
+		return nil, err
+	}
+
+	var gidx backupGlobalIndex
+	if gitem != nil && gitem.Value != nil {
+		if err := json.Unmarshal(gitem.Value, &gidx); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(gidx.RecordIDs) == 0 {
+		return []*Backup{}, nil
+	}
+
+	keys := make([]string, len(gidx.RecordIDs))
+	copy(keys, gidx.RecordIDs)
+
+	items, err := d.client.GetBulk(ctx, d.stateStoreName, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	var backups []*Backup
+	for _, item := range items {
+		if item.Error != "" {
+			continue
+		}
+		if item.Value == nil {
+			continue
+		}
+		var backup Backup
+		if err := json.Unmarshal(item.Value, &backup); err != nil {
+			continue
+		}
+		if backup.ID == "" {
+			backup.ID = backupRecordIDFromKey(item.Key)
+		}
+		backups = append(backups, &backup)
+	}
+
+	return backups, nil
+}
+
+func backupRecordIDFromKey(key string) string {
+	_, suffix, _ := strings.Cut(key, ":")
+	return suffix
+}
+
 func (d *DaprDB) ListAllServerIDs(ctx context.Context) ([]string, error) {
 	return d.getServerIndex(ctx)
+}
+
+func (d *DaprDB) MarkServerBackupsDeleted(ctx context.Context, serverID string, deletedAt time.Time, retentionUntil time.Time) error {
+	markerKey := fmt.Sprintf("backupdeleted:%s", serverID)
+	data, err := json.Marshal(map[string]time.Time{
+		"deleted_at":    deletedAt,
+		"retention_until": retentionUntil,
+	})
+	if err != nil {
+		return err
+	}
+	return d.client.Save(ctx, d.stateStoreName, markerKey, data)
 }

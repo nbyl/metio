@@ -299,6 +299,10 @@ func (s *ProvisioningService) runDestroy(opCtx context.Context, status *db.Provi
 
 	if err := s.db.DeleteServerConfig(opCtx, serverID); err != nil {
 		log.Printf("Failed to delete server config for %s: %v", serverID, err)
+	} else {
+		if err := s.db.MarkServerBackupsDeleted(opCtx, serverID, time.Now(), time.Now().AddDate(0, 0, 30)); err != nil {
+			log.Printf("Failed to mark backups deleted for %s: %v", serverID, err)
+		}
 	}
 
 	return nil
