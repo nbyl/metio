@@ -56,3 +56,30 @@ type WhitelistEntry struct {
 type WhitelistConfig struct {
 	Enabled bool `json:"enabled"`
 }
+
+type BackupStatus string
+
+const (
+	BackupStatusCompleted BackupStatus = "COMPLETED"
+	BackupStatusFailed    BackupStatus = "FAILED"
+)
+
+func (b BackupStatus) String() string {
+	return string(b)
+}
+
+type Backup struct {
+	ID               string       `json:"id"`
+	ServerID         string       `json:"server_id"`
+	ServerName       string       `json:"server_name"`
+	SnapshotID       string       `json:"snapshot_id"`
+	RepositoryPrefix string       `json:"repository_prefix"`
+	CreatedAt        time.Time    `json:"created_at"`
+	DurationSeconds  int64        `json:"duration_seconds"`
+	FileCount        int64        `json:"file_count"`
+	RepositorySize   int64        `json:"repository_size"`
+	MinecraftVersion string       `json:"minecraft_version"`
+	Status           BackupStatus `json:"status"`
+	ServerDeletedAt  *time.Time   `json:"server_deleted_at,omitempty"`
+	RetentionUntil   *time.Time   `json:"retention_until,omitempty"`
+}
