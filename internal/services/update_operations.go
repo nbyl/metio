@@ -88,6 +88,24 @@ func (b *BackupCoordinator) TriggerWorldSave(ctx context.Context, instanceName s
 	return nil
 }
 
+func (b *BackupCoordinator) TriggerRestore(ctx context.Context, instanceName, snapshotID string) error {
+	statusEntry, err := b.dbConn.GetStatus(ctx, instanceName)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return fmt.Errorf("no status document for instance %s — cannot trigger restore", instanceName)
+		}
+		return fmt.Errorf("failed to get server status for restore: %w", err)
+	}
+	statusEntry.PendingCommand = "restore"
+	statusEntry.PendingCommandArgs = map[string]string{"snapshotId": snapshotID}
+	statusEntry.PendingCommandResult = ""
+	if err := b.dbConn.UpdateStatus(ctx, instanceName, statusEntry); err != nil {
+		return fmt.Errorf("failed to write restore command: %w", err)
+	}
+	log.Printf("Triggered restore of snapshot %s for instance %s", snapshotID, instanceName)
+	return nil
+}
+
 func (b *BackupCoordinator) WaitForCommandAck(ctx context.Context, instanceName string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	pollInterval := 2 * time.Second
