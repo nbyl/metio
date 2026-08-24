@@ -9,7 +9,7 @@ COPY web/ ./web/
 RUN cd web && npm run build
 
 # Stage 2: Go build
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /app
 RUN mkdir /app/build
 
