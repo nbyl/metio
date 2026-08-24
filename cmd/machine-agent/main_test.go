@@ -53,6 +53,11 @@ func (m *MockAgentClient) StopInstance(ctx context.Context, project, zone string
 	return args.Error(0)
 }
 
+func (m *MockAgentClient) SubmitBackupReport(ctx context.Context, serverID string, report agentclient.BackupReport) error {
+	args := m.Called(ctx, serverID, report)
+	return args.Error(0)
+}
+
 func TestRunStatusUpdate(t *testing.T) {
 	mockClient := new(MockAgentClient)
 	oldGetFunc := getMinecraftPlayerCountFunc
