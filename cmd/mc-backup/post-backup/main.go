@@ -5,12 +5,13 @@
 //	$1 = backup exit code
 //	$2 = path to the backup tool's output log
 //
-// On success it atomically writes $MANIFEST_DIR/manifest-<timestamp>.json
-// describing the most recent backup; each backup produces its own file so a
+// On success it atomically writes a timestamped manifest describing the most
+// recent backup into $MANIFEST_DIR; each backup produces its own file so a
 // slow ingestion process can never miss a snapshot by a file being
-// overwritten. The machine-agent mounts the same directory at /manifests. A
-// failed backup leaves the previous manifests in place so the dashboard keeps
-// reporting the last known-good backup.
+// overwritten. The machine-agent mounts the same directory at /manifests and
+// relays manifests to the controller's backup report API. A failed backup
+// leaves the previous manifests in place so the dashboard keeps reporting the
+// last known-good backup.
 package main
 
 import (
@@ -19,36 +20,34 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/nbyl/metio/internal/backupmanifest"
 )
 
 const (
-	manifestPrefix     = "mc-backup-manifest: "
-	defaultManifestDir = "/manifests"
-	resticTimeout      = 60 * time.Second
+	manifestPrefix = "mc-backup-manifest: "
+	resticTimeout  = 60 * time.Second
 )
 
 var snapshotSavedRegex = regexp.MustCompile(`snapshot ([a-f0-9]{8,}) saved`)
 
-// Manifest is the JSON document written to a timestamped file in
-// $MANIFEST_DIR (e.g. manifest-20260817T103000Z.json).
-type Manifest struct {
-	Timestamp  string `json:"timestamp"`
-	SnapshotID string `json:"snapshot_id"`
-	SizeBytes  int64  `json:"size_bytes"`
-	Method     string `json:"method"`
+// resticSummary mirrors the summary object restic attaches to snapshots
+// (restic >= 0.16 SnapshotSummary schema).
+type resticSummary struct {
+	BackupStart         string `json:"backup_start"`
+	BackupEnd           string `json:"backup_end"`
+	TotalFilesProcessed int64  `json:"total_files_processed"`
+	TotalBytesProcessed int64  `json:"total_bytes_processed"`
 }
 
 // resticSnapshot is a single entry in `restic snapshots --json`.
 type resticSnapshot struct {
-	ID      string `json:"id"`
-	Time    string `json:"time"`
-	Summary struct {
-		TotalSize int64 `json:"total_size"`
-	} `json:"summary"`
+	ID      string        `json:"id"`
+	Time    string        `json:"time"`
+	Summary resticSummary `json:"summary"`
 }
 
 // runRestic executes a restic command and returns its combined output. The
@@ -83,9 +82,17 @@ func run(args []string) int {
 		return 0
 	}
 
+	serverID := os.Getenv("METIO_SERVER_ID")
+	if serverID == "" {
+		fmt.Printf("%sMETIO_SERVER_ID not set; cannot build manifest\n", manifestPrefix)
+		return 1
+	}
+
+	ctx := context.Background()
+
 	snapshotID := parseSnapshotIDFromLog(logPath)
 
-	snap, _ := latestSnapshot(context.Background())
+	snap, _ := latestSnapshot(ctx)
 	if snapshotID == "" && snap != nil {
 		snapshotID = snap.ID
 	}
@@ -95,29 +102,44 @@ func run(args []string) int {
 		return 0
 	}
 
-	manifest := Manifest{
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		SnapshotID: snapshotID,
-		Method:     backupMethod(),
+	manifest := backupmanifest.Manifest{
+		Timestamp:        time.Now().UTC().Format(time.RFC3339),
+		SnapshotID:       snapshotID,
+		ServerID:         serverID,
+		RepositoryPrefix: fmt.Sprintf("servers/%s/restic/", serverID),
+		Method:           backupMethod(),
+		Status:           backupmanifest.StatusCompleted,
 	}
 	if snap != nil {
 		if snap.Time != "" {
 			manifest.Timestamp = snap.Time
 		}
-		manifest.SizeBytes = snap.Summary.TotalSize
+		manifest.FileCount = snap.Summary.TotalFilesProcessed
+		manifest.DurationSeconds = snapshotDurationSeconds(snap.Summary)
+
+		repoSize, err := repositorySize(ctx)
+		switch {
+		case err == nil:
+			manifest.RepositorySize = repoSize
+		case snap.Summary.TotalBytesProcessed > 0:
+			fmt.Printf("%srepository size lookup failed (%v); falling back to processed bytes\n", manifestPrefix, err)
+			manifest.RepositorySize = snap.Summary.TotalBytesProcessed
+		default:
+			fmt.Printf("%srepository size lookup failed (%v); reporting 0\n", manifestPrefix, err)
+		}
 	}
 
 	manifestDir := os.Getenv("MANIFEST_DIR")
 	if manifestDir == "" {
-		manifestDir = defaultManifestDir
+		manifestDir = backupmanifest.DefaultDir
 	}
-	filename, err := writeManifest(manifestDir, manifest)
+	filename, err := backupmanifest.Save(manifestDir, manifest)
 	if err != nil {
 		fmt.Printf("%sfailed to write manifest: %v\n", manifestPrefix, err)
 		return 1
 	}
 
-	fmt.Printf("%swrote %s (snapshot %s)\n", manifestPrefix, filepath.Join(manifestDir, filename), manifest.SnapshotID)
+	fmt.Printf("%swrote %s (snapshot %s)\n", manifestPrefix, manifestDir+"/"+filename, manifest.SnapshotID)
 	return 0
 }
 
@@ -157,6 +179,39 @@ func latestSnapshot(ctx context.Context) (*resticSnapshot, error) {
 	return &snaps[0], nil
 }
 
+// repositorySize reports the deduplicated size of the repository contents via
+// `restic stats --mode raw-data`, which is what the dashboard shows as
+// repository size. The result covers the whole repository, not just the
+// latest snapshot, matching how restic deduplicates data across backups.
+func repositorySize(ctx context.Context) (int64, error) {
+	out, err := runRestic(ctx, "stats", "--json", "--mode", "raw-data", "--tag", tagFilter(), "latest")
+	if err != nil {
+		return 0, err
+	}
+	var stats struct {
+		TotalSize int64 `json:"total_size"`
+	}
+	if err := json.Unmarshal(out, &stats); err != nil {
+		return 0, err
+	}
+	return stats.TotalSize, nil
+}
+
+// snapshotDurationSeconds derives the backup duration from the summary's
+// RFC3339 timestamps, falling back to 0 when either timestamp is missing or
+// unparsable so a schema drift can never fail the hook.
+func snapshotDurationSeconds(summary resticSummary) int64 {
+	start, err := time.Parse(time.RFC3339, summary.BackupStart)
+	if err != nil {
+		return 0
+	}
+	end, err := time.Parse(time.RFC3339, summary.BackupEnd)
+	if err != nil || end.Before(start) {
+		return 0
+	}
+	return int64(end.Sub(start).Seconds())
+}
+
 // tagFilter builds the comma-joined restic --tag filter, mirroring how the
 // upstream backup-loop constructs restic_tags_filter.
 func tagFilter() string {
@@ -175,39 +230,4 @@ func backupMethod() string {
 		return m
 	}
 	return "restic"
-}
-
-// manifestFilename renders a filename-safe timestamp (manifest-<UTC time>.json)
-// from an RFC3339 manifest timestamp, falling back to the current time when the
-// string cannot be parsed. Each successful backup gets a distinct name so
-// multiple snapshot manifests accumulate instead of overwriting each other.
-func manifestFilename(ts string) string {
-	t := time.Now().UTC()
-	if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
-		t = parsed.UTC()
-	}
-	return fmt.Sprintf("manifest-%s.json", t.Format("20060102T150405Z"))
-}
-
-// writeManifest atomically writes the manifest to dir/<timestamped file>. It
-// returns the filename written.
-func writeManifest(dir string, m Manifest) (string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return "", err
-	}
-	data = append(data, '\n')
-
-	filename := manifestFilename(m.Timestamp)
-	tmp := filepath.Join(dir, filename+".tmp")
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return "", err
-	}
-	if err := os.Rename(tmp, filepath.Join(dir, filename)); err != nil {
-		return "", err
-	}
-	return filename, nil
 }

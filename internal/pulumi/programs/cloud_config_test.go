@@ -83,6 +83,9 @@ func TestRenderCloudConfig_CentralBackupSettings(t *testing.T) {
 	assert.Contains(t, result, "RESTIC_REPOSITORY="+repo)
 	assert.Contains(t, result, "PRUNE_RESTIC_RETENTION=\"--keep-within 90d\"")
 	assert.Contains(t, result, "RESTIC_PASSWORD=deployment-wide-restic-password")
+	// The backup hook needs the server ID to stamp manifests for the
+	// machine-agent's backup reporting (ADR-0004).
+	assert.Contains(t, result, "METIO_SERVER_ID=0dcbaca4-2a26-489c-b4a3-d2fad8bb6483")
 	assert.Contains(t, result, "RCON_PASSWORD="+cfg.RCONPassword)
 	assert.NotContains(t, result, "RESTIC_REPOSITORY=gs:"+cfg.BackupBucket+":/ \\")
 	assert.NotContains(t, result, "keep-within 3m")
