@@ -757,14 +757,95 @@ func (d *DaprDB) ListAllServerIDs(ctx context.Context) ([]string, error) {
 	return d.getServerIndex(ctx)
 }
 
-func (d *DaprDB) MarkServerBackupsDeleted(ctx context.Context, serverID string, deletedAt time.Time, retentionUntil time.Time) error {
-	markerKey := fmt.Sprintf("backupdeleted:%s", serverID)
-	data, err := json.Marshal(map[string]time.Time{
-		"deleted_at":    deletedAt,
-		"retention_until": retentionUntil,
-	})
+func (d *DaprDB) MarkServerBackupsDeleted(ctx context.Context, serverID string, sourceConfig *BackupSourceConfig, deletedAt time.Time, retentionUntil time.Time) error {
+	backups, err := d.ListBackupsByServer(ctx, serverID)
 	if err != nil {
 		return err
 	}
-	return d.client.Save(ctx, d.stateStoreName, markerKey, data)
+
+	for _, backup := range backups {
+		backup.ServerDeletedAt = &deletedAt
+		retention := retentionUntil
+		backup.RetentionUntil = &retention
+		if sourceConfig != nil {
+			sc := *sourceConfig
+			backup.SourceConfig = &sc
+		}
+		data, err := json.Marshal(backup)
+		if err != nil {
+			return err
+		}
+		if err := d.client.Save(ctx, d.stateStoreName, backupKey(serverID, backup.SnapshotID), data); err != nil {
+			return fmt.Errorf("failed to stamp deletion state on backup %s: %w", backup.SnapshotID, err)
+		}
+	}
+
+	markerKey := fmt.Sprintf("backupdeleted:%s", serverID)
+	if err := d.client.Delete(ctx, d.stateStoreName, markerKey); err != nil {
+		log.Printf("DaprDB: failed to remove legacy deleted-backup marker for %s (non-fatal): %v", serverID, err)
+	}
+
+	log.Printf("DaprDB: marked %d backups of server %s as deleted until %s", len(backups), serverID, retentionUntil.Format(time.RFC3339))
+	return nil
+}
+
+func (d *DaprDB) DeleteServerBackups(ctx context.Context, serverID string) error {
+	backups, err := d.ListBackupsByServer(ctx, serverID)
+	if err != nil {
+		return err
+	}
+
+	recordKeys := make([]string, 0, len(backups))
+	for _, backup := range backups {
+		recordKeys = append(recordKeys, backupKey(serverID, backup.SnapshotID))
+	}
+
+	for _, key := range recordKeys {
+		if err := d.client.Delete(ctx, d.stateStoreName, key); err != nil {
+			return fmt.Errorf("failed to delete backup record %s: %w", key, err)
+		}
+	}
+
+	idxKey := fmt.Sprintf("backupidx:%s", serverID)
+	if err := d.client.Delete(ctx, d.stateStoreName, idxKey); err != nil {
+		return fmt.Errorf("failed to delete backup index for server %s: %w", serverID, err)
+	}
+
+	gidxKey := "backupindex"
+	var gidx backupGlobalIndex
+	gitem, err := d.client.Get(ctx, d.stateStoreName, gidxKey)
+	if err != nil {
+		return err
+	}
+	if gitem != nil && gitem.Value != nil {
+		if err := json.Unmarshal(gitem.Value, &gidx); err != nil {
+			return err
+		}
+	}
+
+	removed := make(map[string]bool, len(recordKeys))
+	for _, key := range recordKeys {
+		removed[key] = true
+	}
+	remaining := make([]string, 0, len(gidx.RecordIDs))
+	for _, rid := range gidx.RecordIDs {
+		if !removed[rid] {
+			remaining = append(remaining, rid)
+		}
+	}
+
+	data, err := json.Marshal(backupGlobalIndex{RecordIDs: remaining})
+	if err != nil {
+		return err
+	}
+	if err := d.client.Save(ctx, d.stateStoreName, gidxKey, data); err != nil {
+		return err
+	}
+
+	if err := d.client.Delete(ctx, d.stateStoreName, fmt.Sprintf("backupdeleted:%s", serverID)); err != nil {
+		log.Printf("DaprDB: failed to remove legacy deleted-backup marker for %s (non-fatal): %v", serverID, err)
+	}
+
+	log.Printf("DaprDB: deleted %d backup records of server %s from catalog", len(recordKeys), serverID)
+	return nil
 }

@@ -181,7 +181,12 @@ func (m *MockDB) ListBackups(ctx context.Context) ([]*db.Backup, error) {
 	return args.Get(0).([]*db.Backup), args.Error(1)
 }
 
-func (m *MockDB) MarkServerBackupsDeleted(ctx context.Context, serverID string, deletedAt time.Time, retentionUntil time.Time) error {
-	args := m.Called(ctx, serverID, deletedAt, retentionUntil)
+func (m *MockDB) MarkServerBackupsDeleted(ctx context.Context, serverID string, sourceConfig *db.BackupSourceConfig, deletedAt time.Time, retentionUntil time.Time) error {
+	args := m.Called(ctx, serverID, sourceConfig, deletedAt, retentionUntil)
+	return args.Error(0)
+}
+
+func (m *MockDB) DeleteServerBackups(ctx context.Context, serverID string) error {
+	args := m.Called(ctx, serverID)
 	return args.Error(0)
 }

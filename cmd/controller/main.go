@@ -111,7 +111,7 @@ func initServices() (*servicesBundle, error) {
 		log.Print("Using goroutine executor")
 	}
 
-	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version, executor)
+	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version, executor, cfg.BackupDeletedServerRetentionDays)
 
 	suSvc, err := serviceusage.NewService(ctx)
 	if err != nil {

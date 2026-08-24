@@ -34,5 +34,6 @@ type DB interface {
 	GetBackup(ctx context.Context, serverID, snapshotID string) (*Backup, error)
 	ListBackupsByServer(ctx context.Context, serverID string) ([]*Backup, error)
 	ListBackups(ctx context.Context) ([]*Backup, error)
-	MarkServerBackupsDeleted(ctx context.Context, serverID string, deletedAt time.Time, retentionUntil time.Time) error
+	MarkServerBackupsDeleted(ctx context.Context, serverID string, sourceConfig *BackupSourceConfig, deletedAt time.Time, retentionUntil time.Time) error
+	DeleteServerBackups(ctx context.Context, serverID string) error
 }

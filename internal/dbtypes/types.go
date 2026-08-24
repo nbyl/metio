@@ -68,18 +68,27 @@ func (b BackupStatus) String() string {
 	return string(b)
 }
 
+type BackupSourceConfig struct {
+	Region           string `json:"region"`
+	Zone             string `json:"zone"`
+	MachineType      string `json:"machine_type"`
+	DiskSizeGB       int    `json:"disk_size_gb"`
+	MinecraftVersion string `json:"minecraft_version"`
+}
+
 type Backup struct {
-	ID               string       `json:"id"`
-	ServerID         string       `json:"server_id"`
-	ServerName       string       `json:"server_name"`
-	SnapshotID       string       `json:"snapshot_id"`
-	RepositoryPrefix string       `json:"repository_prefix"`
-	CreatedAt        time.Time    `json:"created_at"`
-	DurationSeconds  int64        `json:"duration_seconds"`
-	FileCount        int64        `json:"file_count"`
-	RepositorySize   int64        `json:"repository_size"`
-	MinecraftVersion string       `json:"minecraft_version"`
-	Status           BackupStatus `json:"status"`
-	ServerDeletedAt  *time.Time   `json:"server_deleted_at,omitempty"`
-	RetentionUntil   *time.Time   `json:"retention_until,omitempty"`
+	ID               string              `json:"id"`
+	ServerID         string              `json:"server_id"`
+	ServerName       string              `json:"server_name"`
+	SnapshotID       string              `json:"snapshot_id"`
+	RepositoryPrefix string              `json:"repository_prefix"`
+	CreatedAt        time.Time           `json:"created_at"`
+	DurationSeconds  int64               `json:"duration_seconds"`
+	FileCount        int64               `json:"file_count"`
+	RepositorySize   int64               `json:"repository_size"`
+	MinecraftVersion string              `json:"minecraft_version"`
+	Status           BackupStatus        `json:"status"`
+	ServerDeletedAt  *time.Time          `json:"server_deleted_at,omitempty"`
+	RetentionUntil   *time.Time          `json:"retention_until,omitempty"`
+	SourceConfig     *BackupSourceConfig `json:"source_config,omitempty"`
 }

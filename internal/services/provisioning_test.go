@@ -117,7 +117,7 @@ func TestNewProvisioningService(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
 
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, 30*time.Minute, service.OperationTimeout())
@@ -128,7 +128,7 @@ func TestNewProvisioningService(t *testing.T) {
 func TestCompleteStep(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 
 	status := &db.ProvisioningStatus{
 		Steps: []db.ProvisioningStep{
@@ -150,7 +150,7 @@ func TestCompleteStep(t *testing.T) {
 func TestCompleteStepNotFound(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -169,7 +169,7 @@ func TestCompleteStepNotFound(t *testing.T) {
 func TestUpdateStep(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -189,7 +189,7 @@ func TestUpdateStep(t *testing.T) {
 func TestHandleError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -213,7 +213,7 @@ func TestHandleError(t *testing.T) {
 func TestExecuteUpWithRetry_Success(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 	service.retryAttempts = 3
 	service.retryDelay = 1 * time.Millisecond
 
@@ -228,7 +228,7 @@ func TestExecuteUpWithRetry_Success(t *testing.T) {
 func TestExecuteUpWithRetry_NonRetryableError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 	service.retryAttempts = 3
 	service.retryDelay = 1 * time.Millisecond
 
@@ -243,7 +243,7 @@ func TestExecuteUpWithRetry_NonRetryableError(t *testing.T) {
 func TestExecuteUpWithRetry_RetryableError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 	service.retryAttempts = 3
 	service.retryDelay = 1 * time.Millisecond
 
@@ -259,7 +259,7 @@ func TestExecuteUpWithRetry_RetryableError(t *testing.T) {
 func TestUpdateStatus(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute))
+	service := NewProvisioningService(wm, mockDB, "test-version", NewGoroutineExecutor(30*time.Minute), 30)
 
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "test-server", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 
@@ -323,12 +323,13 @@ func newTestService() (*ProvisioningService, *testutil.MockWorkspaceManager, *Mo
 	mockWM := new(testutil.MockWorkspaceManager)
 	mockDB := new(MockDB)
 	svc := &ProvisioningService{
-		workspaceManager: mockWM,
-		db:               mockDB,
-		backupCoord:      NewBackupCoordinator(mockDB),
-		executor:         NewGoroutineExecutor(5 * time.Second),
-		retryAttempts:    1,
-		retryDelay:       1 * time.Millisecond,
+		workspaceManager:    mockWM,
+		db:                  mockDB,
+		backupCoord:         NewBackupCoordinator(mockDB),
+		executor:            NewGoroutineExecutor(5 * time.Second),
+		retryAttempts:       1,
+		retryDelay:          1 * time.Millisecond,
+		backupRetentionDays: 30,
 	}
 	return svc, mockWM, mockDB
 }
@@ -530,7 +531,7 @@ func TestUpdateServer_RecreateBackupFailure(t *testing.T) {
 func TestStampServerConfig_SetsVersionFields(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	svc := NewProvisioningService(wm, mockDB, "abc1234", NewGoroutineExecutor(30*time.Minute))
+	svc := NewProvisioningService(wm, mockDB, "abc1234", NewGoroutineExecutor(30*time.Minute), 30)
 
 	existingConfig := &db.ServerConfig{Name: "test-server", InfraVersion: 0}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existingConfig, nil)
@@ -546,7 +547,7 @@ func TestStampServerConfig_SetsVersionFields(t *testing.T) {
 func TestStampServerConfig_GetError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	svc := NewProvisioningService(wm, mockDB, "abc1234", NewGoroutineExecutor(30*time.Minute))
+	svc := NewProvisioningService(wm, mockDB, "abc1234", NewGoroutineExecutor(30*time.Minute), 30)
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(nil, errors.New("not found"))
 
@@ -558,7 +559,7 @@ func TestStampServerConfig_GetError(t *testing.T) {
 func TestStampServerConfig_UpdateError(t *testing.T) {
 	mockDB := new(MockDB)
 	wm, _ := pulumi.NewWorkspaceManager(context.Background(), "test-project", "test-bucket")
-	svc := NewProvisioningService(wm, mockDB, "abc1234", NewGoroutineExecutor(30*time.Minute))
+	svc := NewProvisioningService(wm, mockDB, "abc1234", NewGoroutineExecutor(30*time.Minute), 30)
 
 	existingConfig := &db.ServerConfig{Name: "test-server"}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(existingConfig, nil)
@@ -633,15 +634,56 @@ func TestDestroyServer_Success(t *testing.T) {
 	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name:             "test",
+		Region:           "europe-west6",
+		Zone:             "europe-west6-a",
+		MachineType:      "e2-small",
+		DiskSizeGB:       20,
+		MinecraftVersion: "1.21.1",
+	}, nil)
 	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
-	mockDB.On("MarkServerBackupsDeleted", mock.Anything, "srv1", mock.Anything, mock.Anything).Return(nil)
+	mockDB.On("MarkServerBackupsDeleted", mock.Anything, "srv1",
+		&db.BackupSourceConfig{
+			Region:           "europe-west6",
+			Zone:             "europe-west6-a",
+			MachineType:      "e2-small",
+			DiskSizeGB:       20,
+			MinecraftVersion: "1.21.1",
+		},
+		mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		sourceConfig := args.Get(2).(*db.BackupSourceConfig)
+		assert.Equal(t, "europe-west6", sourceConfig.Region)
+		assert.Equal(t, "1.21.1", sourceConfig.MinecraftVersion)
+		deletedAt := args.Get(3).(time.Time)
+		retentionUntil := args.Get(4).(time.Time)
+		assert.InDelta(t, 30.0, retentionUntil.Sub(deletedAt).Hours()/24, 0.01)
+	}).Return(nil)
 
 	err := svc.DestroyServer(context.Background(), "srv1")
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
 	mockDB.AssertCalled(t, "DeleteServerConfig", mock.Anything, "srv1")
-	mockDB.AssertCalled(t, "MarkServerBackupsDeleted", mock.Anything, "srv1", mock.Anything, mock.Anything)
+	mockDB.AssertCalled(t, "MarkServerBackupsDeleted", mock.Anything, "srv1",
+		mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestDestroyServer_ConfigLoadFailure_StillStampsDeletion(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(nil, errors.New("config unavailable"))
+	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
+	mockDB.On("MarkServerBackupsDeleted", mock.Anything, "srv1", (*db.BackupSourceConfig)(nil), mock.Anything, mock.Anything).Return(nil)
+
+	err := svc.DestroyServer(context.Background(), "srv1")
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+	mockDB.AssertCalled(t, "MarkServerBackupsDeleted", mock.Anything, "srv1", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestDestroyServer_Error(t *testing.T) {

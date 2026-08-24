@@ -13,29 +13,38 @@ import (
 )
 
 type reportRequest struct {
-	SnapshotID      string  `json:"snapshotId"`
+	SnapshotID       string `json:"snapshotId"`
 	RepositoryPrefix string `json:"repositoryPrefix"`
-	DurationSeconds int64   `json:"durationSeconds"`
-	FileCount       int64   `json:"fileCount"`
-	RepositorySize  int64   `json:"repositorySize"`
+	DurationSeconds  int64  `json:"durationSeconds"`
+	FileCount        int64  `json:"fileCount"`
+	RepositorySize   int64  `json:"repositorySize"`
 	MinecraftVersion string `json:"minecraftVersion"`
-	Status          string  `json:"status"`
+	Status           string `json:"status"`
 }
 
 type backupResponse struct {
-	ID               string `json:"id"`
-	ServerID         string `json:"server_id"`
-	ServerName       string `json:"server_name"`
-	SnapshotID       string `json:"snapshot_id"`
-	RepositoryPrefix string `json:"repository_prefix"`
-	CreatedAt        string `json:"created_at"`
-	DurationSeconds  int64  `json:"duration_seconds"`
-	FileCount        int64  `json:"file_count"`
-	RepositorySize   int64  `json:"repository_size"`
+	ID               string                      `json:"id"`
+	ServerID         string                      `json:"server_id"`
+	ServerName       string                      `json:"server_name"`
+	SnapshotID       string                      `json:"snapshot_id"`
+	RepositoryPrefix string                      `json:"repository_prefix"`
+	CreatedAt        string                      `json:"created_at"`
+	DurationSeconds  int64                       `json:"duration_seconds"`
+	FileCount        int64                       `json:"file_count"`
+	RepositorySize   int64                       `json:"repository_size"`
+	MinecraftVersion string                      `json:"minecraft_version"`
+	Status           string                      `json:"status"`
+	ServerDeletedAt  string                      `json:"server_deleted_at,omitempty"`
+	RetentionUntil   string                      `json:"retention_until,omitempty"`
+	SourceConfig     *backupSourceConfigResponse `json:"source_config,omitempty"`
+}
+
+type backupSourceConfigResponse struct {
+	Region           string `json:"region"`
+	Zone             string `json:"zone"`
+	MachineType      string `json:"machine_type"`
+	DiskSizeGB       int    `json:"disk_size_gb"`
 	MinecraftVersion string `json:"minecraft_version"`
-	Status           string `json:"status"`
-	ServerDeletedAt  string `json:"server_deleted_at,omitempty"`
-	RetentionUntil   string `json:"retention_until,omitempty"`
 }
 
 func writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
@@ -170,24 +179,61 @@ func ListServerBackups(w http.ResponseWriter, r *http.Request) {
 
 	var resp []backupResponse
 	for _, b := range backups {
-		resp = append(resp, backupResponse{
-			ID:               b.ID,
-			ServerID:         b.ServerID,
-			ServerName:       b.ServerName,
-			SnapshotID:       b.SnapshotID,
-			RepositoryPrefix: b.RepositoryPrefix,
-			CreatedAt:        b.CreatedAt.UTC().Format(time.RFC3339),
-			DurationSeconds:  b.DurationSeconds,
-			FileCount:        b.FileCount,
-			RepositorySize:   b.RepositorySize,
-			MinecraftVersion: b.MinecraftVersion,
-			Status:           string(b.Status),
-			ServerDeletedAt:  formatTime(b.ServerDeletedAt),
-			RetentionUntil:   formatTime(b.RetentionUntil),
-		})
+		resp = append(resp, toBackupResponse(b))
 	}
 
 	writeJSONResponse(w, http.StatusOK, resp)
+}
+
+func ListAllBackups(w http.ResponseWriter, r *http.Request) {
+	dbConn, _, err := GetDBConnection(r.Context())
+	if err != nil {
+		log.Printf("Error connecting to database: %v", err)
+		writeJSONError(w, "failed to connect to database", http.StatusInternalServerError)
+		return
+	}
+
+	backups, err := dbConn.ListBackups(r.Context())
+	if err != nil {
+		log.Printf("Error listing backups: %v", err)
+		writeJSONError(w, "failed to list backups", http.StatusInternalServerError)
+		return
+	}
+
+	resp := make([]backupResponse, 0, len(backups))
+	for _, b := range backups {
+		resp = append(resp, toBackupResponse(b))
+	}
+
+	writeJSONResponse(w, http.StatusOK, resp)
+}
+
+func toBackupResponse(b *db.Backup) backupResponse {
+	resp := backupResponse{
+		ID:               b.ID,
+		ServerID:         b.ServerID,
+		ServerName:       b.ServerName,
+		SnapshotID:       b.SnapshotID,
+		RepositoryPrefix: b.RepositoryPrefix,
+		CreatedAt:        b.CreatedAt.UTC().Format(time.RFC3339),
+		DurationSeconds:  b.DurationSeconds,
+		FileCount:        b.FileCount,
+		RepositorySize:   b.RepositorySize,
+		MinecraftVersion: b.MinecraftVersion,
+		Status:           string(b.Status),
+		ServerDeletedAt:  formatTime(b.ServerDeletedAt),
+		RetentionUntil:   formatTime(b.RetentionUntil),
+	}
+	if b.SourceConfig != nil {
+		resp.SourceConfig = &backupSourceConfigResponse{
+			Region:           b.SourceConfig.Region,
+			Zone:             b.SourceConfig.Zone,
+			MachineType:      b.SourceConfig.MachineType,
+			DiskSizeGB:       b.SourceConfig.DiskSizeGB,
+			MinecraftVersion: b.SourceConfig.MinecraftVersion,
+		}
+	}
+	return resp
 }
 
 func formatTime(t *time.Time) string {
