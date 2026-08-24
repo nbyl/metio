@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/nbyl/metio/internal/db"
 	"github.com/stretchr/testify/mock"
@@ -149,4 +150,38 @@ func (m *MockDB) ListAllServerIDs(ctx context.Context) ([]string, error) {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockDB) UpsertBackup(ctx context.Context, backup *db.Backup) error {
+	args := m.Called(ctx, backup)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetBackup(ctx context.Context, serverID, snapshotID string) (*db.Backup, error) {
+	args := m.Called(ctx, serverID, snapshotID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Backup), args.Error(1)
+}
+
+func (m *MockDB) ListBackupsByServer(ctx context.Context, serverID string) ([]*db.Backup, error) {
+	args := m.Called(ctx, serverID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.Backup), args.Error(1)
+}
+
+func (m *MockDB) ListBackups(ctx context.Context) ([]*db.Backup, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.Backup), args.Error(1)
+}
+
+func (m *MockDB) MarkServerBackupsDeleted(ctx context.Context, serverID string, deletedAt time.Time, retentionUntil time.Time) error {
+	args := m.Called(ctx, serverID, deletedAt, retentionUntil)
+	return args.Error(0)
 }

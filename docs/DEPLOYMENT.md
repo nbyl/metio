@@ -419,10 +419,22 @@ provisioning page). The `mc-backup` image that renders the schedule/retention co
 Metio image from `cmd/mc-backup/`, which wraps the upstream
 [`itzg/mc-backup`](https://github.com/itzg/docker-mc-backup) and adds a post-backup hook — a Go
 binary at `cmd/mc-backup/post-backup/` — that writes a
-`/manifests/manifest-<timestamp>.json` file (timestamp, Restic snapshot id, size) after every
-successful backup. Each backup produces its own timestamped manifest, so a slow ingestion process
-never misses a snapshot because the file was overwritten. The machine-agent mounts the same directory
-to surface the backup history on the dashboard.
+`/manifests/manifest-<timestamp>.json` file (timestamp, snapshot id, server id, repository prefix,
+duration, file count, repository size, status) after every successful backup. Each backup produces
+its own timestamped manifest, so a slow ingestion process never misses a snapshot because the file
+was overwritten. Failed backups write no manifest, so the catalog keeps reporting the last
+known-good backup.
+
+The machine-agent mounts the same directory and relays each manifest to the controller's backup
+report API (`POST /api/servers/{id}/backups/report`, see ADR-0004). It follows an at-least-once
+strategy:
+
+- Manifests are **deleted only after the controller acknowledged** them (any 2xx response), so
+  controller outages or agent restarts never lose a record; pending files are simply retried on the
+  next tick.
+- Duplicate deliveries are harmless: the controller deduplicates reports by server and snapshot ID.
+- Unparsable manifests are quarantined as `*.invalid`, manifests the controller permanently rejects
+  (HTTP 400) as `*.rejected`; quarantined files stay on disk for inspection and are not retried.
 
 #### Manual Restic access
 

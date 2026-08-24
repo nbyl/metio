@@ -67,6 +67,7 @@ write_files:
         -e PRUNE_RESTIC_RETENTION="${pruneResticRetention}" \
         -e RESTIC_REPOSITORY=gs:${backupBucket}:/servers/${serverId}/restic \
         -e RESTIC_PASSWORD=${resticPassword} \
+        -e METIO_SERVER_ID=${serverId} \
         -e RCON_HOST=127.0.0.1 \
         -e RCON_PASSWORD=${rconPassword} \
         -v /mnt/disks/minecraft/data:/data \

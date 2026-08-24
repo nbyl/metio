@@ -634,12 +634,14 @@ func TestDestroyServer_Success(t *testing.T) {
 	mockWM.On("DestroyStack", mock.Anything, "srv1").Return(nil)
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
 	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
+	mockDB.On("MarkServerBackupsDeleted", mock.Anything, "srv1", mock.Anything, mock.Anything).Return(nil)
 
 	err := svc.DestroyServer(context.Background(), "srv1")
 	assert.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
 	mockDB.AssertCalled(t, "DeleteServerConfig", mock.Anything, "srv1")
+	mockDB.AssertCalled(t, "MarkServerBackupsDeleted", mock.Anything, "srv1", mock.Anything, mock.Anything)
 }
 
 func TestDestroyServer_Error(t *testing.T) {
