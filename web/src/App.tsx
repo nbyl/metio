@@ -1,8 +1,6 @@
-import { Routes, Route, useParams, Navigate } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/layout/Layout';
-import { Header } from './components/layout/Header';
+import { AuthenticatedLayout } from './components/layout/AuthenticatedLayout';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import {
@@ -12,21 +10,16 @@ import {
 } from './components/server';
 import { BackupCatalogPage } from './components/backup/BackupCatalogPage';
 
-/**
- * Dashboard component - main server control panel
- */
 function Dashboard() {
-  const { user } = useAuth();
   const { data: status, isLoading } = useSetupStatus();
 
   if (isLoading) {
     return (
-      <Layout>
-        <Header email={user?.email} showUser />
+      <AuthenticatedLayout>
         <div className="flex items-center justify-center py-12 text-muted-foreground">
           Loading...
         </div>
-      </Layout>
+      </AuthenticatedLayout>
     );
   }
 
@@ -35,30 +28,21 @@ function Dashboard() {
   }
 
   return (
-    <Layout>
-      <Header email={user?.email} showUser />
+    <AuthenticatedLayout>
       <ServerDashboard />
-    </Layout>
+    </AuthenticatedLayout>
   );
 }
 
-/**
- * Provisioning page - shows provisioning progress for a specific server
- */
 function ProvisioningPage() {
   const { id } = useParams<{ id: string }>();
-
   return (
-    <Layout>
-      <Header />
+    <AuthenticatedLayout>
       {id && <ProvisioningProgress serverId={id} />}
-    </Layout>
+    </AuthenticatedLayout>
   );
 }
 
-/**
- * Main App component with routing
- */
 function App() {
   return (
     <Routes>
@@ -74,10 +58,9 @@ function App() {
         path="/servers/new"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Header />
+            <AuthenticatedLayout>
               <ServerSetupWizard />
-            </Layout>
+            </AuthenticatedLayout>
           </ProtectedRoute>
         }
       />
@@ -93,10 +76,9 @@ function App() {
         path="/setup"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Header />
+            <AuthenticatedLayout>
               <SetupWizard />
-            </Layout>
+            </AuthenticatedLayout>
           </ProtectedRoute>
         }
       />
@@ -104,10 +86,9 @@ function App() {
         path="/backups"
         element={
           <ProtectedRoute>
-            <Layout>
-              <Header />
+            <AuthenticatedLayout>
               <BackupCatalogPage />
-            </Layout>
+            </AuthenticatedLayout>
           </ProtectedRoute>
         }
       />
