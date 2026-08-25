@@ -103,7 +103,7 @@ export function useRestoreBackup(serverId: string) {
 async function createServerFromBackup(
   backupId: string,
   request: CreateFromBackupRequest
-): Promise<unknown> {
+): Promise<{ id: string }> {
   const response = await fetch(`/api/backups/${backupId}/servers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

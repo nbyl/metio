@@ -76,7 +76,7 @@ export function CreateFromBackupDialog({
     if (diskSizeGB) request.diskSizeGB = diskSizeGB;
 
     createMutation.mutate(request, {
-      onSuccess: (data: { id: string }) => {
+      onSuccess: (data) => {
         const serverId = data.id;
         onClose();
         navigate(`/servers/${serverId}/provisioning`, {
@@ -98,15 +98,17 @@ export function CreateFromBackupDialog({
         if (!nextOpen) handleClose();
       }}
     >
-      <DialogContent className="max-w-lg">
-        <DialogClose
-          aria-label="Close"
-          variant="ghost"
-          size="icon-sm"
-          className="absolute top-2 right-2"
-          disabled={createMutation.isPending}
-        >
-          <X />
+      <DialogContent className="max-w-lg" showCloseButton={false}>
+        <DialogClose asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-2 right-2"
+            disabled={createMutation.isPending}
+            aria-label="Close"
+          >
+            <X />
+          </Button>
         </DialogClose>
         <DialogHeader>
           <DialogTitle>Create Server from Backup</DialogTitle>
