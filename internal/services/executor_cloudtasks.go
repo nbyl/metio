@@ -33,7 +33,7 @@ func NewCloudTasksExecutor(client *cloudtasks.Client, projectID, location, queue
 	}
 }
 
-func (e *cloudTasksExecutor) StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, _ func(context.Context, *db.ProvisioningStatus) error) error {
+func (e *cloudTasksExecutor) StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, initialOutputs map[string]string, _ func(context.Context, *db.ProvisioningStatus) error) error {
 	existingStatus, err := e.db.GetProvisioningStatus(ctx, serverID)
 	if err == nil && existingStatus != nil && existingStatus.State == db.ProvisioningStateInProgress {
 		return fmt.Errorf(errMsgOperationInProgress, serverID)
@@ -47,6 +47,7 @@ func (e *cloudTasksExecutor) StartOperation(ctx context.Context, serverID string
 		StartedAt:   now,
 		CurrentStep: "enqueuing",
 		Steps:       []db.ProvisioningStep{},
+		Outputs:     initialOutputs,
 	}
 	if err := e.db.UpdateProvisioningStatus(ctx, serverID, status); err != nil {
 		return fmt.Errorf("failed to save provisioning status: %w", err)

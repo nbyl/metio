@@ -330,6 +330,7 @@ func newTestService() (*ProvisioningService, *testutil.MockWorkspaceManager, *Mo
 		retryAttempts:       1,
 		retryDelay:          1 * time.Millisecond,
 		backupRetentionDays: 30,
+		restoreAckTimeout:   5 * time.Second,
 	}
 	return svc, mockWM, mockDB
 }
@@ -703,7 +704,7 @@ func TestQueueOperation_AlreadyInProgress(t *testing.T) {
 	svc, _, _ := newTestService()
 
 	blockCh := make(chan struct{})
-	err := svc.executor.StartOperation(context.Background(), "srv1", db.ProvisioningOperationCreate, func(ctx context.Context, _ *db.ProvisioningStatus) error {
+	err := svc.executor.StartOperation(context.Background(), "srv1", db.ProvisioningOperationCreate, nil, func(ctx context.Context, _ *db.ProvisioningStatus) error {
 		<-blockCh
 		return ctx.Err()
 	})
@@ -731,7 +732,7 @@ func TestCancelOperation_Success(t *testing.T) {
 	svc, _, _ := newTestService()
 
 	blockCh := make(chan struct{})
-	err := svc.executor.StartOperation(context.Background(), "srv1", db.ProvisioningOperationCreate, func(ctx context.Context, _ *db.ProvisioningStatus) error {
+	err := svc.executor.StartOperation(context.Background(), "srv1", db.ProvisioningOperationCreate, nil, func(ctx context.Context, _ *db.ProvisioningStatus) error {
 		<-blockCh
 		return ctx.Err()
 	})

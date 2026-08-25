@@ -33,17 +33,18 @@ type Players struct {
 }
 
 type Status struct {
-	Players              Players     `json:"players"`
-	Timestamp            time.Time   `json:"timestamp"`
-	Uptime               string      `json:"uptime"`
-	ServerState          ServerState `json:"server_state"`
-	InstanceIP           string      `json:"instance_ip"`
-	Version              string      `json:"version"`
-	WhitelistEnabled     bool        `json:"whitelist_enabled"`
-	ScheduledShutdown    *time.Time  `json:"scheduled_shutdown,omitempty"`
-	PendingCommand       string      `json:"pending_command,omitempty"`
-	PendingCommandResult string      `json:"pending_command_result,omitempty"`
-	AgentVersion         string      `json:"agent_version,omitempty"`
+	Players              Players           `json:"players"`
+	Timestamp            time.Time         `json:"timestamp"`
+	Uptime               string            `json:"uptime"`
+	ServerState          ServerState       `json:"server_state"`
+	InstanceIP           string            `json:"instance_ip"`
+	Version              string            `json:"version"`
+	WhitelistEnabled     bool              `json:"whitelist_enabled"`
+	ScheduledShutdown    *time.Time        `json:"scheduled_shutdown,omitempty"`
+	PendingCommand       string            `json:"pending_command,omitempty"`
+	PendingCommandArgs   map[string]string `json:"pending_command_args,omitempty"`
+	PendingCommandResult string            `json:"pending_command_result,omitempty"`
+	AgentVersion         string            `json:"agent_version,omitempty"`
 }
 
 type WhitelistEntry struct {

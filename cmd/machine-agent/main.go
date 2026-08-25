@@ -569,10 +569,20 @@ func handlePendingCommand(ctx context.Context, client agentclient.AgentClient, i
 		} else {
 			status.PendingCommandResult = "completed"
 		}
+	case "restore":
+		snapshotID := status.PendingCommandArgs["snapshotId"]
+		if snapshotID == "" {
+			status.PendingCommandResult = "failed: restore command is missing snapshotId"
+		} else if err := restoreMinecraftWorldFunc(snapshotID); err != nil {
+			status.PendingCommandResult = "failed: " + err.Error()
+		} else {
+			status.PendingCommandResult = "completed"
+		}
 	default:
 		status.PendingCommandResult = "failed: unknown command: " + command
 	}
 	status.PendingCommand = ""
+	status.PendingCommandArgs = nil
 
 	return client.UpdateStatus(ctx, status)
 }

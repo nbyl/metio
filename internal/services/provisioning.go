@@ -23,6 +23,7 @@ const (
 	stepStopInstance         = "stop_instance"
 	stepStartInstance        = "start_instance"
 	stepSaveWorld            = "save_world"
+	stepRestoreWorld         = "restore_world"
 	stepHealthCheck          = "health_check"
 )
 
@@ -48,6 +49,7 @@ type ProvisioningService struct {
 	retryAttempts       int
 	retryDelay          time.Duration
 	backupRetentionDays int
+	restoreAckTimeout   time.Duration
 }
 
 func (s *ProvisioningService) OperationTimeout() time.Duration {
@@ -64,25 +66,97 @@ func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, d
 		retryAttempts:       3,
 		retryDelay:          5 * time.Second,
 		backupRetentionDays: backupRetentionDays,
+		restoreAckTimeout:   30 * time.Minute,
 	}
 }
 
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationCreate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationCreate, nil, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		return s.runCreate(opCtx, status, serverID, config)
 	})
 }
 
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
-	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationUpdate, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationUpdate, nil, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		return s.runUpdate(opCtx, status, serverID, config, updateType)
 	})
 }
 
 func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string) error {
-	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationDestroy, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationDestroy, nil, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		return s.runDestroy(opCtx, status, serverID)
 	})
+}
+
+// RestoreServer restores the given backup onto an existing server. The backup must
+// already be validated by the caller (ownership and COMPLETED status).
+func (s *ProvisioningService) RestoreServer(ctx context.Context, serverID string, backup *db.Backup, versionWarning string) error {
+	initialOutputs := map[string]string{
+		"backupId":   backup.ID,
+		"snapshotId": backup.SnapshotID,
+	}
+	if versionWarning != "" {
+		initialOutputs["versionMismatchWarning"] = versionWarning
+	}
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationRestore, initialOutputs, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		return s.runRestore(opCtx, status, serverID)
+	})
+}
+
+func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.ProvisioningStatus, serverID string) error {
+	status.Steps = []db.ProvisioningStep{
+		{Name: stepSaveWorld, Status: db.ProvisioningStatePending, Message: "Saving world data...", Timestamp: time.Now()},
+		{Name: stepRestoreWorld, Status: db.ProvisioningStatePending, Message: "Restoring backup...", Timestamp: time.Now()},
+		{Name: stepHealthCheck, Status: db.ProvisioningStatePending, Message: "Waiting for server to become healthy...", Timestamp: time.Now()},
+	}
+	s.updateStatus(opCtx, serverID, status)
+
+	config, err := s.db.GetServerConfig(opCtx, serverID)
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld,
+			fmt.Errorf("failed to load server config: %w", err))
+	}
+
+	snapshotID := status.Outputs["snapshotId"]
+	if snapshotID == "" {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld,
+			fmt.Errorf("missing snapshot id in operation outputs"))
+	}
+
+	s.updateStep(opCtx, status, serverID, stepSaveWorld, "Saving world data...")
+	if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld,
+			fmt.Errorf("failed to trigger world save: %w", err))
+	}
+	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld,
+			fmt.Errorf("world save failed: result=%s, %w", result, err))
+	}
+	s.completeStep(opCtx, status, serverID, stepSaveWorld)
+
+	s.updateStep(opCtx, status, serverID, stepRestoreWorld, fmt.Sprintf("Restoring snapshot %s on machine agent...", snapshotID))
+	if err := s.backupCoord.TriggerRestore(opCtx, config.Name, snapshotID); err != nil {
+		return s.handleError(status, opCtx, serverID, stepRestoreWorld,
+			fmt.Errorf("failed to trigger restore: %w", err))
+	}
+	result, err = s.backupCoord.WaitForCommandAck(opCtx, config.Name, s.restoreAckTimeout)
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepRestoreWorld,
+			fmt.Errorf("restore failed: result=%s, %w", result, err))
+	}
+	s.completeStep(opCtx, status, serverID, stepRestoreWorld)
+
+	s.updateStep(opCtx, status, serverID, stepHealthCheck, "Waiting for server to become healthy...")
+	if err := WaitForServerHealthy(opCtx, s.db, config.Name, 180*time.Second); err != nil {
+		log.Printf("Warning: server %s did not become healthy after restore: %v", serverID, err)
+	}
+	s.completeStep(opCtx, status, serverID, stepHealthCheck)
+
+	status.State = db.ProvisioningStateCompleted
+	s.updateStatus(opCtx, serverID, status)
+
+	return nil
 }
 
 func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
@@ -347,6 +421,8 @@ func (s *ProvisioningService) ExecuteOperation(ctx context.Context, serverID str
 		return s.runUpdate(ctx, status, serverID, config, updateType)
 	case db.ProvisioningOperationDestroy:
 		return s.runDestroy(ctx, status, serverID)
+	case db.ProvisioningOperationRestore:
+		return s.runRestore(ctx, status, serverID)
 	default:
 		return fmt.Errorf("unknown operation type: %v", status.Operation)
 	}

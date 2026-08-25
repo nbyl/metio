@@ -24,7 +24,9 @@
         "baseUrl": "http://localhost:8080"
       },
       "dataPropertyOrder": {
-        "&": ["baseUrl"]
+        "&": [
+          "baseUrl"
+        ]
       },
       "color": null,
       "isPrivate": false,
@@ -540,6 +542,73 @@
       "settingRebuildPath": true,
       "settingFollowRedirects": "global",
       "_type": "request"
+    },
+    {
+      "_type": "request_group",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_id": "fld_backups",
+      "parentId": "wrk_metio_api",
+      "modified": 1756000000000,
+      "created": 1756000000000,
+      "name": "Backups",
+      "description": "Backup catalog and restore operations",
+      "metaSortKey": -1743436000000
+    },
+    {
+      "_type": "request",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_id": "req_list_all_backups",
+      "parentId": "fld_backups",
+      "modified": 1756000000000,
+      "created": 1756000000000,
+      "url": "{{ baseUrl }}/api/backups",
+      "name": "List Backups",
+      "description": "List all backups across all servers (including backups of deleted servers).",
+      "method": "GET",
+      "metaSortKey": -1743435999000
+    },
+    {
+      "_type": "request",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_id": "req_backup_restore",
+      "parentId": "fld_backups",
+      "modified": 1756000000000,
+      "created": 1756000000000,
+      "url": "{{ baseUrl }}/api/servers/:id/backups/:backupId/restore",
+      "name": "Restore Backup",
+      "description": "Asynchronously restore a backup onto an existing server. The current world is saved and moved to a recovery directory before the snapshot is restored; on failure the previous world is kept. Progress can be followed via GET /api/servers/:id/provisioning. Returns 202 with warnings (e.g. Minecraft version mismatch).",
+      "method": "POST",
+      "metaSortKey": -1743435998000
     }
   ]
 }

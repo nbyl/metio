@@ -17,6 +17,7 @@ type ProvisioningServiceInterface interface {
 	CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
 	UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error
 	DestroyServer(ctx context.Context, serverID string) error
+	RestoreServer(ctx context.Context, serverID string, backup *db.Backup, versionWarning string) error
 	GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error)
 	RevertServerConfig(ctx context.Context, serverID string) error
 }

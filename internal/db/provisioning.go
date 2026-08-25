@@ -60,6 +60,7 @@ const (
 	ProvisioningOperationCreate ProvisioningOperation = iota
 	ProvisioningOperationUpdate
 	ProvisioningOperationDestroy
+	ProvisioningOperationRestore
 )
 
 func (o ProvisioningOperation) String() string {
@@ -70,6 +71,8 @@ func (o ProvisioningOperation) String() string {
 		return "UPDATE"
 	case ProvisioningOperationDestroy:
 		return "DESTROY"
+	case ProvisioningOperationRestore:
+		return "RESTORE"
 	default:
 		return "UNKNOWN"
 	}
@@ -91,6 +94,8 @@ func (o *ProvisioningOperation) UnmarshalJSON(data []byte) error {
 		*o = ProvisioningOperationUpdate
 	case "DESTROY":
 		*o = ProvisioningOperationDestroy
+	case "RESTORE":
+		*o = ProvisioningOperationRestore
 	default:
 		return fmt.Errorf("unknown ProvisioningOperation: %s", str)
 	}

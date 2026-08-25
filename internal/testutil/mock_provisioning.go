@@ -28,6 +28,11 @@ func (m *MockProvisioningService) DestroyServer(ctx context.Context, serverID st
 	return args.Error(0)
 }
 
+func (m *MockProvisioningService) RestoreServer(ctx context.Context, serverID string, backup *db.Backup, versionWarning string) error {
+	args := m.Called(ctx, serverID, backup, versionWarning)
+	return args.Error(0)
+}
+
 func (m *MockProvisioningService) GetProvisioningStatus(ctx context.Context, serverID string) (*db.ProvisioningStatus, error) {
 	args := m.Called(ctx, serverID)
 	if args.Get(0) == nil {

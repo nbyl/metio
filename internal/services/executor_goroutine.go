@@ -23,7 +23,7 @@ func NewGoroutineExecutor(timeout time.Duration) OperationExecutor {
 	}
 }
 
-func (e *goroutineExecutor) StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, fn func(context.Context, *db.ProvisioningStatus) error) error {
+func (e *goroutineExecutor) StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, initialOutputs map[string]string, fn func(context.Context, *db.ProvisioningStatus) error) error {
 	e.mu.Lock()
 
 	select {
@@ -58,6 +58,7 @@ func (e *goroutineExecutor) StartOperation(ctx context.Context, serverID string,
 			StartedAt:   now,
 			CurrentStep: "initializing",
 			Steps:       []db.ProvisioningStep{},
+			Outputs:     initialOutputs,
 		}
 
 		if err := fn(opCtx, status); err != nil {

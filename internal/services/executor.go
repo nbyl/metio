@@ -8,7 +8,7 @@ import (
 )
 
 type OperationExecutor interface {
-	StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, fn func(context.Context, *db.ProvisioningStatus) error) error
+	StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, initialOutputs map[string]string, fn func(context.Context, *db.ProvisioningStatus) error) error
 	CancelOperation(ctx context.Context, serverID string) error
 	OperationTimeout() time.Duration
 }
