@@ -139,6 +139,65 @@ export interface ProvisioningStep {
 }
 
 /**
+ * Server infrastructure config captured at backup time.
+ * Matches Go dbtypes.BackupSourceConfig.
+ */
+export interface BackupSourceConfig {
+  region: string;
+  zone: string;
+  machineType: string;
+  diskSizeGB: number;
+  minecraftVersion: string;
+}
+
+/**
+ * A backup catalog record from /api/backups or /api/servers/{id}/backups.
+ * Matches Go handlers.backupResponse.
+ */
+export interface BackupRecord {
+  id: string;
+  serverId: string;
+  serverName: string;
+  snapshotId: string;
+  repositoryPrefix: string;
+  createdAt: string;
+  durationSeconds: number;
+  fileCount: number;
+  repositorySize: number;
+  minecraftVersion: string;
+  status: 'COMPLETED' | 'FAILED';
+  serverDeletedAt?: string;
+  retentionUntil?: string;
+  sourceConfig?: BackupSourceConfig;
+}
+
+/**
+ * Response from POST /api/servers/{id}/backups/{backupId}/restore
+ * Matches Go handlers.RestoreResponse.
+ */
+export interface RestoreResponse {
+  operation: string;
+  serverId: string;
+  backupId: string;
+  snapshotId: string;
+  warnings?: string[];
+  provisioningStatusUrl: string;
+}
+
+/**
+ * Request body for POST /api/backups/{backupId}/servers
+ * Matches Go handlers.CreateFromBackupRequest.
+ */
+export interface CreateFromBackupRequest {
+  name: string;
+  region?: string;
+  zone?: string;
+  machineType?: string;
+  minecraftVersion?: string;
+  diskSizeGB?: number;
+}
+
+/**
  * Provisioning status from /api/servers/{id}/provisioning
  */
 export interface ProvisioningStatusResponse {

@@ -65,24 +65,24 @@ type MediaQueryListener = (event: MediaQueryListEvent) => void;
 const mediaQueryListeners = new Map<string, Set<MediaQueryListener>>();
 
 function createMatchMediaStub(prefersDark: boolean) {
-  return (query: string): MediaQueryList => ({
-    matches:
-      query === '(prefers-color-scheme: dark)' ? prefersDark : false,
-    media: query,
-    onchange: null,
-    addEventListener: (_: string, listener: MediaQueryListener) => {
-      if (!mediaQueryListeners.has(query)) {
-        mediaQueryListeners.set(query, new Set());
-      }
-      mediaQueryListeners.get(query)!.add(listener);
-    },
-    removeEventListener: (_: string, listener: MediaQueryListener) => {
-      mediaQueryListeners.get(query)?.delete(listener);
-    },
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  }) as MediaQueryList;
+  return (query: string): MediaQueryList =>
+    ({
+      matches: query === '(prefers-color-scheme: dark)' ? prefersDark : false,
+      media: query,
+      onchange: null,
+      addEventListener: (_: string, listener: MediaQueryListener) => {
+        if (!mediaQueryListeners.has(query)) {
+          mediaQueryListeners.set(query, new Set());
+        }
+        mediaQueryListeners.get(query)!.add(listener);
+      },
+      removeEventListener: (_: string, listener: MediaQueryListener) => {
+        mediaQueryListeners.get(query)?.delete(listener);
+      },
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
 }
 
 Object.defineProperty(window, 'matchMedia', {

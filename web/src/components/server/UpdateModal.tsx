@@ -23,6 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
 import { useServerOptions } from '../../hooks/useServerOptions';
 import { BackupSettingsPanel } from './BackupSettingsPanel';
+import { BackupListPanel } from './BackupListPanel';
 
 export interface UpdateModalProps {
   open: boolean;
@@ -36,7 +37,7 @@ export interface UpdateModalProps {
   isPending: boolean;
 }
 
-type SettingsTab = 'settings' | 'backup';
+type SettingsTab = 'settings' | 'backup' | 'backups';
 
 export function UpdateModal({
   open,
@@ -137,6 +138,7 @@ export function UpdateModal({
           <TabsList variant="line">
             <TabsTrigger value="settings">Settings</TabsTrigger>
             <TabsTrigger value="backup">Backup</TabsTrigger>
+            <TabsTrigger value="backups">Backups</TabsTrigger>
           </TabsList>
           <TabsContent value="settings" className="py-2">
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -225,6 +227,13 @@ export function UpdateModal({
           </TabsContent>
           <TabsContent value="backup" className="py-2">
             <BackupSettingsPanel serverId={serverId} serverName={serverName} />
+          </TabsContent>
+          <TabsContent value="backups" className="py-2">
+            <BackupListPanel
+              serverId={serverId}
+              serverName={serverName}
+              minecraftVersion={config.minecraftVersion}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

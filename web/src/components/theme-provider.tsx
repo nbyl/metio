@@ -45,7 +45,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Keep following live OS preference changes while in system mode.
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    const onChange = (event: MediaQueryListEvent) =>
+      setSystemDark(event.matches);
     media.addEventListener('change', onChange);
     return () => media.removeEventListener('change', onChange);
   }, []);
@@ -67,8 +68,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
       setTheme(next);
     },
-    resolvedTheme:
-      theme === 'system' ? (systemDark ? 'dark' : 'light') : theme,
+    resolvedTheme: theme === 'system' ? (systemDark ? 'dark' : 'light') : theme,
   };
 
   return (

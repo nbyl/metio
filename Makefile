@@ -221,7 +221,7 @@ controller-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/controller:$${SHA}"; \
 	echo "Building controller image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . && \
 	echo "$${IMAGE}" > build/controller-image.txt
 
 # Local machine-agent image build + push to Artifact Registry
@@ -230,7 +230,7 @@ machine-agent-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:$${SHA}"; \
 	echo "Building machine-agent image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . && \
 	echo "$${IMAGE}" > build/machine-agent-image.txt
 
 # Local mc-backup image build + push to Artifact Registry
@@ -239,7 +239,7 @@ mc-backup-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:$${SHA}"; \
 	echo "Building mc-backup image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f cmd/mc-backup/Dockerfile -t $${IMAGE} --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/mc-backup/Dockerfile -t $${IMAGE} --push . && \
 	echo "$${IMAGE}" > build/mc-backup-image.txt
 
 # Local daprd image build + push to Artifact Registry
@@ -248,7 +248,7 @@ daprd-image:
 	@SHA=$$(git rev-parse --short HEAD); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/daprd:$${SHA}"; \
 	echo "Building daprd image: $${IMAGE}"; \
-	docker buildx build --platform linux/amd64 -f cmd/daprd/Dockerfile -t $${IMAGE} --push . ; \
+	docker buildx build --platform linux/amd64 -f cmd/daprd/Dockerfile -t $${IMAGE} --push . && \
 	echo "$${IMAGE}" > build/daprd-image.txt
 
 # Push images to ghcr.io
