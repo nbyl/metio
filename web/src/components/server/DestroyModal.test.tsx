@@ -38,7 +38,12 @@ describe('DestroyModal', () => {
     expect(
       screen.getByText('All world data and configurations')
     ).toBeInTheDocument();
-    expect(screen.getByText('Backup bucket and backups')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Backups in the central catalog are preserved and expire automatically once their retention period ends.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Backup bucket and backups')).toBeNull();
     expect(screen.getByText('Static IP address')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(

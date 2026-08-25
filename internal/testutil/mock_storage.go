@@ -10,6 +10,7 @@ import (
 type StorageBucketHandle interface {
 	Attrs(ctx context.Context) (*storage.BucketAttrs, error)
 	Create(ctx context.Context, projectID string, attrs *storage.BucketAttrs) error
+	DeletePrefix(ctx context.Context, prefix string) (int64, error)
 }
 
 type MockStorageClient struct {
@@ -39,4 +40,9 @@ func (m *MockBucketHandle) Attrs(ctx context.Context) (*storage.BucketAttrs, err
 func (m *MockBucketHandle) Create(ctx context.Context, projectID string, attrs *storage.BucketAttrs) error {
 	args := m.Called(ctx, projectID, attrs)
 	return args.Error(0)
+}
+
+func (m *MockBucketHandle) DeletePrefix(ctx context.Context, prefix string) (int64, error) {
+	args := m.Called(ctx, prefix)
+	return args.Get(0).(int64), args.Error(1)
 }

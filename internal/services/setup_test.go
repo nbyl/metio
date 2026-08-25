@@ -32,6 +32,10 @@ func (m *mockBucketHandle) Create(ctx context.Context, projectID string, attrs *
 	return m.createErr
 }
 
+func (m *mockBucketHandle) DeletePrefix(ctx context.Context, prefix string) (int64, error) {
+	return 0, nil
+}
+
 type mockStorageClient struct {
 	buckets map[string]*mockBucketHandle
 }

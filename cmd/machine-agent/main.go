@@ -102,6 +102,9 @@ func main() {
 			if err := runStatusUpdate(ctx, client, instanceName); err != nil {
 				log.Printf("Error in status update: %v", err)
 			}
+			if err := processBackupManifestsFunc(ctx, client); err != nil {
+				log.Printf("Error processing backup manifests: %v", err)
+			}
 		}
 	}()
 
