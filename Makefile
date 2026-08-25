@@ -309,17 +309,19 @@ deploy-full: build-images
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
 	MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
+	DEPLOY_ID=$$(date +%s) ;\
 	echo "Deploying full system with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
 	echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
-	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" -auto-approve
+	tofu -chdir=deploy apply -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" -var="deploy_id=$${DEPLOY_ID}" -auto-approve
 
 # Deploy infrastructure only: use existing images or module defaults
 deploy-infrastructure:
 	@set -e ;\
-	ARGS="" ;\
+	DEPLOY_ID=$$(date +%s) ;\
+	set -- -var="deploy_id=$${DEPLOY_ID}" ;\
 	if [ -f "build/machine-agent-image.txt" ]; then \
 		set -- "$$@" -var="machine_agent_image=$$(cat build/machine-agent-image.txt)" ;\
 		echo "Machine agent image: $$(cat build/machine-agent-image.txt)" ;\
@@ -347,7 +349,8 @@ deploy-machine-agent: machine-agent-image
 		exit 1 ;\
 	fi ;\
 	MACHINE_AGENT_IMAGE_TAG=$$(cat build/machine-agent-image.txt) ;\
-	set -- -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" ;\
+	DEPLOY_ID=$$(date +%s) ;\
+	set -- -var="machine_agent_image=$${MACHINE_AGENT_IMAGE_TAG}" -var="deploy_id=$${DEPLOY_ID}" ;\
 	if [ -f "build/controller-image.txt" ]; then \
 		CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 		set -- "$$@" -var="controller_image=$${CONTROLLER_IMAGE_TAG}" ;\
@@ -360,7 +363,6 @@ deploy-machine-agent: machine-agent-image
 	if [ -f "build/mc-backup-image.txt" ]; then \
 		MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
 		set -- "$$@" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" ;\
-		echo "mc-backup image: $${MC_BACKUP_IMAGE_TAG}" ;\
 	fi ;\
 	echo "Deploying machine-agent and infrastructure with OpenTofu..." ;\
 	echo "Machine agent image: $${MACHINE_AGENT_IMAGE_TAG}" ;\
@@ -375,10 +377,11 @@ deploy-controller: controller-image daprd-image
 	fi ;\
 	CONTROLLER_IMAGE_TAG=$$(cat build/controller-image.txt) ;\
 	DAPRD_IMAGE_TAG=$$(cat build/daprd-image.txt) ;\
+	DEPLOY_ID=$$(date +%s) ;\
 	echo "Deploying controller only..." ;\
 	echo "Controller image: $${CONTROLLER_IMAGE_TAG}" ;\
 	echo "Daprd image: $${DAPRD_IMAGE_TAG}" ;\
-	set -- -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" ;\
+	set -- -var="controller_image=$${CONTROLLER_IMAGE_TAG}" -var="daprd_image=$${DAPRD_IMAGE_TAG}" -var="deploy_id=$${DEPLOY_ID}" ;\
 	if [ -f "build/mc-backup-image.txt" ]; then \
 		MC_BACKUP_IMAGE_TAG=$$(cat build/mc-backup-image.txt) ;\
 		set -- "$$@" -var="backup_image=$${MC_BACKUP_IMAGE_TAG}" ;\

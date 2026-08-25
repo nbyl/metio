@@ -89,3 +89,9 @@ variable "backup_cleanup_schedule" {
   type        = string
   default     = "0 * * * *"
 }
+
+variable "deploy_id" {
+  description = "Unique identifier for each deployment (e.g. timestamp). Forces Cloud Run to create a new revision even when the image tag hasn't changed."
+  type        = string
+  default     = ""
+}
