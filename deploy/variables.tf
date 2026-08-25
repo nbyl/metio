@@ -85,7 +85,13 @@ variable "backup_deleted_server_retention_days" {
 }
 
 variable "backup_cleanup_schedule" {
-  description = "Cloud Scheduler cron expression driving the controller's expired-backup cleanup sweep (POST /api/backups/cleanup, ADR-0004)."
+  description = "Cloud Scheduler cron expression driving the controller's backup cleanup sweep (POST /api/backups/cleanup, ADR-0004)."
   type        = string
   default     = "0 * * * *"
+}
+
+variable "deploy_id" {
+  description = "Unique identifier for each deployment (e.g. timestamp). Forces Cloud Run to create a new revision even when the image tag hasn't changed."
+  type        = string
+  default     = ""
 }

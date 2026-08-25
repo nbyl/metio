@@ -29,4 +29,5 @@ module "gcp_cloud_run" {
   postgres_connection_string_secret_id = var.postgres_connection_string_secret_id
   backup_deleted_server_retention_days = var.backup_deleted_server_retention_days
   backup_cleanup_schedule              = var.backup_cleanup_schedule
+  deploy_id                            = var.deploy_id
 }
