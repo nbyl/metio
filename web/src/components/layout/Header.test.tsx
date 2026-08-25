@@ -2,34 +2,40 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Header } from './Header';
-import { ThemeProvider, useTheme } from '../theme-provider';
 
-vi.mock('react-router-dom', () => ({
-  Link: ({
-    to,
-    children,
-    ...props
-  }: {
-    to: string;
-    children: React.ReactNode;
-    [key: string]: unknown;
-  }) => (
-    <a href={to} {...props}>
-      {children}
-    </a>
-  ),
-}));
+vi.mock('react-router-dom', () => {
+  const actual = vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    NavLink: ({
+      to,
+      children,
+      className,
+      ...props
+    }: {
+      to: string;
+      children: React.ReactNode;
+      className?: string | ((state: { isActive: boolean }) => string);
+      [key: string]: unknown;
+    }) => {
+      const resolved =
+        typeof className === 'function'
+          ? className({ isActive: to === '/' })
+          : className;
+      return (
+        <a href={to} className={resolved} {...props}>
+          {children}
+        </a>
+      );
+    },
+  };
+});
 
 vi.mock('../../hooks/useServerOptions', () => ({
   useServerOptions: vi.fn(() => ({ data: undefined })),
 }));
 
 import { useServerOptions } from '../../hooks/useServerOptions';
-
-function ThemeProbe() {
-  const { theme } = useTheme();
-  return <span data-testid="theme">{theme}</span>;
-}
 
 describe('Header', () => {
   beforeEach(() => {
@@ -48,6 +54,7 @@ describe('Header', () => {
     render(<Header />);
     expect(screen.queryByText(/Version/)).not.toBeInTheDocument();
   });
+
   it('renders title "Metio"', () => {
     render(<Header />);
     expect(screen.getByRole('heading', { name: /Metio/i })).toBeInTheDocument();
@@ -65,30 +72,24 @@ describe('Header', () => {
     expect(icon).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('shows user email when showUser and email provided', () => {
+  it('shows user menu button when showUser and email provided', () => {
     render(<Header email="test@example.com" showUser />);
-    expect(screen.getByText('test@example.com')).toBeInTheDocument();
-  });
-
-  it('shows logout button when showUser and email provided', () => {
-    render(<Header email="test@example.com" showUser />);
-    const logoutLink = screen.getByRole('link', { name: 'Logout' });
-    expect(logoutLink).toBeInTheDocument();
-    expect(logoutLink).toHaveAttribute('href', '/auth/logout');
-  });
-
-  it('hides user section when showUser is false', () => {
-    render(<Header email="test@example.com" showUser={false} />);
-    expect(screen.queryByText('test@example.com')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: 'Logout' })
+      screen.getByRole('button', { name: 'User menu' })
+    ).toBeInTheDocument();
+  });
+
+  it('hides user menu when showUser is false', () => {
+    render(<Header email="test@example.com" showUser={false} />);
+    expect(
+      screen.queryByRole('button', { name: 'User menu' })
     ).not.toBeInTheDocument();
   });
 
-  it('hides user section when email is undefined', () => {
+  it('hides user menu when email is undefined', () => {
     render(<Header showUser />);
     expect(
-      screen.queryByRole('link', { name: 'Logout' })
+      screen.queryByRole('button', { name: 'User menu' })
     ).not.toBeInTheDocument();
   });
 
@@ -97,38 +98,51 @@ describe('Header', () => {
     expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 
-  it('renders the theme switcher next to the logout button', () => {
+  it('shows nav links when showUser is true', () => {
     render(<Header email="test@example.com" showUser />);
-    const logout = screen.getByRole('link', { name: 'Logout' });
-    const switcher = screen.getByRole('button', { name: 'Change theme' });
-    expect(switcher).toBeInTheDocument();
-    expect(
-      logout.compareDocumentPosition(switcher) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Servers' })).toHaveAttribute(
+      'href',
+      '/'
+    );
+    expect(screen.getByRole('link', { name: 'Backups' })).toHaveAttribute(
+      'href',
+      '/backups'
+    );
   });
 
-  it('hides the theme switcher with the user section', () => {
-    render(<Header email="test@example.com" showUser={false} />);
+  it('hides nav links when showUser is false', () => {
+    render(<Header showUser={false} />);
     expect(
-      screen.queryByRole('button', { name: 'Change theme' })
+      screen.queryByRole('link', { name: 'Servers' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Backups' })
     ).not.toBeInTheDocument();
   });
 
-  it('switches the theme from the dropdown', async () => {
+  it('shows theme submenu in the user menu', async () => {
     const user = userEvent.setup();
-    render(
-      <ThemeProvider>
-        <Header email="test@example.com" showUser />
-        <ThemeProbe />
-      </ThemeProvider>
-    );
+    render(<Header email="test@example.com" showUser />);
 
-    await user.click(screen.getByRole('button', { name: 'Change theme' }));
-    await user.click(screen.getByRole('menuitemradio', { name: 'Dark' }));
+    await user.click(screen.getByRole('button', { name: 'User menu' }));
+    expect(screen.getByRole('menuitem', { name: 'Theme' })).toBeInTheDocument();
+  });
 
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-    expect(window.localStorage.getItem('metio-theme')).toBe('dark');
-    expect(document.documentElement).toHaveClass('dark');
+  it('shows email in the user menu', async () => {
+    const user = userEvent.setup();
+    render(<Header email="test@example.com" showUser />);
+
+    await user.click(screen.getByRole('button', { name: 'User menu' }));
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+  });
+
+  it('shows logout in the user menu', async () => {
+    const user = userEvent.setup();
+    render(<Header email="test@example.com" showUser />);
+
+    await user.click(screen.getByRole('button', { name: 'User menu' }));
+    const logoutLink = screen.getByRole('menuitem', { name: 'Logout' });
+    expect(logoutLink).toBeInTheDocument();
+    expect(logoutLink).toHaveAttribute('href', '/auth/logout');
   });
 });
