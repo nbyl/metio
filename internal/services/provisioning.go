@@ -76,6 +76,14 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 	})
 }
 
+// CreateServerFromBackup creates a new server and restores a snapshot before
+// Minecraft starts. The restore information is carried on the ServerConfig
+// (RestoreSnapshotID / RestoreSourcePrefix) and baked into the cloud-config
+// so it runs during the VM's first boot.
+func (s *ProvisioningService) CreateServerFromBackup(ctx context.Context, serverID string, config *programs.ServerConfig) error {
+	return s.CreateServer(ctx, serverID, config)
+}
+
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
 	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationUpdate, nil, func(opCtx context.Context, status *db.ProvisioningStatus) error {
 		return s.runUpdate(opCtx, status, serverID, config, updateType)

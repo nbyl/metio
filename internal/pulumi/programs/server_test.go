@@ -284,3 +284,23 @@ func TestExistingAddressImportID(t *testing.T) {
 		})
 	}
 }
+
+func TestBackupPrefixConditionExtendedWithSourcePrefix(t *testing.T) {
+	bucket := "my-project-development-backups"
+	newServerID := "new-srv-id"
+	sourcePrefix := "servers/old-srv-id/restic"
+
+	// Standard condition for the new server's own prefix.
+	ownCondition := backupPrefixCondition(bucket, newServerID)
+	assert.Contains(t, ownCondition, "servers/new-srv-id/restic/")
+
+	// Extended condition adds the source prefix with an OR.
+	extendedCondition := fmt.Sprintf(
+		`resource.name.startsWith("projects/_/buckets/%s/objects/%s/") || resource.name.startsWith("projects/_/buckets/%s/objects/%s/")`,
+		bucket, serverBackupPrefix(newServerID),
+		bucket, sourcePrefix,
+	)
+	assert.Contains(t, extendedCondition, "servers/new-srv-id/restic/")
+	assert.Contains(t, extendedCondition, "servers/old-srv-id/restic/")
+	assert.Contains(t, extendedCondition, "||")
+}

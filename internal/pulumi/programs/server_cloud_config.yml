@@ -113,6 +113,7 @@ write_files:
 runcmd:
   - mkdir -p /mnt/disks/minecraft/data /mnt/disks/minecraft/backup-manifests
   - chmod 0777 /mnt/disks/minecraft/backup-manifests
+${restoreCommand}
   - systemctl daemon-reload
   - systemctl enable minecraft ${backupServiceEnable}metio-machine-agent
   - systemctl start minecraft ${backupServiceEnable}metio-machine-agent
