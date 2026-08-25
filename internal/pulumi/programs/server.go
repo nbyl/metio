@@ -60,6 +60,18 @@ type ServerConfig struct {
 	// set on the initial create; updates must leave it false so that an
 	// already-managed address is never re-imported.
 	ImportExistingAddress bool
+
+	// RestoreSnapshotID is the restic snapshot to restore before Minecraft
+	// starts on first boot. When set, a one-off restore step is baked into the
+	// cloud-config runcmd section so the world is in place before any services
+	// start.
+	RestoreSnapshotID string
+
+	// RestoreSourcePrefix is the restic repository prefix inside the backup
+	// bucket that contains the snapshot to restore (e.g.
+	// "servers/{old-server-id}/restic"). It differs from the new server's own
+	// prefix so the restore reads from the source backup's repository.
+	RestoreSourcePrefix string
 }
 
 // centralBackupBucketName returns the deployment-wide central backup bucket
@@ -208,6 +220,8 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			RCONPassword:         config.RCONPassword,
 			ControllerURL:        config.ControllerURL,
 			AgentToken:           config.AgentToken,
+			RestoreSnapshotID:    config.RestoreSnapshotID,
+			RestoreSourcePrefix:  config.RestoreSourcePrefix,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate cloud-config: %w", err)
@@ -258,15 +272,29 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		}
 
 		// Grant the VM service account object access scoped to this server's
-		// Restic prefix inside the central bucket (least privilege).
+		// Restic prefix inside the central bucket (least privilege). When a
+		// restore from another server's backup is requested, extend the
+		// condition to also cover the source prefix so the restore container
+		// can read from the source repository.
+		iamConditionExpr := backupPrefixCondition(config.BackupBucket, config.ServerID)
+		iamConditionDesc := "Limit access to this server's Restic repository prefix"
+		if config.RestoreSourcePrefix != "" {
+			iamConditionExpr = fmt.Sprintf(
+				"resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\") || resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\")",
+				config.BackupBucket, serverBackupPrefix(config.ServerID),
+				config.BackupBucket, config.RestoreSourcePrefix,
+			)
+			iamConditionDesc = "Access to this server's prefix and source backup prefix for restore"
+		}
+
 		_, err = storage.NewBucketIAMMember(ctx, fmt.Sprintf("%s-backup-bucket-admin", config.Name), &storage.BucketIAMMemberArgs{
 			Bucket: pulumi.String(config.BackupBucket),
 			Role:   pulumi.String("roles/storage.objectAdmin"),
 			Member: pulumi.Sprintf("serviceAccount:%s", sa.Email),
 			Condition: &storage.BucketIAMMemberConditionArgs{
 				Title:       pulumi.String("server-backup-prefix"),
-				Description: pulumi.String("Limit access to this server's Restic repository prefix"),
-				Expression:  pulumi.String(backupPrefixCondition(config.BackupBucket, config.ServerID)),
+				Description: pulumi.String(iamConditionDesc),
+				Expression:  pulumi.String(iamConditionExpr),
 			},
 		})
 		if err != nil {

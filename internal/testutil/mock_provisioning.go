@@ -18,6 +18,11 @@ func (m *MockProvisioningService) CreateServer(ctx context.Context, serverID str
 	return args.Error(0)
 }
 
+func (m *MockProvisioningService) CreateServerFromBackup(ctx context.Context, serverID string, config *programs.ServerConfig) error {
+	args := m.Called(ctx, serverID, config)
+	return args.Error(0)
+}
+
 func (m *MockProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
 	args := m.Called(ctx, serverID, config, updateType)
 	return args.Error(0)

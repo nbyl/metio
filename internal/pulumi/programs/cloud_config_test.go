@@ -1,6 +1,7 @@
 package programs
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -155,4 +156,64 @@ func TestRenderCloudConfig_BackupDisabled(t *testing.T) {
 	assert.Contains(t, result, "systemctl enable minecraft metio-machine-agent")
 	assert.Contains(t, result, "systemctl start minecraft metio-machine-agent")
 	assert.NotContains(t, result, "minecraft-backup metio-machine-agent")
+}
+
+func TestRenderCloudConfig_RestoreSnapshotOmitted(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupBucket:        "my-project-development-backups",
+		ServerID:            "new-server-id",
+		BackupRetentionDays: 90,
+		ResticPassword:      "restic-pw",
+		RCONPassword:        "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, result, "metio-restore")
+	assert.NotContains(t, result, "restic restore")
+}
+
+func TestRenderCloudConfig_RestoreSnapshotPresent(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupBucket:        "my-project-development-backups",
+		ServerID:            "new-server-id",
+		BackupRetentionDays: 90,
+		ResticPassword:      "restic-pw",
+		RCONPassword:        "rcon-pw",
+		BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+		RestoreSnapshotID:   "abc123-snapshot",
+		RestoreSourcePrefix: "servers/old-server-id/restic",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "docker run --rm --name metio-restore")
+	assert.Contains(t, result, "RESTIC_REPOSITORY=gs:my-project-development-backups:/servers/old-server-id/restic")
+	assert.Contains(t, result, "RESTIC_PASSWORD=restic-pw")
+	assert.Contains(t, result, "restic restore abc123-snapshot --target /data")
+	assert.Contains(t, result, "-v /mnt/disks/minecraft/data:/data")
+
+	// Restore step appears before systemctl start
+	restoreIdx := strings.Index(result, "metio-restore")
+	startIdx := strings.Index(result, "systemctl start minecraft")
+	assert.True(t, restoreIdx < startIdx, "restore must appear before systemctl start")
+}
+
+func TestRenderCloudConfig_RestoreSnapshotOnly(t *testing.T) {
+	// When only RestoreSnapshotID is set but RestoreSourcePrefix is empty,
+	// no restore step should be rendered (both must be present).
+	cfg := &TemplateConfig{
+		Region:             "europe-west3",
+		MachineAgentImage:  "machine-agent:latest",
+		RestoreSnapshotID:  "abc123",
+		RCONPassword:       "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, result, "metio-restore")
 }

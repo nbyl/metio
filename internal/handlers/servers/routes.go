@@ -26,5 +26,7 @@ func RegisterRoutes(api *mux.Router) {
 	s.HandleFunc("/{id}/backups/{backupId}/restore", RestoreBackupByID).Methods("POST")
 	s.HandleFunc("/{id}/backups", ListServerBackups).Methods("GET")
 
+	api.HandleFunc("/backups", ListAllBackups).Methods("GET")
+	api.HandleFunc("/backups/{backupId}/servers", CreateServerFromBackup).Methods("POST")
 	api.HandleFunc("/options", ListOptions).Methods("GET")
 }

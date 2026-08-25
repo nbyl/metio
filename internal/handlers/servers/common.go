@@ -15,6 +15,7 @@ import (
 
 type ProvisioningServiceInterface interface {
 	CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error
+	CreateServerFromBackup(ctx context.Context, serverID string, config *programs.ServerConfig) error
 	UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error
 	DestroyServer(ctx context.Context, serverID string) error
 	RestoreServer(ctx context.Context, serverID string, backup *db.Backup, versionWarning string) error
@@ -37,6 +38,18 @@ type CreateServerRequest struct {
 	DiskSizeGB       int                    `json:"diskSizeGB,omitempty"`
 	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
 	ExistingAddress  string                 `json:"existingAddress,omitempty"`
+}
+
+// CreateFromBackupRequest is the wire representation for creating a new server
+// from a retained backup. Name is required; all other fields override the
+// backup's SourceConfig defaults.
+type CreateFromBackupRequest struct {
+	Name             string `json:"name"`
+	Region           string `json:"region,omitempty"`
+	Zone             string `json:"zone,omitempty"`
+	MachineType      string `json:"machineType,omitempty"`
+	MinecraftVersion string `json:"minecraftVersion,omitempty"`
+	DiskSizeGB       int    `json:"diskSizeGB,omitempty"`
 }
 
 type UpdateServerRequest struct {
