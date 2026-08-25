@@ -1,4 +1,5 @@
 import { Gamepad2, Moon, Sun } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useServerOptions } from '../../hooks/useServerOptions';
 import { Button } from '../ui/Button';
 import {
@@ -40,7 +41,9 @@ function ThemeSwitcher() {
       <DropdownMenuContent align="end">
         <DropdownMenuRadioGroup
           value={theme}
-          onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+          onValueChange={(value) =>
+            setTheme(value as 'light' | 'dark' | 'system')
+          }
         >
           <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
@@ -82,6 +85,9 @@ export function Header({ email, showUser = false }: HeaderProps) {
       </div>
       {showUser && email && (
         <div className="absolute right-0 flex items-center gap-3">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/backups">Backups</Link>
+          </Button>
           <span className="text-sm text-muted-foreground">{email}</span>
           <Button asChild variant="outline" size="sm">
             <a href="/auth/logout">Logout</a>

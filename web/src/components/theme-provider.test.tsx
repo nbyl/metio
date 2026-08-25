@@ -20,7 +20,7 @@ function renderProvider() {
   return render(
     <ThemeProvider>
       <Probe />
-    </ThemeProvider>,
+    </ThemeProvider>
   );
 }
 

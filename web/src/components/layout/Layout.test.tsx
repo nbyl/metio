@@ -23,7 +23,7 @@ describe('Layout', () => {
     render(
       <ThemeProvider>
         <Layout>Content</Layout>
-      </ThemeProvider>,
+      </ThemeProvider>
     );
     expect(document.documentElement).not.toHaveClass('dark');
   });
@@ -35,7 +35,7 @@ describe('Layout', () => {
           Content
           <DarkProbe />
         </Layout>
-      </ThemeProvider>,
+      </ThemeProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: 'dark' }));
     expect(document.documentElement).toHaveClass('dark');

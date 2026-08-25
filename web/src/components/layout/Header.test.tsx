@@ -4,6 +4,22 @@ import userEvent from '@testing-library/user-event';
 import { Header } from './Header';
 import { ThemeProvider, useTheme } from '../theme-provider';
 
+vi.mock('react-router-dom', () => ({
+  Link: ({
+    to,
+    children,
+    ...props
+  }: {
+    to: string;
+    children: React.ReactNode;
+    [key: string]: unknown;
+  }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('../../hooks/useServerOptions', () => ({
   useServerOptions: vi.fn(() => ({ data: undefined })),
 }));
@@ -86,8 +102,10 @@ describe('Header', () => {
     const logout = screen.getByRole('link', { name: 'Logout' });
     const switcher = screen.getByRole('button', { name: 'Change theme' });
     expect(switcher).toBeInTheDocument();
-    expect(logout.compareDocumentPosition(switcher) &
-      Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      logout.compareDocumentPosition(switcher) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it('hides the theme switcher with the user section', () => {
@@ -103,7 +121,7 @@ describe('Header', () => {
       <ThemeProvider>
         <Header email="test@example.com" showUser />
         <ThemeProbe />
-      </ThemeProvider>,
+      </ThemeProvider>
     );
 
     await user.click(screen.getByRole('button', { name: 'Change theme' }));

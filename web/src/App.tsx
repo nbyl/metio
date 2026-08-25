@@ -10,6 +10,7 @@ import {
   ServerSetupWizard,
   ProvisioningProgress,
 } from './components/server';
+import { BackupCatalogPage } from './components/backup/BackupCatalogPage';
 
 /**
  * Dashboard component - main server control panel
@@ -95,6 +96,17 @@ function App() {
             <Layout>
               <Header />
               <SetupWizard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/backups"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Header />
+              <BackupCatalogPage />
             </Layout>
           </ProtectedRoute>
         }
