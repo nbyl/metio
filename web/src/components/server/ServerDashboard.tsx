@@ -16,6 +16,7 @@ import {
   Settings,
   Trash2,
   Plus,
+  Database,
 } from 'lucide-react';
 import { useServers } from '../../hooks/useServers';
 import { useServerStatus } from '../../hooks/useServerStatus';
@@ -681,6 +682,14 @@ function ServerCard({ server }: ServerCardProps) {
               )}
             </Button>
           )}
+          <Button
+            variant="outline"
+            disabled={isProvisioning}
+            onClick={() => navigate(`/backups?server=${server.id}`)}
+          >
+            <Database className="h-4 w-4" />
+            Backups
+          </Button>
           <Button
             variant={server.outdated ? 'default' : 'outline'}
             disabled={isProvisioning}

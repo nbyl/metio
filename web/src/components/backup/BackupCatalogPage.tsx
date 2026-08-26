@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Server, Trash2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { ArrowLeft, MoreHorizontal, Plus, RotateCcw, Server, Trash2 } from 'lucide-react';
 import type { BackupRecord } from '../../types/server';
 import { useAllBackups } from '../../hooks/useBackups';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
@@ -7,7 +8,14 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/DropdownMenu';
 import { CreateFromBackupDialog } from './CreateFromBackupDialog';
+import { RestoreConfirmDialog } from '../server/RestoreConfirmDialog';
 
 type FilterValue = 'all' | 'active' | 'deleted';
 
@@ -64,7 +72,7 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onShowAll }: { onShowAll?: () => void }) {
   return (
     <Card>
       <CardContent className="py-12 text-center">
@@ -73,6 +81,15 @@ function EmptyState() {
           No backups found. Enable scheduled backups on a server to start
           creating snapshots.
         </p>
+        {onShowAll && (
+          <Button
+            variant="link"
+            className="mt-2"
+            onClick={onShowAll}
+          >
+            Show all backups
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -80,10 +97,28 @@ function EmptyState() {
 
 export function BackupCatalogPage() {
   const { data: backups, isLoading, error, refetch } = useAllBackups();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const serverFilter = searchParams.get('server');
   const [filter, setFilter] = useState<FilterValue>('all');
   const [createFromBackup, setCreateFromBackup] = useState<BackupRecord | null>(
     null
   );
+  const [restoreTarget, setRestoreTarget] = useState<BackupRecord | null>(null);
+
+  const filteredBackups = (backups ?? []).filter((backup) => {
+    if (serverFilter && backup.serverId !== serverFilter) return false;
+    if (filter === 'active') return !backup.serverDeletedAt;
+    if (filter === 'deleted') return !!backup.serverDeletedAt;
+    return true;
+  });
+
+  const filteredServerName = serverFilter
+    ? filteredBackups[0]?.serverName ?? null
+    : null;
+
+  const handleClearServerFilter = () => {
+    setSearchParams({});
+  };
 
   if (isLoading) {
     return (
@@ -114,27 +149,44 @@ export function BackupCatalogPage() {
     );
   }
 
-  const filteredBackups = (backups ?? []).filter((backup) => {
-    if (filter === 'active') return !backup.serverDeletedAt;
-    if (filter === 'deleted') return !!backup.serverDeletedAt;
-    return true;
-  });
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Backups</h1>
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterValue)}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="deleted">Deleted</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-3">
+          {serverFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearServerFilter}
+              aria-label="Show all backups"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <h1 className="text-2xl font-semibold">
+            {filteredServerName
+              ? `Backups for ${filteredServerName}`
+              : 'Backups'}
+          </h1>
+        </div>
+        {!serverFilter && (
+          <Tabs
+            value={filter}
+            onValueChange={(v) => setFilter(v as FilterValue)}
+          >
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="deleted">Deleted</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
       </div>
 
       {filteredBackups.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          onShowAll={serverFilter ? handleClearServerFilter : undefined}
+        />
       ) : (
         <Card>
           <CardHeader className="pb-3">
@@ -220,17 +272,36 @@ export function BackupCatalogPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        {backup.status === 'COMPLETED' &&
-                          backup.sourceConfig && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setCreateFromBackup(backup)}
-                            >
-                              <Plus className="h-3 w-3" />
-                              Create Server
-                            </Button>
-                          )}
+                        {(backup.status === 'COMPLETED' && !backup.serverDeletedAt) ||
+                        (backup.status === 'COMPLETED' && backup.sourceConfig) ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon-sm">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {backup.status === 'COMPLETED' &&
+                                !backup.serverDeletedAt && (
+                                  <DropdownMenuItem
+                                    onClick={() => setRestoreTarget(backup)}
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                    Restore
+                                  </DropdownMenuItem>
+                                )}
+                              {backup.status === 'COMPLETED' &&
+                                backup.sourceConfig && (
+                                  <DropdownMenuItem
+                                    onClick={() => setCreateFromBackup(backup)}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                    Create Server
+                                  </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -245,6 +316,15 @@ export function BackupCatalogPage() {
         open={createFromBackup !== null}
         backup={createFromBackup}
         onClose={() => setCreateFromBackup(null)}
+      />
+
+      <RestoreConfirmDialog
+        open={restoreTarget !== null}
+        backup={restoreTarget}
+        serverId={restoreTarget?.serverId ?? ''}
+        serverName={restoreTarget?.serverName ?? ''}
+        currentMinecraftVersion={restoreTarget?.minecraftVersion}
+        onClose={() => setRestoreTarget(null)}
       />
     </div>
   );

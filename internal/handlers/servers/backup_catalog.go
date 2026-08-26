@@ -128,6 +128,13 @@ func HandleBackupReport(w http.ResponseWriter, r *http.Request) {
 		RepositorySize:   req.RepositorySize,
 		MinecraftVersion: req.MinecraftVersion,
 		Status:           db.BackupStatus(status),
+		SourceConfig: &db.BackupSourceConfig{
+			Region:           serverConfig.Region,
+			Zone:             serverConfig.Zone,
+			MachineType:      serverConfig.MachineType,
+			DiskSizeGB:       serverConfig.DiskSizeGB,
+			MinecraftVersion: serverConfig.MinecraftVersion,
+		},
 	}
 
 	if err := dbConn.UpsertBackup(r.Context(), backup); err != nil {

@@ -347,6 +347,11 @@ describe('ServerDashboard backup settings', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /update/i }));
+
+    expect(screen.getByRole('tab', { name: 'Backup' })).toHaveAttribute(
+      'aria-selected',
+      'false'
+    );
     await user.click(screen.getByRole('tab', { name: 'Backup' }));
 
     expect(screen.getByRole('tab', { name: 'Backup' })).toHaveAttribute(
@@ -453,6 +458,32 @@ describe('ServerDashboard loading and error states', () => {
     renderDashboard();
 
     expect(screen.getAllByText('Unknown').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('ServerDashboard backup navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryClient = createQueryClient();
+    applyBaseMocks();
+    mockServerList([mockServerResponse(stoppedStatus)]);
+  });
+
+  it('shows the Backups button on the server card', () => {
+    renderDashboard();
+
+    expect(
+      screen.getByRole('button', { name: /backups/i })
+    ).toBeInTheDocument();
+  });
+
+  it('navigates to backups page with server filter when Backups is clicked', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await user.click(screen.getByRole('button', { name: /backups/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/backups?server=srv1');
   });
 });
 
