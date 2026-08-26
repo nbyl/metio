@@ -5,14 +5,21 @@ import { BackupCatalogPage } from './BackupCatalogPage';
 import { useAllBackups } from '../../hooks/useBackups';
 
 const mockNavigate = vi.hoisted(() => vi.fn());
+const mockSearchParams = vi.hoisted(() => new URLSearchParams());
+const mockSetSearchParams = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
+  useSearchParams: () => [mockSearchParams, mockSetSearchParams],
 }));
 
 vi.mock('../../hooks/useBackups', () => ({
   useAllBackups: vi.fn(),
   useCreateServerFromBackup: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
+  useRestoreBackup: vi.fn(() => ({
     mutate: vi.fn(),
     isPending: false,
   })),
@@ -66,6 +73,10 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const key of Array.from(mockSearchParams.keys())) {
+    mockSearchParams.delete(key);
+  }
+  mockSetSearchParams.mockReset();
 });
 
 describe('BackupCatalogPage loading', () => {
@@ -201,5 +212,94 @@ describe('BackupCatalogPage with backups', () => {
     renderPage();
 
     expect(screen.getByText('2 backups')).toBeInTheDocument();
+  });
+
+  it('shows Restore button for completed backups of active servers', () => {
+    renderPage();
+
+    const restoreButtons = screen.getAllByText('Restore');
+    expect(restoreButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not show Restore button for deleted server backups', () => {
+    renderPage();
+
+    const rows = screen.getAllByText('Creative').map((el) => el.closest('tr'));
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    for (const row of rows) {
+      expect(row?.querySelectorAll('button')).toHaveLength(0);
+    }
+  });
+});
+
+describe('BackupCatalogPage server filter', () => {
+  beforeEach(() => {
+    vi.mocked(useAllBackups).mockReturnValue({
+      data: backups,
+      isLoading: false,
+    } as never);
+  });
+
+  it('filters backups by server query param', () => {
+    mockSearchParams.set('server', 'srv1');
+
+    renderPage();
+
+    expect(screen.getByText('Survival')).toBeInTheDocument();
+    expect(screen.queryByText('Creative')).not.toBeInTheDocument();
+  });
+
+  it('shows server name in heading when filtered', () => {
+    mockSearchParams.set('server', 'srv1');
+
+    renderPage();
+
+    expect(screen.getByText('Backups for Survival')).toBeInTheDocument();
+  });
+
+  it('shows back button when filtered by server', () => {
+    mockSearchParams.set('server', 'srv1');
+
+    renderPage();
+
+    expect(
+      screen.getByRole('button', { name: 'Show all backups' })
+    ).toBeInTheDocument();
+  });
+
+  it('hides filter tabs when filtered by server', () => {
+    mockSearchParams.set('server', 'srv1');
+
+    renderPage();
+
+    expect(screen.queryByRole('tab', { name: 'All' })).not.toBeInTheDocument();
+  });
+
+  it('clears server filter when back button is clicked', async () => {
+    const user = userEvent.setup();
+    mockSearchParams.set('server', 'srv1');
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Show all backups' }));
+
+    expect(mockSetSearchParams).toHaveBeenCalledWith({});
+  });
+
+  it('shows empty state for unknown server id', () => {
+    mockSearchParams.set('server', 'unknown');
+
+    renderPage();
+
+    expect(screen.getByText(/No backups found/)).toBeInTheDocument();
+  });
+
+  it('shows fallback link in empty state for server filter', () => {
+    mockSearchParams.set('server', 'unknown');
+
+    renderPage();
+
+    const buttons = screen.getAllByRole('button', { name: 'Show all backups' });
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
   });
 });
