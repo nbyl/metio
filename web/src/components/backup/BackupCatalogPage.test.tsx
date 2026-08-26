@@ -169,11 +169,14 @@ describe('BackupCatalogPage with backups', () => {
     expect(screen.getByText(/Retention until/)).toBeInTheDocument();
   });
 
-  it('shows Create Server button for completed backups with sourceConfig', () => {
+  it('shows Create Server in dropdown for completed backups with sourceConfig', async () => {
+    const user = userEvent.setup();
     renderPage();
 
-    const createButtons = screen.getAllByText('Create Server');
-    expect(createButtons.length).toBeGreaterThanOrEqual(1);
+    const dropdownTriggers = screen.getAllByRole('button', { name: '' });
+    await user.click(dropdownTriggers[0]);
+
+    expect(screen.getByRole('menuitem', { name: /Create Server/ })).toBeInTheDocument();
   });
 
   it('filters to active servers only', async () => {
@@ -214,20 +217,23 @@ describe('BackupCatalogPage with backups', () => {
     expect(screen.getByText('2 backups')).toBeInTheDocument();
   });
 
-  it('shows Restore button for completed backups of active servers', () => {
+  it('shows Restore in dropdown for completed backups of active servers', async () => {
+    const user = userEvent.setup();
     renderPage();
 
-    const restoreButtons = screen.getAllByText('Restore');
-    expect(restoreButtons.length).toBeGreaterThanOrEqual(1);
+    const dropdownTriggers = screen.getAllByRole('button', { name: '' });
+    await user.click(dropdownTriggers[0]);
+
+    expect(screen.getByRole('menuitem', { name: /Restore/ })).toBeInTheDocument();
   });
 
-  it('does not show Restore button for deleted server backups', () => {
+  it('does not show dropdown for deleted server backups without sourceConfig', () => {
     renderPage();
 
     const rows = screen.getAllByText('Creative').map((el) => el.closest('tr'));
     expect(rows.length).toBeGreaterThanOrEqual(1);
     for (const row of rows) {
-      expect(row?.querySelectorAll('button')).toHaveLength(0);
+      expect(row?.querySelectorAll('[data-slot="dropdown-menu-trigger"]')).toHaveLength(0);
     }
   });
 });

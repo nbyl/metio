@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Plus, RotateCcw, Server, Trash2 } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Plus, RotateCcw, Server, Trash2 } from 'lucide-react';
 import type { BackupRecord } from '../../types/server';
 import { useAllBackups } from '../../hooks/useBackups';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
@@ -8,6 +8,12 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/DropdownMenu';
 import { CreateFromBackupDialog } from './CreateFromBackupDialog';
 import { RestoreConfirmDialog } from '../server/RestoreConfirmDialog';
 
@@ -266,30 +272,36 @@ export function BackupCatalogPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {backup.status === 'COMPLETED' &&
-                            !backup.serverDeletedAt && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setRestoreTarget(backup)}
-                              >
-                                <RotateCcw className="h-3 w-3" />
-                                Restore
+                        {(backup.status === 'COMPLETED' && !backup.serverDeletedAt) ||
+                        (backup.status === 'COMPLETED' && backup.sourceConfig) ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon-sm">
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
-                            )}
-                          {backup.status === 'COMPLETED' &&
-                            backup.sourceConfig && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setCreateFromBackup(backup)}
-                              >
-                                <Plus className="h-3 w-3" />
-                                Create Server
-                              </Button>
-                            )}
-                        </div>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {backup.status === 'COMPLETED' &&
+                                !backup.serverDeletedAt && (
+                                  <DropdownMenuItem
+                                    onClick={() => setRestoreTarget(backup)}
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                    Restore
+                                  </DropdownMenuItem>
+                                )}
+                              {backup.status === 'COMPLETED' &&
+                                backup.sourceConfig && (
+                                  <DropdownMenuItem
+                                    onClick={() => setCreateFromBackup(backup)}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                    Create Server
+                                  </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
