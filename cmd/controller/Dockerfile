@@ -25,12 +25,14 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-# Copy built frontend assets from frontend stage
+# Copy all source files
+COPY . .
+
+# Copy built frontend assets AFTER COPY . so the fresh build
+# overwrites the stale static/dist/ that may exist in the repo.
 COPY --from=frontend-builder /app/static/dist ./static/dist
-COPY static/embed.go ./static/
 
 # Build Go binary
-COPY . .
 ARG VERSION=local
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \

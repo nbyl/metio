@@ -2,6 +2,9 @@
 build
 tmp
 
+# Ignore stale frontend dist (rebuilt during Docker build)
+static/dist/
+
 # Ignore Go build cache and modules
 *.out
 *.exe

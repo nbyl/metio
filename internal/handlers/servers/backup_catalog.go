@@ -27,27 +27,27 @@ type reportRequest struct {
 
 type backupResponse struct {
 	ID               string                      `json:"id"`
-	ServerID         string                      `json:"server_id"`
-	ServerName       string                      `json:"server_name"`
-	SnapshotID       string                      `json:"snapshot_id"`
-	RepositoryPrefix string                      `json:"repository_prefix"`
-	CreatedAt        string                      `json:"created_at"`
-	DurationSeconds  int64                       `json:"duration_seconds"`
-	FileCount        int64                       `json:"file_count"`
-	RepositorySize   int64                       `json:"repository_size"`
-	MinecraftVersion string                      `json:"minecraft_version"`
+	ServerID         string                      `json:"serverId"`
+	ServerName       string                      `json:"serverName"`
+	SnapshotID       string                      `json:"snapshotId"`
+	RepositoryPrefix string                      `json:"repositoryPrefix"`
+	CreatedAt        string                      `json:"createdAt"`
+	DurationSeconds  int64                       `json:"durationSeconds"`
+	FileCount        int64                       `json:"fileCount"`
+	RepositorySize   int64                       `json:"repositorySize"`
+	MinecraftVersion string                      `json:"minecraftVersion"`
 	Status           string                      `json:"status"`
-	ServerDeletedAt  string                      `json:"server_deleted_at,omitempty"`
-	RetentionUntil   string                      `json:"retention_until,omitempty"`
-	SourceConfig     *backupSourceConfigResponse `json:"source_config,omitempty"`
+	ServerDeletedAt  string                      `json:"serverDeletedAt,omitempty"`
+	RetentionUntil   string                      `json:"retentionUntil,omitempty"`
+	SourceConfig     *backupSourceConfigResponse `json:"sourceConfig,omitempty"`
 }
 
 type backupSourceConfigResponse struct {
 	Region           string `json:"region"`
 	Zone             string `json:"zone"`
-	MachineType      string `json:"machine_type"`
-	DiskSizeGB       int    `json:"disk_size_gb"`
-	MinecraftVersion string `json:"minecraft_version"`
+	MachineType      string `json:"machineType"`
+	DiskSizeGB       int    `json:"diskSizeGB"`
+	MinecraftVersion string `json:"minecraftVersion"`
 }
 
 func writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
