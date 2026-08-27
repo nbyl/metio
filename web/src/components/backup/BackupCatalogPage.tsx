@@ -1,23 +1,40 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, MoreHorizontal, Plus, RotateCcw, Server, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  Plus,
+  RotateCcw,
+  Server,
+  Trash2,
+} from 'lucide-react';
 import type { BackupRecord } from '../../types/server';
 import { useAllBackups } from '../../hooks/useBackups';
+import { useServers } from '../../hooks/useServers';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
-import { Tabs, TabsList, TabsTrigger } from '../ui/Tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from '../ui/DropdownMenu';
 import { CreateFromBackupDialog } from './CreateFromBackupDialog';
 import { RestoreConfirmDialog } from '../server/RestoreConfirmDialog';
 
 type FilterValue = 'all' | 'active' | 'deleted';
+type SortField = 'created_at' | 'duration_seconds' | 'repository_size';
+type SortDir = 'asc' | 'desc';
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 'All'] as const;
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -95,30 +112,116 @@ function EmptyState({ onShowAll }: { onShowAll?: () => void }) {
   );
 }
 
-export function BackupCatalogPage() {
-  const { data: backups, isLoading, error, refetch } = useAllBackups();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const serverFilter = searchParams.get('server');
-  const [filter, setFilter] = useState<FilterValue>('all');
-  const [createFromBackup, setCreateFromBackup] = useState<BackupRecord | null>(
-    null
+interface SortHeaderProps {
+  field: SortField;
+  label: string;
+  sortField: SortField;
+  sortDir: SortDir;
+  onSort: (field: SortField) => void;
+}
+
+function SortHeader({ field, label, sortField, sortDir, onSort }: SortHeaderProps) {
+  const active = sortField === field;
+  return (
+    <th
+      className="px-4 py-2 font-medium cursor-pointer select-none hover:text-foreground"
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          sortDir === 'asc' ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowDown className="h-3 w-3 opacity-30" />
+        )}
+      </span>
+    </th>
   );
+}
+
+export function BackupCatalogPage() {
+  const { data: servers } = useServers();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const serverFilter = searchParams.get('server') ?? '';
+  const sortField = (searchParams.get('sort') ?? 'created_at') as SortField;
+  const sortDir = (searchParams.get('dir') ?? 'desc') as SortDir;
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSizeParam = searchParams.get('pageSize');
+  const pageSize = pageSizeParam === 'All' ? 1000 : (parseInt(pageSizeParam ?? '25', 10) || 25);
+  const [filter, setFilter] = useState<FilterValue>('all');
+  const [createFromBackup, setCreateFromBackup] = useState<BackupRecord | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupRecord | null>(null);
 
-  const filteredBackups = (backups ?? []).filter((backup) => {
-    if (serverFilter && backup.serverId !== serverFilter) return false;
+  const limit = pageSize;
+  const offset = (page - 1) * limit;
+
+  const { data, isLoading, error, refetch } = useAllBackups({
+    sort: sortField,
+    dir: sortDir,
+    limit,
+    offset,
+    server: serverFilter || undefined,
+  });
+
+  const total = data?.total ?? 0;
+  const backups = data?.backups ?? [];
+  const totalPages = pageSize >= 1000 ? 1 : Math.max(1, Math.ceil(total / pageSize));
+
+  const updateParam = (key: string, value: string | null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === null) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      if (key !== 'page') {
+        next.set('page', '1');
+      }
+      return next;
+    });
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      updateParam('dir', sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      updateParam('sort', field);
+      updateParam('dir', 'desc');
+    }
+  };
+
+  const handleServerFilter = (serverId: string) => {
+    updateParam('server', serverId || null);
+  };
+
+  const handlePageSizeChange = (size: number | 'All') => {
+    updateParam('pageSize', size === 'All' ? 'All' : String(size));
+  };
+
+  const handleClearServerFilter = () => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('server');
+      next.delete('page');
+      return next;
+    });
+  };
+
+  const filteredServerName = serverFilter
+    ? backups.find((b) => b.serverId === serverFilter)?.serverName ?? null
+    : null;
+
+  const filteredByStatus = backups.filter((backup) => {
     if (filter === 'active') return !backup.serverDeletedAt;
     if (filter === 'deleted') return !!backup.serverDeletedAt;
     return true;
   });
-
-  const filteredServerName = serverFilter
-    ? filteredBackups[0]?.serverName ?? null
-    : null;
-
-  const handleClearServerFilter = () => {
-    setSearchParams({});
-  };
 
   if (isLoading) {
     return (
@@ -169,147 +272,239 @@ export function BackupCatalogPage() {
               : 'Backups'}
           </h1>
         </div>
-        {!serverFilter && (
-          <Tabs
-            value={filter}
-            onValueChange={(v) => setFilter(v as FilterValue)}
-          >
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="deleted">Deleted</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Server className="mr-1 h-3.5 w-3.5" />
+                {serverFilter
+                  ? (servers?.find((s) => s.id === serverFilter)?.config.name ?? 'Filtered')
+                  : 'All Servers'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Filter by server</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleServerFilter('')}>
+                All Servers
+              </DropdownMenuItem>
+              {servers?.map((s) => (
+                <DropdownMenuItem
+                  key={s.id}
+                  onClick={() => handleServerFilter(s.id)}
+                >
+                  {s.config.name}
+                  {s.id === serverFilter && ' (selected)'}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {filteredBackups.length === 0 ? (
-        <EmptyState
-          onShowAll={serverFilter ? handleClearServerFilter : undefined}
-        />
+      {filteredByStatus.length === 0 && !serverFilter ? (
+        <EmptyState />
       ) : (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {filteredBackups.length} backup
-              {filteredBackups.length !== 1 ? 's' : ''}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Server</th>
-                    <th className="px-4 py-2 font-medium">Status</th>
-                    <th className="px-4 py-2 font-medium">Created</th>
-                    <th className="px-4 py-2 font-medium">Duration</th>
-                    <th className="px-4 py-2 font-medium">Files</th>
-                    <th className="px-4 py-2 font-medium">Size</th>
-                    <th className="px-4 py-2 font-medium">Version</th>
-                    <th className="px-4 py-2 font-medium">Retention</th>
-                    <th className="px-4 py-2 font-medium text-right">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBackups.map((backup) => (
-                    <tr
-                      key={backup.id}
-                      className="border-b border-border/50 hover:bg-muted/30"
+        <>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {total} backup{total !== 1 ? 's' : ''}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Status:</span>
+                  {(['all', 'active', 'deleted'] as FilterValue[]).map((v) => (
+                    <Badge
+                      key={v}
+                      variant={filter === v ? 'default' : 'outline'}
+                      className="cursor-pointer"
+                      onClick={() => setFilter(v)}
                     >
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {backup.serverName}
-                          </span>
-                          {backup.serverDeletedAt && (
-                            <Badge variant="destructive" className="text-xs">
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Deleted
-                            </Badge>
-                          )}
-                        </div>
-                        {backup.serverDeletedAt && backup.retentionUntil && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Retention until{' '}
-                            {formatDateShort(backup.retentionUntil)}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Badge
-                          variant={
-                            backup.status === 'COMPLETED'
-                              ? 'default'
-                              : 'destructive'
-                          }
-                        >
-                          {backup.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {formatDate(backup.createdAt)}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {formatDuration(backup.durationSeconds)}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {backup.fileCount.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {formatBytes(backup.repositorySize)}
-                      </td>
-                      <td className="px-4 py-2.5">{backup.minecraftVersion}</td>
-                      <td className="px-4 py-2.5">
-                        {backup.retentionUntil ? (
-                          <span className="text-muted-foreground">
-                            until {formatDateShort(backup.retentionUntil)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        {(backup.status === 'COMPLETED' && !backup.serverDeletedAt) ||
-                        (backup.status === 'COMPLETED' && backup.sourceConfig) ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon-sm">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {backup.status === 'COMPLETED' &&
-                                !backup.serverDeletedAt && (
-                                  <DropdownMenuItem
-                                    onClick={() => setRestoreTarget(backup)}
-                                  >
-                                    <RotateCcw className="h-4 w-4" />
-                                    Restore
-                                  </DropdownMenuItem>
-                                )}
-                              {backup.status === 'COMPLETED' &&
-                                backup.sourceConfig && (
-                                  <DropdownMenuItem
-                                    onClick={() => setCreateFromBackup(backup)}
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                    Create Server
-                                  </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : null}
-                      </td>
-                    </tr>
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </Badge>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="px-4 py-2 font-medium">Server</th>
+                      <th className="px-4 py-2 font-medium">Status</th>
+                      <SortHeader
+                        field="created_at"
+                        label="Created"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <SortHeader
+                        field="duration_seconds"
+                        label="Duration"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <th className="px-4 py-2 font-medium">Files</th>
+                      <SortHeader
+                        field="repository_size"
+                        label="Size"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <th className="px-4 py-2 font-medium">Version</th>
+                      <th className="px-4 py-2 font-medium">Retention</th>
+                      <th className="px-4 py-2 font-medium text-right">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredByStatus.map((backup) => (
+                      <tr
+                        key={backup.id}
+                        className="border-b border-border/50 hover:bg-muted/30"
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {backup.serverName}
+                            </span>
+                            {backup.serverDeletedAt && (
+                              <Badge variant="destructive" className="text-xs">
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Deleted
+                              </Badge>
+                            )}
+                          </div>
+                          {backup.serverDeletedAt && backup.retentionUntil && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Retention until{' '}
+                              {formatDateShort(backup.retentionUntil)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Badge
+                            variant={
+                              backup.status === 'COMPLETED'
+                                ? 'default'
+                                : 'destructive'
+                            }
+                          >
+                            {backup.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {formatDate(backup.createdAt)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {formatDuration(backup.durationSeconds)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {backup.fileCount.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {formatBytes(backup.repositorySize)}
+                        </td>
+                        <td className="px-4 py-2.5">{backup.minecraftVersion}</td>
+                        <td className="px-4 py-2.5">
+                          {backup.retentionUntil ? (
+                            <span className="text-muted-foreground">
+                              until {formatDateShort(backup.retentionUntil)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          {(backup.status === 'COMPLETED' && !backup.serverDeletedAt) ||
+                          (backup.status === 'COMPLETED' && backup.sourceConfig) ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon-sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {backup.status === 'COMPLETED' &&
+                                  !backup.serverDeletedAt && (
+                                    <DropdownMenuItem
+                                      onClick={() => setRestoreTarget(backup)}
+                                    >
+                                      <RotateCcw className="h-4 w-4" />
+                                      Restore
+                                    </DropdownMenuItem>
+                                  )}
+                                {backup.status === 'COMPLETED' &&
+                                  backup.sourceConfig && (
+                                    <DropdownMenuItem
+                                      onClick={() => setCreateFromBackup(backup)}
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                      Create Server
+                                    </DropdownMenuItem>
+                                  )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Page size:</span>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <Badge
+                  key={size}
+                  variant={
+                    (pageSizeParam ?? '25') === String(size) ||
+                    (size === 'All' && pageSizeParam === 'All')
+                      ? 'default'
+                      : 'outline'
+                  }
+                  className="cursor-pointer"
+                  onClick={() => handlePageSizeChange(size)}
+                >
+                  {size}
+                </Badge>
+              ))}
             </div>
-          </CardContent>
-        </Card>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {offset + 1}–{Math.min(offset + limit, total)} of {total}
+              </span>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                disabled={page <= 1}
+                onClick={() => updateParam('page', String(page - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                disabled={page >= totalPages}
+                onClick={() => updateParam('page', String(page + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </>
       )}
 
       <CreateFromBackupDialog

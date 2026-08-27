@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +50,40 @@ type backupSourceConfigResponse struct {
 	MachineType      string `json:"machineType"`
 	DiskSizeGB       int    `json:"diskSizeGB"`
 	MinecraftVersion string `json:"minecraftVersion"`
+}
+
+type paginatedBackupsResponse struct {
+	Backups []backupResponse `json:"backups"`
+	Total   int              `json:"total"`
+}
+
+func parseSortParams(r *http.Request) (sortBy string, sortDir string, limit int, offset int, server string) {
+	sortBy = r.URL.Query().Get("sort")
+	sortDir = r.URL.Query().Get("dir")
+	server = r.URL.Query().Get("server")
+
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+	if sortDir == "" {
+		sortDir = "desc"
+	}
+
+	limit = 25
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	offset = 0
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	return
 }
 
 func writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
@@ -203,6 +239,8 @@ func ListAllBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sortBy, sortDir, limit, offset, serverFilter := parseSortParams(r)
+
 	backups, err := dbConn.ListBackups(r.Context())
 	if err != nil {
 		log.Printf("Error listing backups: %v", err)
@@ -210,12 +248,52 @@ func ListAllBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]backupResponse, 0, len(backups))
-	for _, b := range backups {
+	if serverFilter != "" {
+		filtered := make([]*db.Backup, 0, len(backups))
+		for _, b := range backups {
+			if b.ServerID == serverFilter || b.ServerName == serverFilter {
+				filtered = append(filtered, b)
+			}
+		}
+		backups = filtered
+	}
+
+	sort.SliceStable(backups, func(i, j int) bool {
+		var less bool
+		switch sortBy {
+		case "duration_seconds":
+			less = backups[i].DurationSeconds < backups[j].DurationSeconds
+		case "repository_size":
+			less = backups[i].RepositorySize < backups[j].RepositorySize
+		default:
+			less = backups[i].CreatedAt.Before(backups[j].CreatedAt)
+		}
+		if sortDir == "asc" {
+			return less
+		}
+		return !less
+	})
+
+	total := len(backups)
+
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := backups[offset:end]
+
+	resp := make([]backupResponse, 0, len(page))
+	for _, b := range page {
 		resp = append(resp, toBackupResponse(b))
 	}
 
-	writeJSONResponse(w, http.StatusOK, resp)
+	writeJSONResponse(w, http.StatusOK, paginatedBackupsResponse{
+		Backups: resp,
+		Total:   total,
+	})
 }
 
 func toBackupResponse(b *db.Backup) backupResponse {

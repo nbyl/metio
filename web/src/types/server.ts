@@ -172,6 +172,15 @@ export interface BackupRecord {
 }
 
 /**
+ * Paginated response from GET /api/backups.
+ * Matches Go handlers.paginatedBackupsResponse.
+ */
+export interface PaginatedBackupsResponse {
+  backups: BackupRecord[];
+  total: number;
+}
+
+/**
  * Response from POST /api/servers/{id}/backups/{backupId}/restore
  * Matches Go handlers.RestoreResponse.
  */

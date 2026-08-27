@@ -61,12 +61,13 @@ func TestListAllBackups_ReturnsGlobalCatalog(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-	var resp []backupResponse
+	var resp paginatedBackupsResponse
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Len(t, resp, 1)
-	assert.Equal(t, "srv1:snap1", resp[0].ID)
-	assert.NotNil(t, resp[0].SourceConfig)
-	assert.Equal(t, "europe-west6-a", resp[0].SourceConfig.Zone)
+	assert.Equal(t, 1, resp.Total)
+	assert.Len(t, resp.Backups, 1)
+	assert.Equal(t, "srv1:snap1", resp.Backups[0].ID)
+	assert.NotNil(t, resp.Backups[0].SourceConfig)
+	assert.Equal(t, "europe-west6-a", resp.Backups[0].SourceConfig.Zone)
 }
 
 func TestListAllBackups_EmptyCatalogReturnsArray(t *testing.T) {
@@ -86,7 +87,11 @@ func TestListAllBackups_EmptyCatalogReturnsArray(t *testing.T) {
 	ListAllBackups(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "[]\n", w.Body.String())
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Total)
+	assert.Empty(t, resp.Backups)
 }
 
 func TestListAllBackups_DBErrorReturns500(t *testing.T) {
@@ -336,4 +341,239 @@ func TestCreateServerFromBackup_DBErrorOnListBackups(t *testing.T) {
 	})
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func setupListAllBackupsTest(t *testing.T, backups []*db.Backup) {
+	t.Helper()
+	mockDB := new(testutil.MockDB)
+
+	original := GetDBConnection
+	GetDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
+		return mockDB, config.Config{}, nil
+	}
+	t.Cleanup(func() { GetDBConnection = original })
+
+	mockDB.On("ListBackups", mock.Anything).Return(backups, nil)
+}
+
+func makeBackup(id, serverID, serverName string, createdAt time.Time, duration, size int64) *db.Backup {
+	return &db.Backup{
+		ID:               id,
+		ServerID:         serverID,
+		ServerName:       serverName,
+		SnapshotID:       "snap",
+		RepositoryPrefix: "servers/" + serverID + "/restic/",
+		CreatedAt:        createdAt,
+		DurationSeconds:  duration,
+		RepositorySize:   size,
+		Status:           dbtypes.BackupStatusCompleted,
+	}
+}
+
+func TestListAllBackups_DefaultSortByCreatedAtDesc(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now.Add(-time.Hour), 10, 100),
+		makeBackup("b", "s2", "beta", now, 20, 200),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Total)
+	assert.Len(t, resp.Backups, 2)
+	assert.Equal(t, "b", resp.Backups[0].ID)
+	assert.Equal(t, "a", resp.Backups[1].ID)
+}
+
+func TestListAllBackups_SortAsc(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now.Add(-time.Hour), 10, 100),
+		makeBackup("b", "s2", "beta", now, 20, 200),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?sort=created_at&dir=asc", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "a", resp.Backups[0].ID)
+	assert.Equal(t, "b", resp.Backups[1].ID)
+}
+
+func TestListAllBackups_SortByDuration(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now, 30, 100),
+		makeBackup("b", "s2", "beta", now, 10, 200),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?sort=duration_seconds&dir=asc", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "b", resp.Backups[0].ID)
+	assert.Equal(t, "a", resp.Backups[1].ID)
+}
+
+func TestListAllBackups_SortBySize(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now, 10, 500),
+		makeBackup("b", "s2", "beta", now, 10, 100),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?sort=repository_size&dir=desc", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "a", resp.Backups[0].ID)
+	assert.Equal(t, "b", resp.Backups[1].ID)
+}
+
+func TestListAllBackups_ServerFilter(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now, 10, 100),
+		makeBackup("b", "s2", "beta", now, 20, 200),
+		makeBackup("c", "s1", "alpha", now.Add(-time.Minute), 30, 300),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?server=s1", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Total)
+	assert.Len(t, resp.Backups, 2)
+	for _, b := range resp.Backups {
+		assert.Equal(t, "s1", b.ServerID)
+	}
+}
+
+func TestListAllBackups_ServerFilterByName(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now, 10, 100),
+		makeBackup("b", "s2", "beta", now, 20, 200),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?server=beta", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Total)
+	assert.Equal(t, "b", resp.Backups[0].ID)
+}
+
+func TestListAllBackups_Pagination(t *testing.T) {
+	now := time.Now()
+	backups := make([]*db.Backup, 0, 5)
+	for i := range 5 {
+		backups = append(backups, makeBackup(
+			fmt.Sprintf("b%d", i), "s1", "alpha",
+			now.Add(-time.Duration(i)*time.Minute), int64(i*10), int64(i*100),
+		))
+	}
+	setupListAllBackupsTest(t, backups)
+
+	req := httptest.NewRequest("GET", "/api/backups?limit=2&offset=0", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 5, resp.Total)
+	assert.Len(t, resp.Backups, 2)
+}
+
+func TestListAllBackups_PaginationOffset(t *testing.T) {
+	now := time.Now()
+	backups := make([]*db.Backup, 0, 5)
+	for i := range 5 {
+		backups = append(backups, makeBackup(
+			fmt.Sprintf("b%d", i), "s1", "alpha",
+			now.Add(-time.Duration(i)*time.Minute), int64(i*10), int64(i*100),
+		))
+	}
+	setupListAllBackupsTest(t, backups)
+
+	req := httptest.NewRequest("GET", "/api/backups?limit=2&offset=4", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 5, resp.Total)
+	assert.Len(t, resp.Backups, 1)
+}
+
+func TestListAllBackups_InvalidLimitUsesDefault(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now, 10, 100),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?limit=abc", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Total)
+}
+
+func TestListAllBackups_InvalidOffsetUsesDefault(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now, 10, 100),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?offset=-5", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Total)
+	assert.Len(t, resp.Backups, 1)
+}
+
+func TestListAllBackups_UnknownSortFallsBackToCreatedAt(t *testing.T) {
+	now := time.Now()
+	setupListAllBackupsTest(t, []*db.Backup{
+		makeBackup("a", "s1", "alpha", now.Add(-time.Hour), 10, 100),
+		makeBackup("b", "s2", "beta", now, 20, 200),
+	})
+
+	req := httptest.NewRequest("GET", "/api/backups?sort=unknown_field", nil)
+	w := httptest.NewRecorder()
+
+	ListAllBackups(w, req)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "b", resp.Backups[0].ID)
 }
