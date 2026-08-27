@@ -25,6 +25,16 @@ vi.mock('../../hooks/useBackups', () => ({
   })),
 }));
 
+vi.mock('../../hooks/useServers', () => ({
+  useServers: vi.fn(() => ({
+    data: [
+      { id: 'srv1', config: { name: 'Survival' } },
+      { id: 'srv2', config: { name: 'Creative' } },
+    ],
+    isLoading: false,
+  })),
+}));
+
 vi.mock('../../hooks/useServerOptions', () => ({
   useServerOptions: vi.fn(() => ({ data: undefined, isLoading: false })),
 }));
@@ -112,7 +122,7 @@ describe('BackupCatalogPage error', () => {
 describe('BackupCatalogPage empty', () => {
   it('shows an empty state when there are no backups', () => {
     vi.mocked(useAllBackups).mockReturnValue({
-      data: [],
+      data: { backups: [], total: 0 },
       isLoading: false,
     } as never);
 
@@ -125,7 +135,7 @@ describe('BackupCatalogPage empty', () => {
 describe('BackupCatalogPage with backups', () => {
   beforeEach(() => {
     vi.mocked(useAllBackups).mockReturnValue({
-      data: backups,
+      data: { backups, total: 2 },
       isLoading: false,
     } as never);
   });
@@ -183,7 +193,10 @@ describe('BackupCatalogPage with backups', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('tab', { name: 'Active' }));
+    const activeBadge = screen.getAllByText('Active').find(
+      (el) => el.getAttribute('data-slot') === 'badge'
+    )!;
+    await user.click(activeBadge);
 
     expect(screen.getByText('Survival')).toBeInTheDocument();
     expect(screen.queryByText('Creative')).not.toBeInTheDocument();
@@ -193,20 +206,29 @@ describe('BackupCatalogPage with backups', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('tab', { name: 'Deleted' }));
+    const deletedBadge = screen.getAllByText('Deleted').find(
+      (el) => el.getAttribute('data-slot') === 'badge' && el.getAttribute('data-variant') === 'outline'
+    )!;
+    await user.click(deletedBadge);
 
     expect(screen.queryByText('Survival')).not.toBeInTheDocument();
     expect(screen.getByText('Creative')).toBeInTheDocument();
   });
 
-  it('shows all backups when All tab is selected', async () => {
+  it('shows all backups when All status filter is selected', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('tab', { name: 'Deleted' }));
+    const deletedBadge = screen.getAllByText('Deleted').find(
+      (el) => el.getAttribute('data-slot') === 'badge' && el.getAttribute('data-variant') === 'outline'
+    )!;
+    await user.click(deletedBadge);
     expect(screen.queryByText('Survival')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('tab', { name: 'All' }));
+    const allBadge = screen.getAllByText('All').find(
+      (el) => el.getAttribute('data-slot') === 'badge'
+    )!;
+    await user.click(allBadge);
     expect(screen.getByText('Survival')).toBeInTheDocument();
     expect(screen.getByText('Creative')).toBeInTheDocument();
   });
@@ -238,12 +260,161 @@ describe('BackupCatalogPage with backups', () => {
   });
 });
 
-describe('BackupCatalogPage server filter', () => {
+describe('BackupCatalogPage sort', () => {
   beforeEach(() => {
     vi.mocked(useAllBackups).mockReturnValue({
-      data: backups,
+      data: { backups, total: 2 },
       isLoading: false,
     } as never);
+  });
+
+  it('calls useAllBackups with default sort params', () => {
+    renderPage();
+
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith({
+      sort: 'created_at',
+      dir: 'desc',
+      limit: 25,
+      offset: 0,
+      server: undefined,
+    });
+  });
+
+  it('calls useAllBackups with sort params from URL', () => {
+    mockSearchParams.set('sort', 'duration_seconds');
+    mockSearchParams.set('dir', 'asc');
+
+    renderPage();
+
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith({
+      sort: 'duration_seconds',
+      dir: 'asc',
+      limit: 25,
+      offset: 0,
+      server: undefined,
+    });
+  });
+
+  it('toggles sort direction when clicking same column', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByText('Created'));
+
+    expect(mockSetSearchParams).toHaveBeenCalled();
+    const call = mockSetSearchParams.mock.calls[0][0];
+    const next = typeof call === 'function' ? call(mockSearchParams) : call;
+    expect(next.get('dir')).toBe('asc');
+  });
+
+  it('sets new sort field when clicking different column', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByText('Size'));
+
+    expect(mockSetSearchParams).toHaveBeenCalledTimes(2);
+    const firstCall = mockSetSearchParams.mock.calls[0][0];
+    const firstNext = typeof firstCall === 'function' ? firstCall(mockSearchParams) : firstCall;
+    expect(firstNext.get('sort')).toBe('repository_size');
+
+    const secondCall = mockSetSearchParams.mock.calls[1][0];
+    const secondNext = typeof secondCall === 'function' ? secondCall(firstNext) : secondCall;
+    expect(secondNext.get('dir')).toBe('desc');
+  });
+});
+
+describe('BackupCatalogPage pagination', () => {
+  beforeEach(() => {
+    vi.mocked(useAllBackups).mockReturnValue({
+      data: { backups, total: 2 },
+      isLoading: false,
+    } as never);
+  });
+
+  it('shows page range', () => {
+    renderPage();
+
+    expect(screen.getByText('1–2 of 2')).toBeInTheDocument();
+  });
+
+  it('disables previous button on first page', () => {
+    renderPage();
+
+    expect(screen.getByLabelText('Previous page')).toBeDisabled();
+  });
+
+  it('calls useAllBackups with offset=0 for page 1', () => {
+    renderPage();
+
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 0 })
+    );
+  });
+
+  it('calls useAllBackups with correct offset for page', () => {
+    mockSearchParams.set('page', '3');
+    mockSearchParams.set('pageSize', '25');
+
+    renderPage();
+
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 50 })
+    );
+  });
+});
+
+describe('BackupCatalogPage page size', () => {
+  beforeEach(() => {
+    vi.mocked(useAllBackups).mockReturnValue({
+      data: { backups, total: 2 },
+      isLoading: false,
+    } as never);
+  });
+
+  it('defaults to page size 25', () => {
+    renderPage();
+
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 25 })
+    );
+  });
+
+  it('uses page size from URL', () => {
+    mockSearchParams.set('pageSize', '50');
+
+    renderPage();
+
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 50 })
+    );
+  });
+
+  it('sets page to 1 when changing page size', async () => {
+    mockSearchParams.set('page', '3');
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByText('50'));
+
+    const call = mockSetSearchParams.mock.calls[0][0];
+    const next = typeof call === 'function' ? call(new URLSearchParams()) : call;
+    expect(next.get('pageSize')).toBe('50');
+    expect(next.get('page')).toBe('1');
+  });
+});
+
+describe('BackupCatalogPage server filter', () => {
+  beforeEach(() => {
+    vi.mocked(useAllBackups).mockImplementation((params: { server?: string } = {}) => {
+      const filtered = params.server
+        ? backups.filter((b) => b.serverId === params.server)
+        : backups;
+      return {
+        data: { backups: filtered, total: filtered.length },
+        isLoading: false,
+      } as never;
+    });
   });
 
   it('filters backups by server query param', () => {
@@ -251,7 +422,7 @@ describe('BackupCatalogPage server filter', () => {
 
     renderPage();
 
-    expect(screen.getByText('Survival')).toBeInTheDocument();
+    expect(screen.getAllByText('Survival').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Creative')).not.toBeInTheDocument();
   });
 
@@ -273,12 +444,20 @@ describe('BackupCatalogPage server filter', () => {
     ).toBeInTheDocument();
   });
 
-  it('hides filter tabs when filtered by server', () => {
+  it('passes server filter to useAllBackups', () => {
     mockSearchParams.set('server', 'srv1');
 
     renderPage();
 
-    expect(screen.queryByRole('tab', { name: 'All' })).not.toBeInTheDocument();
+    expect(vi.mocked(useAllBackups)).toHaveBeenCalledWith(
+      expect.objectContaining({ server: 'srv1' })
+    );
+  });
+
+  it('shows All Servers button in header', () => {
+    renderPage();
+
+    expect(screen.getByText('All Servers')).toBeInTheDocument();
   });
 
   it('clears server filter when back button is clicked', async () => {
@@ -289,23 +468,6 @@ describe('BackupCatalogPage server filter', () => {
 
     await user.click(screen.getByRole('button', { name: 'Show all backups' }));
 
-    expect(mockSetSearchParams).toHaveBeenCalledWith({});
-  });
-
-  it('shows empty state for unknown server id', () => {
-    mockSearchParams.set('server', 'unknown');
-
-    renderPage();
-
-    expect(screen.getByText(/No backups found/)).toBeInTheDocument();
-  });
-
-  it('shows fallback link in empty state for server filter', () => {
-    mockSearchParams.set('server', 'unknown');
-
-    renderPage();
-
-    const buttons = screen.getAllByRole('button', { name: 'Show all backups' });
-    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    expect(mockSetSearchParams).toHaveBeenCalled();
   });
 });

@@ -4,14 +4,35 @@ import type {
   APIError,
   BackupRecord,
   CreateFromBackupRequest,
+  PaginatedBackupsResponse,
   RestoreResponse,
 } from '../types/server';
 
 const ALL_BACKUPS_KEY = 'allBackups';
 const SERVER_BACKUPS_KEY = 'serverBackups';
 
-async function fetchAllBackups(): Promise<BackupRecord[]> {
-  const response = await fetch('/api/backups');
+export interface BackupQueryParams {
+  sort?: string;
+  dir?: string;
+  limit?: number;
+  offset?: number;
+  server?: string;
+}
+
+async function fetchAllBackups(
+  params: BackupQueryParams
+): Promise<PaginatedBackupsResponse> {
+  const query = new URLSearchParams();
+  if (params.sort) query.set('sort', params.sort);
+  if (params.dir) query.set('dir', params.dir);
+  if (params.limit != null) query.set('limit', String(params.limit));
+  if (params.offset != null) query.set('offset', String(params.offset));
+  if (params.server) query.set('server', params.server);
+
+  const qs = query.toString();
+  const url = `/api/backups${qs ? `?${qs}` : ''}`;
+
+  const response = await fetch(url);
 
   if (response.status === 401) {
     window.location.href = '/auth/login';
@@ -26,10 +47,10 @@ async function fetchAllBackups(): Promise<BackupRecord[]> {
   return response.json();
 }
 
-export function useAllBackups() {
+export function useAllBackups(params: BackupQueryParams = {}) {
   return useQuery({
-    queryKey: [ALL_BACKUPS_KEY],
-    queryFn: fetchAllBackups,
+    queryKey: [ALL_BACKUPS_KEY, params],
+    queryFn: () => fetchAllBackups(params),
     staleTime: 0,
   });
 }
