@@ -79,9 +79,20 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 // CreateServerFromBackup creates a new server and restores a snapshot before
 // Minecraft starts. The restore information is carried on the ServerConfig
 // (RestoreSnapshotID / RestoreSourcePrefix) and baked into the cloud-config
-// so it runs during the VM's first boot.
+// so it runs during the VM's first boot. It is also seeded into the operation
+// status outputs so that deferred execution (e.g. via Cloud Tasks) can rebuild
+// the full program config when the operation actually runs.
 func (s *ProvisioningService) CreateServerFromBackup(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	return s.CreateServer(ctx, serverID, config)
+	initialOutputs := map[string]string{}
+	if config.RestoreSnapshotID != "" {
+		initialOutputs["restoreSnapshotId"] = config.RestoreSnapshotID
+	}
+	if config.RestoreSourcePrefix != "" {
+		initialOutputs["restoreSourcePrefix"] = config.RestoreSourcePrefix
+	}
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationCreate, initialOutputs, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		return s.runCreate(opCtx, status, serverID, config)
+	})
 }
 
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
@@ -424,6 +435,7 @@ func (s *ProvisioningService) ExecuteOperation(ctx context.Context, serverID str
 
 	switch status.Operation {
 	case db.ProvisioningOperationCreate:
+		applyRestoreToConfig(config, status.Outputs)
 		return s.runCreate(ctx, status, serverID, config)
 	case db.ProvisioningOperationUpdate:
 		return s.runUpdate(ctx, status, serverID, config, updateType)
@@ -433,6 +445,26 @@ func (s *ProvisioningService) ExecuteOperation(ctx context.Context, serverID str
 		return s.runRestore(ctx, status, serverID)
 	default:
 		return fmt.Errorf("unknown operation type: %v", status.Operation)
+	}
+}
+
+// applyRestoreToConfig carries restore fields persisted in the operation
+// outputs onto a program config that was rebuilt from persisted server state
+// (e.g. by the Cloud Tasks task handler). It only fills empty fields so a
+// config that already carries the restore information is left untouched.
+func applyRestoreToConfig(config *programs.ServerConfig, outputs map[string]string) {
+	if config == nil || len(outputs) == 0 {
+		return
+	}
+	if config.RestoreSnapshotID == "" {
+		if v := outputs["restoreSnapshotId"]; v != "" {
+			config.RestoreSnapshotID = v
+		}
+	}
+	if config.RestoreSourcePrefix == "" {
+		if v := outputs["restoreSourcePrefix"]; v != "" {
+			config.RestoreSourcePrefix = v
+		}
 	}
 }
 

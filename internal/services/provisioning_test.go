@@ -851,3 +851,122 @@ func TestCreateServer_WithOutputs(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 }
+
+// TestCreateServerFromBackup_SeedsRestoreOutputs asserts that the restore
+// fields are persisted in the operation status outputs so deferred execution
+// (e.g. via Cloud Tasks) can rebuild a program config that still carries them.
+func TestCreateServerFromBackup_SeedsRestoreOutputs(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{Outputs: auto.OutputMap{}}, nil)
+
+	var persisted []*db.ProvisioningStatus
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).
+		Run(func(args mock.Arguments) {
+			s := args.Get(2).(*db.ProvisioningStatus)
+			// Snapshot the status: the same struct is mutated across the
+			// operation, and runCreate overwrites Outputs with Pulumi results.
+			snap := &db.ProvisioningStatus{
+				ID:          s.ID,
+				Operation:   s.Operation,
+				State:       s.State,
+				StartedAt:   s.StartedAt,
+				CurrentStep: s.CurrentStep,
+				Error:       s.Error,
+				Outputs:     map[string]string{},
+			}
+			for k, v := range s.Outputs {
+				snap.Outputs[k] = v
+			}
+			snap.Steps = append([]db.ProvisioningStep(nil), s.Steps...)
+			persisted = append(persisted, snap)
+		}).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	err := svc.CreateServerFromBackup(context.Background(), "srv1", &programs.ServerConfig{
+		Name:                "test",
+		RestoreSnapshotID:   "snap-abc123",
+		RestoreSourcePrefix: "servers/old-srv/restic",
+	})
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+
+	var seeded *db.ProvisioningStatus
+	for _, s := range persisted {
+		if s.Operation == db.ProvisioningOperationCreate && s.Outputs != nil && s.Outputs["restoreSnapshotId"] != "" {
+			seeded = s
+			break
+		}
+	}
+	if assert.NotNil(t, seeded, "expected a persisted create status seeded with restore outputs") {
+		assert.Equal(t, "snap-abc123", seeded.Outputs["restoreSnapshotId"])
+		assert.Equal(t, "servers/old-srv/restic", seeded.Outputs["restoreSourcePrefix"])
+	}
+}
+
+// TestExecuteOperation_DispatchesCreateFromBackupWithRestoreOutputs simulates
+// the Cloud Tasks handler: it rebuilds a config from persisted server state
+// (no restore fields) and then executes it. The restore fields persisted in
+// the operation outputs must be merged back onto the config.
+func TestExecuteOperation_DispatchesCreateFromBackupWithRestoreOutputs(t *testing.T) {
+	svc, mockWM, mockDB := newTestService()
+
+	stack := &auto.Stack{}
+	mockWM.On("CancelStack", mock.Anything, "srv1").Return(nil)
+	mockWM.On("UpsertStack", mock.Anything, "srv1", mock.AnythingOfType("func(*pulumi.Context) error")).Return(stack, nil)
+	mockWM.On("ProjectID").Return("")
+	mockWM.On("SetConfig", mock.Anything, stack, "gcp:project", "", false).Return(nil)
+	mockWM.On("UpStack", mock.Anything, stack).Return(auto.UpResult{Outputs: auto.OutputMap{}}, nil)
+	mockDB.On("GetProvisioningStatus", mock.Anything, "srv1").Return(&db.ProvisioningStatus{
+		ID:        "srv1-123",
+		Operation: db.ProvisioningOperationCreate,
+		State:     db.ProvisioningStateInProgress,
+		StartedAt: time.Now(),
+		Outputs: map[string]string{
+			"restoreSnapshotId":   "snap-abc123",
+			"restoreSourcePrefix": "servers/old-srv/restic",
+		},
+	}, nil)
+	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).Return(nil)
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
+	mockDB.On("UpdateServerConfig", mock.Anything, "srv1", mock.AnythingOfType("*db.ServerConfig")).Return(nil)
+
+	config := &programs.ServerConfig{Name: "test"}
+	err := svc.ExecuteOperation(context.Background(), "srv1", config, updateTypeInPlace)
+	assert.NoError(t, err)
+
+	mockWM.AssertCalled(t, "UpStack", mock.Anything, stack)
+	// The config passed in is the one actually provisioned; the merge must
+	// have restored the restore fields onto it.
+	assert.Equal(t, "snap-abc123", config.RestoreSnapshotID)
+	assert.Equal(t, "servers/old-srv/restic", config.RestoreSourcePrefix)
+}
+
+func TestApplyRestoreToConfig(t *testing.T) {
+	config := &programs.ServerConfig{}
+	applyRestoreToConfig(config, map[string]string{
+		"restoreSnapshotId":   "snap-abc123",
+		"restoreSourcePrefix": "servers/old-srv/restic",
+	})
+	assert.Equal(t, "snap-abc123", config.RestoreSnapshotID)
+	assert.Equal(t, "servers/old-srv/restic", config.RestoreSourcePrefix)
+
+	// Non-empty config fields are never clobbered.
+	config.RestoreSnapshotID = "already-set"
+	applyRestoreToConfig(config, map[string]string{"restoreSnapshotId": "from-outputs"})
+	assert.Equal(t, "already-set", config.RestoreSnapshotID)
+
+	// No-op for nil config and empty outputs.
+	applyRestoreToConfig(nil, map[string]string{"restoreSnapshotId": "x"})
+	before := &programs.ServerConfig{}
+	applyRestoreToConfig(before, nil)
+	assert.Equal(t, "", before.RestoreSnapshotID)
+	assert.Equal(t, "", before.RestoreSourcePrefix)
+}
