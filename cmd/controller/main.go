@@ -112,6 +112,7 @@ func initServices() (*servicesBundle, error) {
 	}
 
 	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version, executor, cfg.BackupDeletedServerRetentionDays)
+	provisioningService.SetSaveAckTimeout(cfg.SaveAckTimeout)
 
 	suSvc, err := serviceusage.NewService(ctx)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
@@ -50,6 +51,7 @@ type ProvisioningService struct {
 	retryDelay          time.Duration
 	backupRetentionDays int
 	restoreAckTimeout   time.Duration
+	saveAckTimeout      time.Duration
 }
 
 func (s *ProvisioningService) OperationTimeout() time.Duration {
@@ -67,6 +69,13 @@ func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, d
 		retryDelay:          5 * time.Second,
 		backupRetentionDays: backupRetentionDays,
 		restoreAckTimeout:   30 * time.Minute,
+		saveAckTimeout:      config.DefaultSaveAckTimeout,
+	}
+}
+
+func (s *ProvisioningService) SetSaveAckTimeout(d time.Duration) {
+	if d > 0 {
+		s.saveAckTimeout = d
 	}
 }
 
@@ -147,7 +156,7 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("failed to trigger world save: %w", err))
 	}
-	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, s.saveAckTimeout)
 	if err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("world save failed: result=%s, %w", result, err))
@@ -296,7 +305,7 @@ func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *d
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("failed to trigger world save: %w", err))
 	}
-	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, s.saveAckTimeout)
 	if err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("world save failed: result=%s, %w", result, err))

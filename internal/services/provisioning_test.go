@@ -331,6 +331,7 @@ func newTestService() (*ProvisioningService, *testutil.MockWorkspaceManager, *Mo
 		retryDelay:          1 * time.Millisecond,
 		backupRetentionDays: 30,
 		restoreAckTimeout:   5 * time.Second,
+		saveAckTimeout:      5 * time.Second,
 	}
 	return svc, mockWM, mockDB
 }
