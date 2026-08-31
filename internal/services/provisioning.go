@@ -42,16 +42,18 @@ var errOperationInProgress = errors.New("operation already in progress")
 var errNoOperationInProgress = errors.New("no operation in progress")
 
 type ProvisioningService struct {
-	workspaceManager    pulumi.WorkspaceManagerInterface
-	db                  db.DB
-	backupCoord         *BackupCoordinator
-	controllerVersion   string
-	executor            OperationExecutor
-	retryAttempts       int
-	retryDelay          time.Duration
-	backupRetentionDays int
-	restoreAckTimeout   time.Duration
-	saveAckTimeout      time.Duration
+	workspaceManager     pulumi.WorkspaceManagerInterface
+	db                   db.DB
+	backupCoord          *BackupCoordinator
+	controllerVersion    string
+	executor             OperationExecutor
+	retryAttempts        int
+	retryDelay           time.Duration
+	backupRetentionDays  int
+	restoreAckTimeout    time.Duration
+	saveAckTimeout       time.Duration
+	backupBucket         string
+	backupResticPassword string
 }
 
 func (s *ProvisioningService) OperationTimeout() time.Duration {
@@ -77,6 +79,14 @@ func (s *ProvisioningService) SetSaveAckTimeout(d time.Duration) {
 	if d > 0 {
 		s.saveAckTimeout = d
 	}
+}
+
+// SetBackupRestoreConfig configures the central backup bucket name and the
+// deployment-wide Restic password, used to reconstruct the source Restic
+// repository when restoring a snapshot onto an existing server.
+func (s *ProvisioningService) SetBackupRestoreConfig(backupBucket, backupResticPassword string) {
+	s.backupBucket = backupBucket
+	s.backupResticPassword = backupResticPassword
 }
 
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
@@ -120,8 +130,9 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 // already be validated by the caller (ownership and COMPLETED status).
 func (s *ProvisioningService) RestoreServer(ctx context.Context, serverID string, backup *db.Backup, versionWarning string) error {
 	initialOutputs := map[string]string{
-		"backupId":   backup.ID,
-		"snapshotId": backup.SnapshotID,
+		"backupId":         backup.ID,
+		"snapshotId":       backup.SnapshotID,
+		"repositoryPrefix": backup.RepositoryPrefix,
 	}
 	if versionWarning != "" {
 		initialOutputs["versionMismatchWarning"] = versionWarning
@@ -151,6 +162,11 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 			fmt.Errorf("missing snapshot id in operation outputs"))
 	}
 
+	repository, err := s.restoreRepository(status.Outputs["repositoryPrefix"])
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld, err)
+	}
+
 	s.updateStep(opCtx, status, serverID, stepSaveWorld, "Saving world data...")
 	if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
@@ -164,7 +180,7 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 	s.completeStep(opCtx, status, serverID, stepSaveWorld)
 
 	s.updateStep(opCtx, status, serverID, stepRestoreWorld, fmt.Sprintf("Restoring snapshot %s on machine agent...", snapshotID))
-	if err := s.backupCoord.TriggerRestore(opCtx, config.Name, snapshotID); err != nil {
+	if err := s.backupCoord.TriggerRestore(opCtx, config.Name, snapshotID, repository, s.backupResticPassword); err != nil {
 		return s.handleError(status, opCtx, serverID, stepRestoreWorld,
 			fmt.Errorf("failed to trigger restore: %w", err))
 	}
@@ -185,6 +201,21 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 	s.updateStatus(opCtx, serverID, status)
 
 	return nil
+}
+
+// restoreRepository reconstructs the full Restic repository reference for a
+// backup (e.g. "gs:project-env-backups:/servers/<id>/restic") from the stored
+// object prefix (e.g. "servers/<id>/restic/"). The password is not part of the
+// repository; it is carried separately to the agent.
+func (s *ProvisioningService) restoreRepository(repositoryPrefix string) (string, error) {
+	if repositoryPrefix == "" {
+		return "", fmt.Errorf("missing repository prefix in operation outputs")
+	}
+	if s.backupBucket == "" {
+		return "", fmt.Errorf("backup bucket is not configured")
+	}
+	repo := strings.TrimSuffix(repositoryPrefix, "/")
+	return "gs:" + s.backupBucket + ":/" + repo, nil
 }
 
 func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {

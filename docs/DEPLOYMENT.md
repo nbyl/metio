@@ -500,6 +500,31 @@ make deploy-machine-agent
 
 When the machine-agent image changes, the Pulumi program recreates the VM with the new image. Existing servers show an "Update Available" badge in the dashboard.
 
+#### Server Infrastructure Version Migration
+
+Each server's Pulumi program records an `infra_version` output (see
+`internal/pulumi/programs/version.go`). When the controller's `CurrentInfraVersion` is newer than a
+server's recorded version, the server is marked **Outdated** in the dashboard and must be updated
+before new infrastructure behaviors apply. Running an **Update** (any update type) on the server
+applies the new program version.
+
+**v4 → v5 (breaking).** The machine-agent container now runs `--privileged --pid=host` and mounts the
+host data disk at `/mnt/disks/minecraft`, and the agent image includes `util-linux` (for `nsenter`).
+This lets the agent restore a world in place by running `restic` inside the `minecraft-backup`
+container and stopping/starting the host services through host systemd. The agent is now more
+privileged than before — only attempt this on infrastructure you trust.
+
+To upgrade an existing server:
+
+1. Build/roll out the controller that knows `CurrentInfraVersion = 5` (`make controller-image` / `make deploy-controller`).
+2. Rebuild the machine-agent image and deploy it (`make machine-agent-image` / `make deploy-machine-agent`).
+3. In the dashboard, each server shows **Outdated**/[Update Available]. Run the update; this
+   redeploys the instance with the privileged agent and the mounted data disk.
+
+If you skip step 3, old servers keep their previous (unprivileged) agent and in-place Restore will
+not work; the old "create from backup" path remains usable. Do not re-deploy the controller and
+expect restore-on-existing-server to work until servers are migrated.
+
 #### Full System Update
 
 ```bash

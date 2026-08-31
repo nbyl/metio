@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nbyl/metio/internal/dbtypes"
 	"github.com/stretchr/testify/assert"
@@ -15,149 +13,134 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const backupUnitFixture = `#cloud-config fragment: rendered minecraft-backup.service
-[Unit]
-Description=Minecraft Backup Service
-After=minecraft.service
-Requires=minecraft.service
+func TestRunResticRestore_UsesExecIntoBackupContainer(t *testing.T) {
+	oldExec := execCommandContext
+	defer func() { execCommandContext = oldExec }()
 
-[Service]
-User=metio
-WorkingDirectory=/home/metio
-TimeoutStartSec=0
-Restart=always
-ExecStartPre=-/usr/bin/docker stop %n
-ExecStartPre=-/usr/bin/docker rm %n
-ExecStart=/usr/bin/docker run --rm --name %n \
-  --network host \
-  -e BACKUP_METHOD=restic \
-  -e BACKUP_INTERVAL=1h \
-  -e RESTIC_REPOSITORY=gs:metio-dev-backups:/servers/srv-1234/restic \
-  -e RESTIC_PASSWORD=super-secret \
-  -v /mnt/disks/minecraft/data:/data \
-  europe-docker.pkg.dev/metio/metio/mc-backup:latest
-ExecStop=/usr/bin/docker stop %n
-
-[Install]
-WantedBy=default.target
-`
-
-func TestParseBackupUnitConfig(t *testing.T) {
-	cfg, err := parseBackupUnitConfig(backupUnitFixture)
-	require.NoError(t, err)
-	assert.Equal(t, "gs:metio-dev-backups:/servers/srv-1234/restic", cfg.Repository)
-	assert.Equal(t, "super-secret", cfg.Password)
-	assert.Equal(t, "europe-docker.pkg.dev/metio/metio/mc-backup:latest", cfg.Image)
-}
-
-func TestParseBackupUnitConfig_MissingEnvironment(t *testing.T) {
-	content := strings.ReplaceAll(backupUnitFixture, "-e RESTIC_PASSWORD=super-secret \\\n", "")
-	_, err := parseBackupUnitConfig(content)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "RESTIC_PASSWORD")
-}
-
-func TestPerformRestore_Success(t *testing.T) {
-	base := t.TempDir()
-	dataDir := filepath.Join(base, "data")
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "world"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "world", "level.dat"), []byte("old"), 0o644))
-	staging := filepath.Join(base, stagingDirName)
-
-	oldExec := execCommand
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		if name == "/usr/bin/docker" {
-			script := fmt.Sprintf("mkdir -p %q/world && echo restored > %q/world/level.dat", staging, staging)
-			return exec.Command("/bin/sh", "-c", script)
-		}
+	var gotArgs []string
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		gotArgs = append([]string{name}, args...)
 		return exec.Command("true")
 	}
-	defer func() { execCommand = oldExec }()
 
-	cfg := &backupUnitConfig{Repository: "gs:bkt:/servers/srv/restic", Password: "pw", Image: "backup-img"}
-	require.NoError(t, performRestore(base, "snap1", cfg))
-
-	restored, err := os.ReadFile(filepath.Join(dataDir, "world", "level.dat"))
+	err := runResticRestore("snap1", "gs:bkt:/servers/src/restic", "pw")
 	require.NoError(t, err)
-	assert.Equal(t, "restored\n", string(restored))
 
-	recoveryRoot := filepath.Join(base, recoveryDirName)
-	entries, err := os.ReadDir(recoveryRoot)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-
-	saved, err := os.ReadFile(filepath.Join(recoveryRoot, entries[0].Name(), "world", "level.dat"))
-	require.NoError(t, err)
-	assert.Equal(t, "old", string(saved), "previous world must be preserved in the recovery directory")
-
-	assert.NoDirExists(t, staging, "staging directory must be cleaned up")
+	assert.Equal(t, "/usr/bin/docker", gotArgs[0])
+	assert.Contains(t, gotArgs, "exec")
+	assert.Contains(t, gotArgs, "-e")
+	assert.Contains(t, gotArgs, "RESTIC_REPOSITORY=gs:bkt:/servers/src/restic")
+	assert.Contains(t, gotArgs, "RESTIC_PASSWORD=pw")
+	assert.Contains(t, gotArgs, backupContainer)
+	assert.Contains(t, gotArgs, "restore")
+	assert.Contains(t, gotArgs, "snap1")
+	assert.Contains(t, gotArgs, "--target")
+	assert.Contains(t, gotArgs, "/data")
 }
 
-func TestPerformRestore_ResticFailureKeepsCurrentWorld(t *testing.T) {
-	base := t.TempDir()
-	dataDir := filepath.Join(base, "data")
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "world"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "world", "level.dat"), []byte("old"), 0o644))
+func TestRunResticRestore_Error(t *testing.T) {
+	oldExec := execCommandContext
+	defer func() { execCommandContext = oldExec }()
 
-	oldExec := execCommand
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		if name == "/usr/bin/docker" {
-			return exec.Command("false")
-		}
-		return exec.Command("true")
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.Command("false")
 	}
-	defer func() { execCommand = oldExec }()
 
-	cfg := &backupUnitConfig{Repository: "gs:bkt:/servers/srv/restic", Password: "pw", Image: "backup-img"}
-	err := performRestore(base, "snap1", cfg)
+	err := runResticRestore("snap1", "gs:bkt:/servers/src/restic", "pw")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "restic restore failed")
+}
 
-	current, readErr := os.ReadFile(filepath.Join(dataDir, "world", "level.dat"))
-	require.NoError(t, readErr, "current world must stay in place when the restore fails")
-	assert.Equal(t, "old", string(current))
-	assert.NoDirExists(t, filepath.Join(base, stagingDirName))
+func TestStopStartServices_UseNsenterSystemctl(t *testing.T) {
+	oldExec := execCommand
+	defer func() { execCommand = oldExec }()
+
+	var stopArgs, startArgs []string
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		for _, a := range args {
+			if a == "stop" {
+				stopArgs = append([]string{name}, args...)
+			}
+			if a == "start" {
+				startArgs = append([]string{name}, args...)
+			}
+		}
+		return exec.Command("true")
+	}
+
+	require.NoError(t, stopMinecraftServices())
+	require.NoError(t, startMinecraftServices())
+
+	assert.Equal(t, "/usr/bin/nsenter", stopArgs[0], "must run through nsenter")
+	assert.Equal(t, hostCommand, stopArgs[:len(hostCommand)], "must run through nsenter with the host PID namespace")
+	assert.Contains(t, stopArgs, "stop")
+	assert.Contains(t, stopArgs, minecraftServiceContainer)
+	assert.Contains(t, stopArgs, backupContainer)
+
+	assert.Equal(t, "/usr/bin/nsenter", startArgs[0], "must run through nsenter")
+	assert.Contains(t, startArgs, "start")
+	assert.Contains(t, startArgs, minecraftServiceContainer)
+	assert.Contains(t, startArgs, backupContainer)
 }
 
 func TestRestoreMinecraftWorld_RestartsServicesAfterFailure(t *testing.T) {
-	base := t.TempDir()
-	dataDir := filepath.Join(base, "data")
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "world"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "world", "level.dat"), []byte("old"), 0o644))
-
-	oldBase := minecraftBaseDir
-	minecraftBaseDir = base
-	defer func() { minecraftBaseDir = oldBase }()
-
-	oldRead := osReadFile
-	osReadFile = func(string) ([]byte, error) { return []byte(backupUnitFixture), nil }
-	defer func() { osReadFile = oldRead }()
-
-	var started bool
+	var started, stopped bool
 	oldExec := execCommand
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		if name == "/usr/bin/docker" {
-			return exec.Command("false")
-		}
-		started = true // systemctl start path after the rollback
-		return exec.Command("true")
-	}
 	defer func() { execCommand = oldExec }()
 
-	err := restoreMinecraftWorld("snap1")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "restic restore failed")
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		for _, a := range args {
+			switch a {
+			case "stop":
+				stopped = true
+			case "start":
+				started = true
+			}
+		}
+		return exec.Command("true")
+	}
 
-	current, readErr := os.ReadFile(filepath.Join(dataDir, "world", "level.dat"))
-	require.NoError(t, readErr)
-	assert.Equal(t, "old", string(current))
-	assert.True(t, started, "Minecraft services must be restarted even on failure")
+	oldExecCtx := execCommandContext
+	defer func() { execCommandContext = oldExecCtx }()
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.Command("false")
+	}
+
+	err := restoreMinecraftWorld("snap1", "gs:bkt:/srv/restic", "pw")
+	require.Error(t, err)
+	assert.True(t, stopped, "services must be stopped before restore")
+	assert.True(t, started, "services must be restarted even on failure")
+	assert.Contains(t, err.Error(), "restic restore failed")
+}
+
+func TestRestoreMinecraftWorld_Success(t *testing.T) {
+	var cmdLog []string
+	oldExec := execCommand
+	defer func() { execCommand = oldExec }()
+
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		for _, a := range args {
+			if a == "stop" || a == "start" {
+				cmdLog = append(cmdLog, a)
+			}
+		}
+		return exec.Command("true")
+	}
+
+	oldExecCtx := execCommandContext
+	defer func() { execCommandContext = oldExecCtx }()
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.Command("true")
+	}
+
+	require.Nil(t, restoreMinecraftWorld("snap1", "gs:bkt:/srv/restic", "pw"))
+	assert.Equal(t, []string{"stop", "start"}, cmdLog)
 }
 
 func stubRestoreFunc(t *testing.T, calls *[]string, retErr error) {
 	t.Helper()
 	orig := restoreMinecraftWorldFunc
-	restoreMinecraftWorldFunc = func(snapshotID string) error {
+	restoreMinecraftWorldFunc = func(snapshotID, repository, password string) error {
 		*calls = append(*calls, snapshotID)
 		return retErr
 	}
@@ -170,8 +153,12 @@ func TestHandlePendingCommand_RestoreSuccess(t *testing.T) {
 
 	mockClient := new(MockAgentClient)
 	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
-		PendingCommand:     "restore",
-		PendingCommandArgs: map[string]string{"snapshotId": "snap9"},
+		PendingCommand: "restore",
+		PendingCommandArgs: map[string]string{
+			"snapshotId": "snap9",
+			"repository": "gs:bkt:/servers/src/restic",
+			"password":   "pw",
+		},
 	}, nil)
 
 	var saved dbtypes.Status
@@ -204,9 +191,9 @@ func TestHandlePendingCommand_RestoreMissingSnapshotID(t *testing.T) {
 	assert.Contains(t, saved.PendingCommandResult, "missing snapshotId")
 }
 
-func TestHandlePendingCommand_RestoreFailureReportsRollbackError(t *testing.T) {
+func TestHandlePendingCommand_RestoreMissingCredentials(t *testing.T) {
 	var calls []string
-	stubRestoreFunc(t, &calls, fmt.Errorf("restic restore failed; rolled back to previous world"))
+	stubRestoreFunc(t, &calls, nil)
 
 	mockClient := new(MockAgentClient)
 	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
@@ -219,7 +206,39 @@ func TestHandlePendingCommand_RestoreFailureReportsRollbackError(t *testing.T) {
 
 	require.NoError(t, handlePendingCommand(context.Background(), mockClient, "srv-1"))
 
+	assert.Empty(t, calls)
+	assert.Contains(t, saved.PendingCommandResult, "missing repository or password")
+}
+
+func TestHandlePendingCommand_RestoreFailureReportsError(t *testing.T) {
+	var calls []string
+	stubRestoreFunc(t, &calls, assert.AnError)
+
+	mockClient := new(MockAgentClient)
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{
+		PendingCommand: "restore",
+		PendingCommandArgs: map[string]string{
+			"snapshotId": "snap9",
+			"repository": "gs:bkt:/servers/src/restic",
+			"password":   "pw",
+		},
+	}, nil)
+	var saved dbtypes.Status
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).
+		Run(func(args mock.Arguments) { saved = args.Get(1).(dbtypes.Status) }).Return(nil)
+
+	require.NoError(t, handlePendingCommand(context.Background(), mockClient, "srv-1"))
+
 	assert.Equal(t, []string{"snap9"}, calls)
-	assert.Contains(t, saved.PendingCommandResult, "rolled back to previous world")
+	assert.Contains(t, saved.PendingCommandResult, "failed")
 	assert.Empty(t, saved.PendingCommand)
+}
+
+func TestRestoreTimeoutDefault(t *testing.T) {
+	assert.Equal(t, 30*time.Minute, restoreTimeout)
+}
+
+func TestHostCommand(t *testing.T) {
+	assert.Equal(t, []string{"/usr/bin/nsenter", "-t", "1", "-m", "-u", "-i", "-n"}, hostCommand)
+	assert.NotContains(t, strings.Join(hostCommand, " "), "unexpected")
 }

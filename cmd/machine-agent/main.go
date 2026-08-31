@@ -576,9 +576,13 @@ func handlePendingCommand(ctx context.Context, client agentclient.AgentClient, i
 		}
 	case "restore":
 		snapshotID := status.PendingCommandArgs["snapshotId"]
+		repository := status.PendingCommandArgs["repository"]
+		password := status.PendingCommandArgs["password"]
 		if snapshotID == "" {
 			status.PendingCommandResult = "failed: restore command is missing snapshotId"
-		} else if err := restoreMinecraftWorldFunc(snapshotID); err != nil {
+		} else if repository == "" || password == "" {
+			status.PendingCommandResult = "failed: restore command is missing repository or password"
+		} else if err := restoreMinecraftWorldFunc(snapshotID, repository, password); err != nil {
 			status.PendingCommandResult = "failed: " + err.Error()
 		} else {
 			status.PendingCommandResult = "completed"
