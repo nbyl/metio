@@ -49,6 +49,15 @@ func imageRegistryHost(image string, fallbackRegion string) string {
 	return fallbackRegion + "-docker.pkg.dev"
 }
 
+// normalizeBackupPrefix strips a trailing slash from a restic repository
+// prefix. Stored prefixes end in "/" (the backup hook stamps
+// "servers/<id>/restic/"), so normalizing keeps the IAM condition and the
+// restore repository URL from rendering a doubled slash. The wire format is
+// unchanged.
+func normalizeBackupPrefix(prefix string) string {
+	return strings.TrimSuffix(prefix, "/")
+}
+
 func RenderCloudConfig(config *TemplateConfig) (string, error) {
 	imageHost := imageRegistryHost(config.MachineAgentImage, config.Region)
 
@@ -67,20 +76,35 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 		config.PruneResticRetention = fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays)
 	}
 
-	// Build the optional restore command. When a snapshot ID is provided, a
-	// one-off docker run restores the snapshot into the data directory before
-	// any services start.
+	// Build the optional first-boot restore step and the guarded service start
+	// that follows it. When a snapshot ID and source prefix are provided, a
+	// one-off container restores the snapshot into the data directory before
+	// any services start. runcmd runs as root, which unlike the systemd units
+	// has no registry credential helper configured, so the step configures
+	// docker-credential-gcr itself and retries the pull like the units do. On
+	// failure a marker file is created and the start command skips Minecraft,
+	// so a failed restore can never masquerade as a freshly generated empty
+	// world. The marker is removed before attempting, so a later successful run
+	// (reboot or re-provision) recovers automatically.
 	restoreCommand := ""
+	startCommand := fmt.Sprintf("  - systemctl start minecraft %smetio-machine-agent", config.BackupServiceEnable)
 	if config.RestoreSnapshotID != "" && config.RestoreSourcePrefix != "" {
+		sourcePrefix := normalizeBackupPrefix(config.RestoreSourcePrefix)
 		restoreCommand = fmt.Sprintf(
-			"  - docker run --rm --name metio-restore --network host -v /mnt/disks/minecraft/data:/data -e RESTIC_REPOSITORY=gs:%s:/%s -e RESTIC_PASSWORD=%s %s restic restore %s --target /data",
-			config.BackupBucket, config.RestoreSourcePrefix, config.ResticPassword,
+			"  - /bin/bash -c 'rm -f /mnt/disks/minecraft/.metio-restore-failed; docker-credential-gcr configure-docker --registries %s; for i in 1 2 3; do docker pull %s && docker run --rm --name metio-restore --network host -v /mnt/disks/minecraft/data:/data -e RESTIC_REPOSITORY=gs:%s:/%s -e RESTIC_PASSWORD=%s %s restic restore %s:/data --target /data && exit 0; sleep 10; done; touch /mnt/disks/minecraft/.metio-restore-failed; exit 1'",
+			imageHost,
+			config.BackupImage, config.BackupBucket, sourcePrefix, config.ResticPassword,
 			config.BackupImage, config.RestoreSnapshotID,
+		)
+		startCommand = fmt.Sprintf(
+			"  - /bin/bash -c 'if [ -f /mnt/disks/minecraft/.metio-restore-failed ]; then echo \"Metio restore failed; Minecraft left stopped, only the machine agent started.\" >&2; systemctl start metio-machine-agent; exit 1; fi; systemctl start minecraft %smetio-machine-agent'",
+			config.BackupServiceEnable,
 		)
 	}
 
 	replacements := map[string]string{
 		"${restoreCommand}":       restoreCommand,
+		"${startCommand}":         startCommand,
 		"${region}":               config.Region,
 		"${gcpProject}":           config.GCPProject,
 		"${environment}":          config.Environment,

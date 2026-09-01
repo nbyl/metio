@@ -116,4 +116,4 @@ runcmd:
 ${restoreCommand}
   - systemctl daemon-reload
   - systemctl enable minecraft ${backupServiceEnable}metio-machine-agent
-  - systemctl start minecraft ${backupServiceEnable}metio-machine-agent
+${startCommand}

@@ -285,22 +285,35 @@ func TestExistingAddressImportID(t *testing.T) {
 	}
 }
 
-func TestBackupPrefixConditionExtendedWithSourcePrefix(t *testing.T) {
+func TestExtendedBackupPrefixCondition(t *testing.T) {
 	bucket := "my-project-development-backups"
 	newServerID := "new-srv-id"
-	sourcePrefix := "servers/old-srv-id/restic"
 
-	// Standard condition for the new server's own prefix.
-	ownCondition := backupPrefixCondition(bucket, newServerID)
-	assert.Contains(t, ownCondition, "servers/new-srv-id/restic/")
-
-	// Extended condition adds the source prefix with an OR.
-	extendedCondition := fmt.Sprintf(
-		`resource.name.startsWith("projects/_/buckets/%s/objects/%s/") || resource.name.startsWith("projects/_/buckets/%s/objects/%s/")`,
-		bucket, serverBackupPrefix(newServerID),
-		bucket, sourcePrefix,
-	)
-	assert.Contains(t, extendedCondition, "servers/new-srv-id/restic/")
-	assert.Contains(t, extendedCondition, "servers/old-srv-id/restic/")
-	assert.Contains(t, extendedCondition, "||")
+	for _, tt := range []struct {
+		name      string
+		prefix    string
+		wantOwn   string
+		wantExtra string
+	}{
+		{
+			name:      "source prefix without trailing slash",
+			prefix:    "servers/old-srv-id/restic",
+			wantOwn:   "servers/new-srv-id/restic/",
+			wantExtra: "servers/old-srv-id/restic/",
+		},
+		{
+			name:      "source prefix with trailing slash must not double it",
+			prefix:    "servers/old-srv-id/restic/",
+			wantOwn:   "servers/new-srv-id/restic/",
+			wantExtra: "servers/old-srv-id/restic/",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			expr := extendedBackupPrefixCondition(bucket, newServerID, tt.prefix)
+			assert.Contains(t, expr, tt.wantOwn)
+			assert.Contains(t, expr, tt.wantExtra)
+			assert.Contains(t, expr, "||")
+			assert.NotContains(t, expr, "restic//")
+		})
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 )
 
 func TestImageRegistryHost(t *testing.T) {
@@ -185,6 +186,7 @@ func TestRenderCloudConfig_RestoreSnapshotPresent(t *testing.T) {
 		ResticPassword:      "restic-pw",
 		RCONPassword:        "rcon-pw",
 		BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+		BackupServiceEnable: "minecraft-backup ",
 		RestoreSnapshotID:   "abc123-snapshot",
 		RestoreSourcePrefix: "servers/old-server-id/restic",
 	}
@@ -192,28 +194,125 @@ func TestRenderCloudConfig_RestoreSnapshotPresent(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Contains(t, result, "docker run --rm --name metio-restore")
+	assert.Contains(t, result, "docker-credential-gcr configure-docker --registries europe-west3-docker.pkg.dev")
 	assert.Contains(t, result, "RESTIC_REPOSITORY=gs:my-project-development-backups:/servers/old-server-id/restic")
 	assert.Contains(t, result, "RESTIC_PASSWORD=restic-pw")
-	assert.Contains(t, result, "restic restore abc123-snapshot --target /data")
+	assert.Contains(t, result, "restic restore abc123-snapshot:/data --target /data")
 	assert.Contains(t, result, "-v /mnt/disks/minecraft/data:/data")
+	assert.Contains(t, result, "rm -f /mnt/disks/minecraft/.metio-restore-failed")
+	assert.Contains(t, result, "touch /mnt/disks/minecraft/.metio-restore-failed")
 
-	// Restore step appears before systemctl start
+	// Restore step appears before the guarded systemctl start.
 	restoreIdx := strings.Index(result, "metio-restore")
 	startIdx := strings.Index(result, "systemctl start minecraft")
 	assert.True(t, restoreIdx < startIdx, "restore must appear before systemctl start")
+
+	// The guarded start skips Minecraft when the restore failed, but starts it
+	// normally on success.
+	assert.Contains(t, result, "[ -f /mnt/disks/minecraft/.metio-restore-failed ]")
+	assert.Contains(t, result, "systemctl start metio-machine-agent")
+	assert.Contains(t, result, "systemctl start minecraft minecraft-backup metio-machine-agent")
 }
 
 func TestRenderCloudConfig_RestoreSnapshotOnly(t *testing.T) {
 	// When only RestoreSnapshotID is set but RestoreSourcePrefix is empty,
 	// no restore step should be rendered (both must be present).
 	cfg := &TemplateConfig{
-		Region:             "europe-west3",
-		MachineAgentImage:  "machine-agent:latest",
-		RestoreSnapshotID:  "abc123",
-		RCONPassword:       "rcon-pw",
+		Region:            "europe-west3",
+		MachineAgentImage: "machine-agent:latest",
+		RestoreSnapshotID: "abc123",
+		RCONPassword:      "rcon-pw",
 	}
 	result, err := RenderCloudConfig(cfg)
 	assert.NoError(t, err)
 
 	assert.NotContains(t, result, "metio-restore")
+}
+
+func TestRenderCloudConfig_RestoreSourcePrefixTrailingSlash(t *testing.T) {
+	// Stored repository prefixes end in "/" (the wire format is validated by
+	// the backup report handler), so the restore URL and start guard must
+	// not render a doubled slash.
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupBucket:        "my-project-development-backups",
+		ServerID:            "new-server-id",
+		BackupRetentionDays: 90,
+		ResticPassword:      "restic-pw",
+		RCONPassword:        "rcon-pw",
+		BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+		RestoreSnapshotID:   "abc123-snapshot",
+		RestoreSourcePrefix: "servers/old-server-id/restic/",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "RESTIC_REPOSITORY=gs:my-project-development-backups:/servers/old-server-id/restic")
+	assert.NotContains(t, result, "restic//")
+}
+
+func TestRenderCloudConfig_NoRestoreEmitsPlainStart(t *testing.T) {
+	// Without a restore, the start command must be byte-identical to the
+	// historical form so the normal boot path is untouched.
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupServiceEnable: "minecraft-backup ",
+		RCONPassword:        "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "systemctl start minecraft minecraft-backup metio-machine-agent")
+	assert.NotContains(t, result, "metio-restore-failed")
+}
+
+func TestRenderCloudConfig_YAMLValid(t *testing.T) {
+	// The restore and guarded-start entries are plain YAML scalars; a stray
+	// indicator would silently corrupt the whole user-data document. Parse the
+	// rendered output to guarantee the VM would receive valid cloud-config.
+	tests := []*TemplateConfig{
+		{
+			Region:              "europe-west3",
+			MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+			BackupBucket:        "my-project-development-backups",
+			ServerID:            "new-server-id",
+			BackupRetentionDays: 90,
+			ResticPassword:      "restic-pw",
+			RCONPassword:        "rcon-pw",
+			BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+			BackupServiceEnable: "minecraft-backup ",
+			RestoreSnapshotID:   "abc123-snapshot",
+			RestoreSourcePrefix: "servers/old-server-id/restic/",
+		},
+		{
+			Region:              "europe-west3",
+			MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+			BackupBucket:        "my-project-development-backups",
+			ServerID:            "new-server-id",
+			BackupRetentionDays: 90,
+			ResticPassword:      "restic-pw",
+			RCONPassword:        "rcon-pw",
+			BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+			RestoreSnapshotID:   "abc123-snapshot",
+			RestoreSourcePrefix: "servers/old-server-id/restic",
+		},
+		{
+			Region:              "europe-west3",
+			MachineAgentImage:   "machine-agent:latest",
+			BackupServiceEnable: "minecraft-backup ",
+			RCONPassword:        "rcon-pw",
+		},
+	}
+	for _, cfg := range tests {
+		result, err := RenderCloudConfig(cfg)
+		assert.NoError(t, err)
+
+		var parsed map[string]interface{}
+		assert.NoError(t, yaml.Unmarshal([]byte(result), &parsed))
+		runcmd, ok := parsed["runcmd"].([]interface{})
+		assert.True(t, ok, "runcmd must be a list")
+		assert.NotEmpty(t, runcmd)
+	}
 }
