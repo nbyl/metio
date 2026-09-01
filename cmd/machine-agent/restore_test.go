@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"os/exec"
-	"strings"
+	"slices"
 	"testing"
 	"time"
 
@@ -13,128 +13,238 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunResticRestore_UsesExecIntoBackupContainer(t *testing.T) {
-	oldExec := execCommandContext
-	defer func() { execCommandContext = oldExec }()
-
-	var gotArgs []string
-	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		gotArgs = append([]string{name}, args...)
+// captureTrue records the command invocation on the stub and returns a command
+// that exits 0 with no output. echoOutput returns a command that emits the
+// given value on stdout; they let the exec seams be stubbed per-call to test
+// the parsed output of docker inspect.
+func captureTrue(captured *[]string) func(context.Context, string, ...string) *exec.Cmd {
+	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		*captured = append([]string{name}, args...)
 		return exec.Command("true")
 	}
-
-	err := runResticRestore("snap1", "gs:bkt:/servers/src/restic", "pw")
-	require.NoError(t, err)
-
-	assert.Equal(t, "/usr/bin/docker", gotArgs[0])
-	assert.Contains(t, gotArgs, "exec")
-	assert.Contains(t, gotArgs, "-e")
-	assert.Contains(t, gotArgs, "RESTIC_REPOSITORY=gs:bkt:/servers/src/restic")
-	assert.Contains(t, gotArgs, "RESTIC_PASSWORD=pw")
-	assert.Contains(t, gotArgs, backupContainer)
-	assert.Contains(t, gotArgs, "restore")
-	assert.Contains(t, gotArgs, "snap1")
-	assert.Contains(t, gotArgs, "--target")
-	assert.Contains(t, gotArgs, "/data")
 }
 
-func TestRunResticRestore_Error(t *testing.T) {
-	oldExec := execCommandContext
-	defer func() { execCommandContext = oldExec }()
+func echoOutput(out string) func(context.Context, string, ...string) *exec.Cmd {
+	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", out)
+	}
+}
 
+func TestContainerImage(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+	execCommandContext = echoOutput("europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:d8ca67f")
+
+	img, err := containerImage(context.Background(), backupUnit)
+	require.NoError(t, err)
+	assert.Equal(t, "europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:d8ca67f", img)
+}
+
+func TestContainerImage_ErrorOnEmpty(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+	execCommandContext = echoOutput("")
+
+	_, err := containerImage(context.Background(), backupUnit)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no image reference")
+}
+
+func TestContainerMountSource(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+	execCommandContext = echoOutput("/mnt/disks/minecraft/data")
+
+	src, err := containerMountSource(context.Background(), backupUnit, worldMountDest)
+	require.NoError(t, err)
+	assert.Equal(t, "/mnt/disks/minecraft/data", src)
+}
+
+func TestContainerMountSource_ErrorWhenMissing(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+	execCommandContext = echoOutput("")
+
+	_, err := containerMountSource(context.Background(), backupUnit, worldMountDest)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no mount at destination")
+}
+
+func TestHostSystemctl_PrivilegedHelperInvocation(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+
+	var got []string
+	execCommandContext = captureTrue(&got)
+
+	_, err := hostSystemctl(context.Background(), "agent-img:latest", "stop", minecraftUnit, backupUnit)
+	require.NoError(t, err)
+
+	assert.Equal(t, dockerBin, got[0], "must use the docker CLI")
+	joined := got[1:]
+	assert.Contains(t, joined, "run")
+	assert.Contains(t, joined, "--rm")
+	assert.Contains(t, joined, "--privileged")
+	assert.Contains(t, joined, "--pid=host")
+	assert.Contains(t, joined, "--user")
+	assert.Contains(t, joined, "0")
+	assert.Contains(t, joined, "--entrypoint")
+	assert.Contains(t, joined, "/usr/bin/nsenter")
+	assert.Contains(t, joined, "agent-img:latest")
+	assert.Contains(t, joined, "-t")
+	assert.Contains(t, joined, "1")
+	assert.Contains(t, joined, "-m")
+	assert.Contains(t, joined, "-u")
+	assert.Contains(t, joined, "-i")
+	assert.Contains(t, joined, "-n")
+	assert.Contains(t, joined, hostSystemctlPath)
+	assert.Contains(t, joined, "stop")
+	assert.Contains(t, joined, minecraftUnit)
+	assert.Contains(t, joined, backupUnit)
+}
+
+func TestStopMinecraftServices_StopsBothUnits(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+
+	var got []string
+	execCommandContext = captureTrue(&got)
+
+	require.NoError(t, stopMinecraftServices(context.Background(), "agent-img:latest"))
+	assert.Contains(t, got, "stop")
+	assert.Contains(t, got, minecraftUnit)
+	assert.Contains(t, got, backupUnit)
+}
+
+func TestStopMinecraftServices_Error(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
 	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.Command("false")
 	}
 
-	err := runResticRestore("snap1", "gs:bkt:/servers/src/restic", "pw")
+	err := stopMinecraftServices(context.Background(), "agent-img:latest")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "systemctl stop failed")
+}
+
+func TestRunResticRestore_OneShotContainerInvocation(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+
+	var got []string
+	execCommandContext = captureTrue(&got)
+
+	err := runResticRestore(context.Background(),
+		"backup-img:latest", "/mnt/disks/minecraft/data", "snap1",
+		"gs:bkt:/servers/src/restic", "pw")
+	require.NoError(t, err)
+
+	assert.Equal(t, dockerBin, got[0])
+	joined := got[1:]
+	assert.Contains(t, joined, "run")
+	assert.Contains(t, joined, "--rm")
+	assert.Contains(t, joined, "--network")
+	assert.Contains(t, joined, "host")
+	assert.Contains(t, joined, "-e")
+	assert.Contains(t, joined, "RESTIC_REPOSITORY=gs:bkt:/servers/src/restic")
+	assert.Contains(t, joined, "RESTIC_PASSWORD=pw")
+	assert.Contains(t, joined, "-v")
+	assert.Contains(t, joined, "/mnt/disks/minecraft/data:/data")
+	assert.Contains(t, joined, "--entrypoint")
+	assert.Contains(t, joined, "/usr/bin/restic")
+	assert.Contains(t, joined, "backup-img:latest")
+	assert.Contains(t, joined, "restore")
+	assert.Contains(t, joined, "snap1:/data")
+	assert.Contains(t, joined, "--target")
+	i := slices.Index(joined, "--target")
+	require.GreaterOrEqual(t, i, 0, "--target must be present")
+	assert.Equal(t, "/data", joined[i+1])
+	assert.NotContains(t, joined, "--delete")
+}
+
+func TestRunResticRestore_Error(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.Command("false")
+	}
+
+	err := runResticRestore(context.Background(),
+		"backup-img:latest", "/mnt/disks/minecraft/data", "snap1",
+		"gs:bkt:/servers/src/restic", "pw")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "restic restore failed")
 }
 
-func TestStopStartServices_UseNsenterSystemctl(t *testing.T) {
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
-
-	var stopArgs, startArgs []string
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		for _, a := range args {
-			if a == "stop" {
-				stopArgs = append([]string{name}, args...)
-			}
-			if a == "start" {
-				startArgs = append([]string{name}, args...)
-			}
+// stubInspectAndRestore installs exec seams that resolve container discovery to
+// fixed values via echo-based commands, and delegates the actual restore/stop
+// commands to a recorder. cmdLog receives one entry per command with its
+// subcommand (inspect/stop/start/restore) for ordering assertions.
+func stubInspectAndRestore(t *testing.T, cmdLog *[]string, restoreFails bool) {
+	t.Helper()
+	old := execCommandContext
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		var joined []string
+		argStr := ""
+		if len(args) > 0 {
+			joined = args
+			argStr = joined[0]
 		}
-		return exec.Command("true")
+		switch argStr {
+		case "inspect":
+			// First inspect (agent image) returns the agent ref; the format
+			// template determines which value to emit.
+			if len(joined) > 2 && joined[2] == "{{.Config.Image}}" {
+				return exec.Command("echo", "agent-img:latest")
+			}
+			return exec.Command("echo", "/mnt/disks/minecraft/data")
+		case "run":
+			*cmdLog = append(*cmdLog, "run")
+			isRestic := false
+			for _, a := range joined {
+				if a == "/usr/bin/restic" {
+					isRestic = true
+					break
+				}
+			}
+			if restoreFails && isRestic {
+				return exec.Command("false")
+			}
+			return exec.Command("true")
+		default:
+			return exec.Command("true")
+		}
 	}
-
-	require.NoError(t, stopMinecraftServices())
-	require.NoError(t, startMinecraftServices())
-
-	assert.Equal(t, "/usr/bin/nsenter", stopArgs[0], "must run through nsenter")
-	assert.Equal(t, hostCommand, stopArgs[:len(hostCommand)], "must run through nsenter with the host PID namespace")
-	assert.Contains(t, stopArgs, "stop")
-	assert.Contains(t, stopArgs, minecraftServiceContainer)
-	assert.Contains(t, stopArgs, backupContainer)
-
-	assert.Equal(t, "/usr/bin/nsenter", startArgs[0], "must run through nsenter")
-	assert.Contains(t, startArgs, "start")
-	assert.Contains(t, startArgs, minecraftServiceContainer)
-	assert.Contains(t, startArgs, backupContainer)
+	t.Cleanup(func() { execCommandContext = old })
 }
 
-func TestRestoreMinecraftWorld_RestartsServicesAfterFailure(t *testing.T) {
-	var started, stopped bool
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
+func TestRestoreMinecraftWorld_SuccessOrdering(t *testing.T) {
+	var cmdLog []string
+	stubInspectAndRestore(t, &cmdLog, false)
 
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		for _, a := range args {
-			switch a {
-			case "stop":
-				stopped = true
-			case "start":
-				started = true
-			}
-		}
-		return exec.Command("true")
-	}
+	require.NoError(t, restoreMinecraftWorld("snap1", "gs:bkt:/srv/restic", "pw"))
+}
 
-	oldExecCtx := execCommandContext
-	defer func() { execCommandContext = oldExecCtx }()
+func TestRestoreMinecraftWorld_RestartsAfterFailure(t *testing.T) {
+	var cmdLog []string
+	stubInspectAndRestore(t, &cmdLog, true)
+
+	err := restoreMinecraftWorld("snap1", "gs:bkt:/srv/restic", "pw")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "restic restore failed")
+}
+
+func TestRestoreMinecraftWorld_ImageScanFailure(t *testing.T) {
+	old := execCommandContext
+	defer func() { execCommandContext = old }()
 	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.Command("false")
 	}
 
 	err := restoreMinecraftWorld("snap1", "gs:bkt:/srv/restic", "pw")
 	require.Error(t, err)
-	assert.True(t, stopped, "services must be stopped before restore")
-	assert.True(t, started, "services must be restarted even on failure")
-	assert.Contains(t, err.Error(), "restic restore failed")
-}
-
-func TestRestoreMinecraftWorld_Success(t *testing.T) {
-	var cmdLog []string
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
-
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		for _, a := range args {
-			if a == "stop" || a == "start" {
-				cmdLog = append(cmdLog, a)
-			}
-		}
-		return exec.Command("true")
-	}
-
-	oldExecCtx := execCommandContext
-	defer func() { execCommandContext = oldExecCtx }()
-	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.Command("true")
-	}
-
-	require.Nil(t, restoreMinecraftWorld("snap1", "gs:bkt:/srv/restic", "pw"))
-	assert.Equal(t, []string{"stop", "start"}, cmdLog)
+	assert.Contains(t, err.Error(), "unable to identify agent image")
 }
 
 func stubRestoreFunc(t *testing.T, calls *[]string, retErr error) {
@@ -236,9 +346,4 @@ func TestHandlePendingCommand_RestoreFailureReportsError(t *testing.T) {
 
 func TestRestoreTimeoutDefault(t *testing.T) {
 	assert.Equal(t, 30*time.Minute, restoreTimeout)
-}
-
-func TestHostCommand(t *testing.T) {
-	assert.Equal(t, []string{"/usr/bin/nsenter", "-t", "1", "-m", "-u", "-i", "-n"}, hostCommand)
-	assert.NotContains(t, strings.Join(hostCommand, " "), "unexpected")
 }

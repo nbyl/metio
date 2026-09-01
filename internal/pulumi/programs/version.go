@@ -9,9 +9,4 @@ package programs
 // /mnt/disks/minecraft/data to /mnt/disks/minecraft and world data moves into
 // a data/ subdirectory alongside the new backup manifest directory. Existing
 // servers must be migrated BEFORE re-deploying; see docs/DEPLOYMENT.md.
-//
-// Version 5 is a BREAKING change: the machine-agent container now runs with
-// --privileged --pid=host and mounts the host data disk at /mnt/disks/minecraft
-// so it can restore worlds by running restic inside the minecraft-backup
-// container and control the host services via nsenter/systemd.
-const CurrentInfraVersion = 5
+const CurrentInfraVersion = 4

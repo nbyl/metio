@@ -590,6 +590,9 @@ func handlePendingCommand(ctx context.Context, client agentclient.AgentClient, i
 	default:
 		status.PendingCommandResult = "failed: unknown command: " + command
 	}
+
+	log.Printf("Pending command %q result: %s", command, status.PendingCommandResult)
+
 	status.PendingCommand = ""
 	status.PendingCommandArgs = nil
 
