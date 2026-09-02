@@ -76,34 +76,64 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 		config.PruneResticRetention = fmt.Sprintf("--keep-within %dd", config.BackupRetentionDays)
 	}
 
-	// Build the optional first-boot restore step and the guarded service start
-	// that follows it. When a snapshot ID and source prefix are provided, a
-	// one-off container restores the snapshot into the data directory before
-	// any services start. runcmd runs as root, which unlike the systemd units
-	// has no registry credential helper configured, so the step configures
-	// docker-credential-gcr itself and retries the pull like the units do. On
-	// failure a marker file is created and the start command skips Minecraft,
-	// so a failed restore can never masquerade as a freshly generated empty
-	// world. The marker is removed before attempting, so a later successful run
-	// (reboot or re-provision) recovers automatically.
-	restoreCommand := ""
-	startCommand := fmt.Sprintf("  - systemctl start minecraft %smetio-machine-agent", config.BackupServiceEnable)
+	// Build the optional first-boot restore: a one-shot systemd unit that
+	// restores the snapshot into the data directory before any services start.
+	// Running as the metio user (as the service units do) gives a writable HOME
+	// so docker-credential-gcr can write its config; ordering is guaranteed by
+	// Minecraft's After=/Requires=.
+	//
+	// The unit is written to the disk on first boot. It runs exactly once: on an
+	// already-restored machine the run-once sentinel keyed to the snapshot ID
+	// makes ConditionPathExists skip it, and runcmd/cloud-init re-run on COS on
+	// every boot (users-groups is once, scripts-user/runcmd are "always"). If
+	// the restore fails the unit is skipped-but-satisfied, so Minecraft never
+	// starts against an empty world and the machine agent still reports.
+	afterRestore := ""
+	requiresRestore := ""
+	restoreWriteFiles := ""
 	if config.RestoreSnapshotID != "" && config.RestoreSourcePrefix != "" {
+		// The restore dependency lines are injected inline into the
+		// minecraft.service unit, at the same block indentation, so an empty
+		// (non-restore) render leaves no dangling blank line inside the YAML
+		// literal block.
+		afterRestore = "\n      After=metio-restore.service"
+		requiresRestore = "\n      Requires=metio-restore.service"
 		sourcePrefix := normalizeBackupPrefix(config.RestoreSourcePrefix)
-		restoreCommand = fmt.Sprintf(
-			"  - /bin/bash -c 'rm -f /mnt/disks/minecraft/.metio-restore-failed; docker-credential-gcr configure-docker --registries %s; for i in 1 2 3; do docker pull %s && docker run --rm --name metio-restore --network host -v /mnt/disks/minecraft/data:/data -e RESTIC_REPOSITORY=gs:%s:/%s -e RESTIC_PASSWORD=%s %s restic restore %s:/data --target /data && exit 0; sleep 10; done; touch /mnt/disks/minecraft/.metio-restore-failed; exit 1'",
-			imageHost,
-			config.BackupImage, config.BackupBucket, sourcePrefix, config.ResticPassword,
-			config.BackupImage, config.RestoreSnapshotID,
-		)
-		startCommand = fmt.Sprintf(
-			"  - /bin/bash -c 'if [ -f /mnt/disks/minecraft/.metio-restore-failed ]; then echo \"Metio restore failed; Minecraft left stopped, only the machine agent started.\" >&2; systemctl start metio-machine-agent; exit 1; fi; systemctl start minecraft %smetio-machine-agent'",
-			config.BackupServiceEnable,
-		)
+		// Values interpolated into a systemd unit are escaped: '%' becomes '%%'
+		// so %n-style specifiers are not mangled in the rendered content.
+		restoreWriteFiles = fmt.Sprintf(`  - path: /etc/systemd/system/metio-restore.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Metio One-Shot World Restore
+      After=docker.service
+      Requires=docker.service
+      Before=minecraft.service
+      ConditionPathExists=!/mnt/disks/minecraft/.metio-restore-%s.done
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      User=metio
+      WorkingDirectory=/home/metio
+      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries %s
+      ExecStartPre=/bin/bash -c 'for i in 1 2 3; do docker pull %s && exit 0; sleep 10; done; exit 1'
+      ExecStart=/usr/bin/docker run --rm --name metio-restore --network host \
+        -e RESTIC_REPOSITORY=gs:%s:/%s \
+        -e RESTIC_PASSWORD=%s \
+        -v /mnt/disks/minecraft/data:/data \
+        %s restic restore %s:/data --target /data
+      ExecStartPost=+/bin/touch /mnt/disks/minecraft/.metio-restore-%s.done
+`, config.RestoreSnapshotID, imageHost, config.BackupImage,
+			config.BackupBucket, sourcePrefix, config.ResticPassword,
+			config.BackupImage, config.RestoreSnapshotID, config.RestoreSnapshotID)
 	}
+	startCommand := fmt.Sprintf("  - systemctl start minecraft %smetio-machine-agent", config.BackupServiceEnable)
 
 	replacements := map[string]string{
-		"${restoreCommand}":       restoreCommand,
+		"${restoreWriteFiles}":    restoreWriteFiles,
+		"${afterRestore}":         afterRestore,
+		"${requiresRestore}":      requiresRestore,
 		"${startCommand}":         startCommand,
 		"${region}":               config.Region,
 		"${gcpProject}":           config.GCPProject,
