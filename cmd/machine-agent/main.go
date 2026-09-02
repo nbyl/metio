@@ -24,6 +24,8 @@ import (
 var Version = "dev"
 
 var execCommand = exec.Command
+var execCommandContext = exec.CommandContext
+var saveAllTimeout = 60 * time.Second
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
 var getMinecraftVersionFunc = getMinecraftVersion
@@ -181,17 +183,17 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 
 	currentStatus, _ := client.GetStatus(ctx)
 
-	err = client.UpdateStatus(ctx, dbtypes.Status{
-		Players:           dbtypes.Players{Current: current, Max: max},
-		Timestamp:         time.Now(),
-		Uptime:            uptime,
-		ServerState:       dbtypes.ServerStateRunning,
-		InstanceIP:        instanceIP,
-		Version:           version,
-		WhitelistEnabled:  whitelistEnabled,
-		ScheduledShutdown: currentStatus.ScheduledShutdown,
-		AgentVersion:      Version,
-	})
+	status := currentStatus
+	status.Players = dbtypes.Players{Current: current, Max: max}
+	status.Timestamp = time.Now()
+	status.Uptime = uptime
+	status.ServerState = dbtypes.ServerStateRunning
+	status.InstanceIP = instanceIP
+	status.Version = version
+	status.WhitelistEnabled = whitelistEnabled
+	status.AgentVersion = Version
+
+	err = client.UpdateStatus(ctx, status)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "update_status_failed"))
 		tracing.RecordError("update_status_failed")
@@ -543,7 +545,10 @@ func sendMinecraftMessage(message string) error {
 }
 
 func saveMinecraftWorld() error {
-	cmd := execCommand("/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "save-all")
+	ctx, cancel := context.WithTimeout(context.Background(), saveAllTimeout)
+	defer cancel()
+	log.Println("Saving world via RCON save-all...")
+	cmd := execCommandContext(ctx, "/usr/bin/docker", "exec", "minecraft.service", "rcon-cli", "save-all")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("rcon save-all failed: %w, output: %s", err, string(output))
@@ -571,9 +576,13 @@ func handlePendingCommand(ctx context.Context, client agentclient.AgentClient, i
 		}
 	case "restore":
 		snapshotID := status.PendingCommandArgs["snapshotId"]
+		repository := status.PendingCommandArgs["repository"]
+		password := status.PendingCommandArgs["password"]
 		if snapshotID == "" {
 			status.PendingCommandResult = "failed: restore command is missing snapshotId"
-		} else if err := restoreMinecraftWorldFunc(snapshotID); err != nil {
+		} else if repository == "" || password == "" {
+			status.PendingCommandResult = "failed: restore command is missing repository or password"
+		} else if err := restoreMinecraftWorldFunc(snapshotID, repository, password); err != nil {
 			status.PendingCommandResult = "failed: " + err.Error()
 		} else {
 			status.PendingCommandResult = "completed"
@@ -581,6 +590,9 @@ func handlePendingCommand(ctx context.Context, client agentclient.AgentClient, i
 	default:
 		status.PendingCommandResult = "failed: unknown command: " + command
 	}
+
+	log.Printf("Pending command %q result: %s", command, status.PendingCommandResult)
+
 	status.PendingCommand = ""
 	status.PendingCommandArgs = nil
 

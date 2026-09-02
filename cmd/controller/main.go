@@ -112,6 +112,8 @@ func initServices() (*servicesBundle, error) {
 	}
 
 	provisioningService := services.NewProvisioningService(workspaceManager, dbConn, Version, executor, cfg.BackupDeletedServerRetentionDays)
+	provisioningService.SetSaveAckTimeout(cfg.SaveAckTimeout)
+	provisioningService.SetBackupRestoreConfig(fmt.Sprintf("%s-%s-backups", cfg.ProjectID, cfg.Environment), cfg.BackupResticPassword)
 
 	suSvc, err := serviceusage.NewService(ctx)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"time"
 
 	cloudtasks "cloud.google.com/go/cloudtasks/apiv2"
@@ -33,6 +34,10 @@ func NewCloudTasksExecutor(client *cloudtasks.Client, projectID, location, queue
 	}
 }
 
+func (e *cloudTasksExecutor) taskURL(serverID, opID string) string {
+	return fmt.Sprintf("%s/tasks/provision/%s?opId=%s", e.baseURL, serverID, url.QueryEscape(opID))
+}
+
 func (e *cloudTasksExecutor) StartOperation(ctx context.Context, serverID string, opType db.ProvisioningOperation, initialOutputs map[string]string, _ func(context.Context, *db.ProvisioningStatus) error) error {
 	existingStatus, err := e.db.GetProvisioningStatus(ctx, serverID)
 	if err == nil && existingStatus != nil && existingStatus.State == db.ProvisioningStateInProgress {
@@ -59,7 +64,7 @@ func (e *cloudTasksExecutor) StartOperation(ctx context.Context, serverID string
 			MessageType: &cloudtaskspb.Task_HttpRequest{
 				HttpRequest: &cloudtaskspb.HttpRequest{
 					HttpMethod: cloudtaskspb.HttpMethod_POST,
-					Url:        fmt.Sprintf("%s/tasks/provision/%s", e.baseURL, serverID),
+					Url:        e.taskURL(serverID, status.ID),
 					AuthorizationHeader: &cloudtaskspb.HttpRequest_OidcToken{
 						OidcToken: &cloudtaskspb.OidcToken{
 							ServiceAccountEmail: e.serviceAccount,

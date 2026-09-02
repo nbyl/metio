@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -192,4 +193,48 @@ func TestLoad_BackupResticPassword(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "super-secret-password", cfg.BackupResticPassword)
+}
+
+func TestLoad_SaveAckTimeoutDefault(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	os.Unsetenv("SAVE_ACK_TIMEOUT")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, DefaultSaveAckTimeout, cfg.SaveAckTimeout)
+}
+
+func TestLoad_SaveAckTimeoutCustom(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+	t.Setenv("SAVE_ACK_TIMEOUT", "5m")
+
+	cfg, err := Load()
+
+	assert.NoError(t, err)
+	assert.Equal(t, 5*time.Minute, cfg.SaveAckTimeout)
+}
+
+func TestLoad_SaveAckTimeoutInvalid(t *testing.T) {
+	viper.Reset()
+	viper.AutomaticEnv()
+
+	t.Setenv("MACHINE_AGENT_IMAGE", "test-image:latest")
+
+	for _, raw := range []string{"0", "-1s", "abc"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("SAVE_ACK_TIMEOUT", raw)
+
+			_, err := Load()
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "SAVE_ACK_TIMEOUT")
+		})
+	}
 }
