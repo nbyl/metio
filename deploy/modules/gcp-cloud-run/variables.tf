@@ -24,19 +24,19 @@ variable "admin_users" {
 variable "controller_image" {
   description = "The container image for the controller service. Override to pin a specific version."
   type        = string
-  default     = "europe-docker.pkg.dev/metio-distribution/metio/controller:1.7.0" # x-release-please-version
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/controller:2.0.0" # x-release-please-version
 }
 
 variable "machine_agent_image" {
   description = "Docker image for metio-machine-agent. Override to pin a specific version."
   type        = string
-  default     = "europe-docker.pkg.dev/metio-distribution/metio/machine-agent:1.7.0" # x-release-please-version
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/machine-agent:2.0.0" # x-release-please-version
 }
 
 variable "backup_image" {
   description = "Docker image used for the per-server backup service (mc-backup)."
   type        = string
-  default     = "europe-docker.pkg.dev/metio-distribution/metio/mc-backup:1.7.0" # x-release-please-version
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/mc-backup:2.0.0" # x-release-please-version
 }
 
 variable "environment" {
@@ -48,7 +48,7 @@ variable "environment" {
 variable "daprd_image" {
   description = "The Dapr sidecar image with baked statestore components. Override to pin a specific version."
   type        = string
-  default     = "europe-docker.pkg.dev/metio-distribution/metio/daprd:1.7.0" # x-release-please-version
+  default     = "europe-docker.pkg.dev/metio-distribution/metio/daprd:2.0.0" # x-release-please-version
 }
 
 variable "postgres_mode" {

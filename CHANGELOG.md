@@ -1,5 +1,48 @@
 # Changelog
 
+## [2.0.0](https://github.com/nbyl/metio/compare/v1.7.0...v2.0.0) (2026-09-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* **backup:** Existing server VMs must run the disk migration in docs/DEPLOYMENT.md before deploying; the data disk mount relocates to /mnt/disks/minecraft with a data/ subdirectory and CurrentInfraVersion is bumped to 4.
+
+### Features
+
+* **api:** add backup catalog and idempotent report ingestion ([#477](https://github.com/nbyl/metio/issues/477)) ([59f7dc8](https://github.com/nbyl/metio/commit/59f7dc84b40fe1cd6e58db548bd4a079b9cc77e2)), closes [#429](https://github.com/nbyl/metio/issues/429)
+* **backup:** add per-server backup configuration and runtime ([#435](https://github.com/nbyl/metio/issues/435)) ([7de6548](https://github.com/nbyl/metio/commit/7de65487fa6c789937b54dc314a96fcbbfc25a46))
+* **backups:** add backup UI and operational documentation ([#483](https://github.com/nbyl/metio/issues/483)) ([079e25f](https://github.com/nbyl/metio/commit/079e25f8ef2e5ce521cd73b63748a960b1c50ad0))
+* **backups:** create new servers from retained backups ([#482](https://github.com/nbyl/metio/issues/482)) ([a0af790](https://github.com/nbyl/metio/commit/a0af790a02702bc19c040b4844293620acb91207))
+* **backups:** move backup actions to catalog page and add server filter ([#487](https://github.com/nbyl/metio/issues/487)) ([df754e6](https://github.com/nbyl/metio/commit/df754e6d3c7db9bd149ab9e342babbfedc45b4b9))
+* **backups:** preserve deleted-server backups with scheduled cleanup ([#479](https://github.com/nbyl/metio/issues/479)) ([3fe6a08](https://github.com/nbyl/metio/commit/3fe6a087448b5065dd61071f286c6e6d50fc4e20))
+* **backups:** restore snapshots onto existing servers ([#481](https://github.com/nbyl/metio/issues/481)) ([1e193cd](https://github.com/nbyl/metio/commit/1e193cd1f844ba5a8d1d6446e7302b8dee939834))
+* establish central backup infrastructure ([#434](https://github.com/nbyl/metio/issues/434)) ([d1183be](https://github.com/nbyl/metio/commit/d1183beb9780840486c386192307a627a98ab143))
+* improve backup table with server-side pagination, sort, and filter ([#489](https://github.com/nbyl/metio/issues/489)) ([eb9f4c7](https://github.com/nbyl/metio/commit/eb9f4c7bed1fcf35458cc48f2b756a5218e776ca))
+* **machine-agent:** report backup manifests to controller ([#478](https://github.com/nbyl/metio/issues/478)) ([c3c85a6](https://github.com/nbyl/metio/commit/c3c85a6f5f3404c43ba547032aaa67bb6aadf0c5))
+* **web:** add dark mode with system-default theme switcher ([#468](https://github.com/nbyl/metio/issues/468)) ([278736d](https://github.com/nbyl/metio/commit/278736d8d3745edc644ca4edfd7d718424f86c96))
+* **web:** apply shadcn vega preset ([#461](https://github.com/nbyl/metio/issues/461)) ([f1fcbe4](https://github.com/nbyl/metio/commit/f1fcbe4e70fc429d5644d0e896f5b8a1be5d1dcd))
+* **web:** migrate layout and shell components ([#457](https://github.com/nbyl/metio/issues/457)) ([7ccfdef](https://github.com/nbyl/metio/commit/7ccfdefc6b6bfb6c2711cfadea93e880a2b5c169))
+* **web:** migrate modals and progress to shadcn ([#455](https://github.com/nbyl/metio/issues/455)) ([3df2118](https://github.com/nbyl/metio/commit/3df2118f1b358fb7d4b0ed53550b3d344b274e36))
+* **web:** migrate server pages to shadcn and RHF ([#459](https://github.com/nbyl/metio/issues/459)) ([6746e04](https://github.com/nbyl/metio/commit/6746e045ced1a9956b1d19c143509827ee27d5d1))
+* **web:** migrate setup wizards to RHF and Zod ([#458](https://github.com/nbyl/metio/issues/458)) ([89db4fd](https://github.com/nbyl/metio/commit/89db4fd0c089b6d923e136a20480da8947f63b1a))
+* **web:** migrate to plain shadcn components ([#454](https://github.com/nbyl/metio/issues/454)) ([b7de099](https://github.com/nbyl/metio/commit/b7de0990029de88fa136c740a71720ba9e141882))
+* **web:** replace UI primitives with shadcn components ([#452](https://github.com/nbyl/metio/issues/452)) ([ec4639d](https://github.com/nbyl/metio/commit/ec4639ddee5575aac19e6dd73ab2faf45c062d51))
+
+
+### Bug Fixes
+
+* add deploy_id annotation to force new Cloud Run revisions ([#484](https://github.com/nbyl/metio/issues/484)) ([6b11cd0](https://github.com/nbyl/metio/commit/6b11cd04ae1c05f0f54ba4ad5d3be02a9835caf1))
+* **build:** inject release version into controller and machine-agent images ([#467](https://github.com/nbyl/metio/issues/467)) ([d045ab6](https://github.com/nbyl/metio/commit/d045ab6295aef2631d69dd49ba6e010a81490c44))
+* correct backup JSON tags and Docker build ordering ([#485](https://github.com/nbyl/metio/issues/485)) ([2f3f288](https://github.com/nbyl/metio/commit/2f3f2884767b13e5e6f1e21f6b418e1d1c74a903)), closes [#423](https://github.com/nbyl/metio/issues/423)
+* **css:** don't re-run lightningcss visitor during minify (fix &lt;a ([46acda0](https://github.com/nbyl/metio/commit/46acda08ea9b6578ec50ab289badbde8bf91f8fd))
+* **machine-agent:** restore docker CLI and CA certs on debian 13 ([#448](https://github.com/nbyl/metio/issues/448)) ([7a62b1d](https://github.com/nbyl/metio/commit/7a62b1de691f2053dee0f2df427ebaad5e3ad3db))
+* **web:** complete light theme migration and harden layout assertions ([#464](https://github.com/nbyl/metio/issues/464)) ([da8c440](https://github.com/nbyl/metio/commit/da8c440903239eb467f2e0676f3941c3e102f3c6))
+
+
+### Performance Improvements
+
+* **build:** reorder controller layers, add Go cache mounts, drop Cloud Build ([#465](https://github.com/nbyl/metio/issues/465)) ([fcf67d7](https://github.com/nbyl/metio/commit/fcf67d7f87e96587f63337ae5a76c3e8652de7c2))
+
 ## [1.7.0](https://github.com/nbyl/metio/compare/v1.6.2...v1.7.0) (2026-08-12)
 
 
