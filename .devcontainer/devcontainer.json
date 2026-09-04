@@ -15,7 +15,8 @@
 	},
 	"forwardPorts": [50001, 8081],
 	"initializeCommand": "mkdir -p \"$HOME/.config/opencode\" \"$HOME/.local/share/opencode\" && cp -n .devcontainer/devcontainer.env.example .devcontainer/devcontainer.env || true",
-	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.config/opencode /home/vscode/.local/share/opencode && sudo chmod 666 /var/run/docker.sock && sudo mkdir -p /home/vscode/.local/state && sudo chown vscode:vscode /home/vscode/.local /home/vscode/.local/state && cd web && npm install && dapr init --slim",
+	"postStartCommand": "sudo chmod 666 /var/run/docker.sock",
+	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.config/opencode /home/vscode/.local/share/opencode && sudo mkdir -p /home/vscode/.local/state && sudo chown vscode:vscode /home/vscode/.local /home/vscode/.local/state && cd web && npm install && dapr init --slim",
 	"customizations": {
 		"vscode": {
 			"extensions": [
