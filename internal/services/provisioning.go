@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nbyl/metio/internal/config"
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
@@ -41,15 +42,18 @@ var errOperationInProgress = errors.New("operation already in progress")
 var errNoOperationInProgress = errors.New("no operation in progress")
 
 type ProvisioningService struct {
-	workspaceManager    pulumi.WorkspaceManagerInterface
-	db                  db.DB
-	backupCoord         *BackupCoordinator
-	controllerVersion   string
-	executor            OperationExecutor
-	retryAttempts       int
-	retryDelay          time.Duration
-	backupRetentionDays int
-	restoreAckTimeout   time.Duration
+	workspaceManager     pulumi.WorkspaceManagerInterface
+	db                   db.DB
+	backupCoord          *BackupCoordinator
+	controllerVersion    string
+	executor             OperationExecutor
+	retryAttempts        int
+	retryDelay           time.Duration
+	backupRetentionDays  int
+	restoreAckTimeout    time.Duration
+	saveAckTimeout       time.Duration
+	backupBucket         string
+	backupResticPassword string
 }
 
 func (s *ProvisioningService) OperationTimeout() time.Duration {
@@ -67,7 +71,22 @@ func NewProvisioningService(workspaceManager pulumi.WorkspaceManagerInterface, d
 		retryDelay:          5 * time.Second,
 		backupRetentionDays: backupRetentionDays,
 		restoreAckTimeout:   30 * time.Minute,
+		saveAckTimeout:      config.DefaultSaveAckTimeout,
 	}
+}
+
+func (s *ProvisioningService) SetSaveAckTimeout(d time.Duration) {
+	if d > 0 {
+		s.saveAckTimeout = d
+	}
+}
+
+// SetBackupRestoreConfig configures the central backup bucket name and the
+// deployment-wide Restic password, used to reconstruct the source Restic
+// repository when restoring a snapshot onto an existing server.
+func (s *ProvisioningService) SetBackupRestoreConfig(backupBucket, backupResticPassword string) {
+	s.backupBucket = backupBucket
+	s.backupResticPassword = backupResticPassword
 }
 
 func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string, config *programs.ServerConfig) error {
@@ -79,9 +98,20 @@ func (s *ProvisioningService) CreateServer(ctx context.Context, serverID string,
 // CreateServerFromBackup creates a new server and restores a snapshot before
 // Minecraft starts. The restore information is carried on the ServerConfig
 // (RestoreSnapshotID / RestoreSourcePrefix) and baked into the cloud-config
-// so it runs during the VM's first boot.
+// so it runs during the VM's first boot. It is also seeded into the operation
+// status outputs so that deferred execution (e.g. via Cloud Tasks) can rebuild
+// the full program config when the operation actually runs.
 func (s *ProvisioningService) CreateServerFromBackup(ctx context.Context, serverID string, config *programs.ServerConfig) error {
-	return s.CreateServer(ctx, serverID, config)
+	initialOutputs := map[string]string{}
+	if config.RestoreSnapshotID != "" {
+		initialOutputs["restoreSnapshotId"] = config.RestoreSnapshotID
+	}
+	if config.RestoreSourcePrefix != "" {
+		initialOutputs["restoreSourcePrefix"] = config.RestoreSourcePrefix
+	}
+	return s.executor.StartOperation(ctx, serverID, db.ProvisioningOperationCreate, initialOutputs, func(opCtx context.Context, status *db.ProvisioningStatus) error {
+		return s.runCreate(opCtx, status, serverID, config)
+	})
 }
 
 func (s *ProvisioningService) UpdateServer(ctx context.Context, serverID string, config *programs.ServerConfig, updateType int) error {
@@ -100,8 +130,9 @@ func (s *ProvisioningService) DestroyServer(ctx context.Context, serverID string
 // already be validated by the caller (ownership and COMPLETED status).
 func (s *ProvisioningService) RestoreServer(ctx context.Context, serverID string, backup *db.Backup, versionWarning string) error {
 	initialOutputs := map[string]string{
-		"backupId":   backup.ID,
-		"snapshotId": backup.SnapshotID,
+		"backupId":         backup.ID,
+		"snapshotId":       backup.SnapshotID,
+		"repositoryPrefix": backup.RepositoryPrefix,
 	}
 	if versionWarning != "" {
 		initialOutputs["versionMismatchWarning"] = versionWarning
@@ -131,12 +162,17 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 			fmt.Errorf("missing snapshot id in operation outputs"))
 	}
 
+	repository, err := s.restoreRepository(status.Outputs["repositoryPrefix"])
+	if err != nil {
+		return s.handleError(status, opCtx, serverID, stepSaveWorld, err)
+	}
+
 	s.updateStep(opCtx, status, serverID, stepSaveWorld, "Saving world data...")
 	if err := s.backupCoord.TriggerWorldSave(opCtx, config.Name); err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("failed to trigger world save: %w", err))
 	}
-	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, s.saveAckTimeout)
 	if err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("world save failed: result=%s, %w", result, err))
@@ -144,7 +180,7 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 	s.completeStep(opCtx, status, serverID, stepSaveWorld)
 
 	s.updateStep(opCtx, status, serverID, stepRestoreWorld, fmt.Sprintf("Restoring snapshot %s on machine agent...", snapshotID))
-	if err := s.backupCoord.TriggerRestore(opCtx, config.Name, snapshotID); err != nil {
+	if err := s.backupCoord.TriggerRestore(opCtx, config.Name, snapshotID, repository, s.backupResticPassword); err != nil {
 		return s.handleError(status, opCtx, serverID, stepRestoreWorld,
 			fmt.Errorf("failed to trigger restore: %w", err))
 	}
@@ -165,6 +201,21 @@ func (s *ProvisioningService) runRestore(opCtx context.Context, status *db.Provi
 	s.updateStatus(opCtx, serverID, status)
 
 	return nil
+}
+
+// restoreRepository reconstructs the full Restic repository reference for a
+// backup (e.g. "gs:project-env-backups:/servers/<id>/restic") from the stored
+// object prefix (e.g. "servers/<id>/restic/"). The password is not part of the
+// repository; it is carried separately to the agent.
+func (s *ProvisioningService) restoreRepository(repositoryPrefix string) (string, error) {
+	if repositoryPrefix == "" {
+		return "", fmt.Errorf("missing repository prefix in operation outputs")
+	}
+	if s.backupBucket == "" {
+		return "", fmt.Errorf("backup bucket is not configured")
+	}
+	repo := strings.TrimSuffix(repositoryPrefix, "/")
+	return "gs:" + s.backupBucket + ":/" + repo, nil
 }
 
 func (s *ProvisioningService) runCreate(opCtx context.Context, status *db.ProvisioningStatus, serverID string, config *programs.ServerConfig) error {
@@ -285,7 +336,7 @@ func (s *ProvisioningService) runRecreateUpdate(opCtx context.Context, status *d
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("failed to trigger world save: %w", err))
 	}
-	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, 60*time.Second)
+	result, err := s.backupCoord.WaitForCommandAck(opCtx, config.Name, s.saveAckTimeout)
 	if err != nil {
 		return s.handleError(status, opCtx, serverID, stepSaveWorld,
 			fmt.Errorf("world save failed: result=%s, %w", result, err))
@@ -424,6 +475,7 @@ func (s *ProvisioningService) ExecuteOperation(ctx context.Context, serverID str
 
 	switch status.Operation {
 	case db.ProvisioningOperationCreate:
+		applyRestoreToConfig(config, status.Outputs)
 		return s.runCreate(ctx, status, serverID, config)
 	case db.ProvisioningOperationUpdate:
 		return s.runUpdate(ctx, status, serverID, config, updateType)
@@ -433,6 +485,26 @@ func (s *ProvisioningService) ExecuteOperation(ctx context.Context, serverID str
 		return s.runRestore(ctx, status, serverID)
 	default:
 		return fmt.Errorf("unknown operation type: %v", status.Operation)
+	}
+}
+
+// applyRestoreToConfig carries restore fields persisted in the operation
+// outputs onto a program config that was rebuilt from persisted server state
+// (e.g. by the Cloud Tasks task handler). It only fills empty fields so a
+// config that already carries the restore information is left untouched.
+func applyRestoreToConfig(config *programs.ServerConfig, outputs map[string]string) {
+	if config == nil || len(outputs) == 0 {
+		return
+	}
+	if config.RestoreSnapshotID == "" {
+		if v := outputs["restoreSnapshotId"]; v != "" {
+			config.RestoreSnapshotID = v
+		}
+	}
+	if config.RestoreSourcePrefix == "" {
+		if v := outputs["restoreSourcePrefix"]; v != "" {
+			config.RestoreSourcePrefix = v
+		}
 	}
 }
 

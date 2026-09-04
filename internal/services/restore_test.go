@@ -34,6 +34,7 @@ func TestGoroutineExecutor_SeedsInitialOutputs(t *testing.T) {
 
 func newRestoreTestService() (*ProvisioningService, *MockDB, *[]*db.ProvisioningStatus) {
 	svc, _, mockDB := newTestService()
+	svc.SetBackupRestoreConfig("project-env-backups", "test-password")
 	persisted := &[]*db.ProvisioningStatus{}
 	mockDB.On("UpdateProvisioningStatus", mock.Anything, "srv1", mock.AnythingOfType("*db.ProvisioningStatus")).
 		Run(func(args mock.Arguments) {
@@ -47,6 +48,7 @@ func restoreTestBackup() *dbtypes.Backup {
 		ID:               "backup-1",
 		ServerID:         "srv1",
 		SnapshotID:       "snap-abc123",
+		RepositoryPrefix: "servers/srv1/restic/",
 		Status:           dbtypes.BackupStatusCompleted,
 		MinecraftVersion: "1.21.1",
 	}
@@ -81,7 +83,11 @@ func TestRestoreServer_Success(t *testing.T) {
 	assert.Equal(t, []string{"save", "restore"}, savedCommands)
 	require.Len(t, savedArgs, 2)
 	assert.Nil(t, savedArgs[0])
-	assert.Equal(t, map[string]string{"snapshotId": "snap-abc123"}, savedArgs[1])
+	assert.Equal(t, map[string]string{
+		"snapshotId": "snap-abc123",
+		"repository": "gs:project-env-backups:/servers/srv1/restic",
+		"password":   "test-password",
+	}, savedArgs[1])
 
 	last := (*persisted)[len(*persisted)-1]
 	assert.Equal(t, db.ProvisioningOperationRestore, last.Operation)
@@ -186,7 +192,7 @@ func TestExecuteOperation_DispatchesRestore(t *testing.T) {
 		Operation: db.ProvisioningOperationRestore,
 		State:     db.ProvisioningStateInProgress,
 		StartedAt: now,
-		Outputs:   map[string]string{"snapshotId": "snap-abc123"},
+		Outputs:   map[string]string{"snapshotId": "snap-abc123", "repositoryPrefix": "servers/srv1/restic/"},
 	}, nil)
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "test"}, nil)
 	mockDB.On("GetStatus", mock.Anything, "test").Return(db.Status{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/nbyl/metio/internal/db"
@@ -55,7 +56,7 @@ func RestoreBackupByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	backup, err := dbConn.GetBackup(ctx, serverID, backupID)
+	backup, err := dbConn.GetBackup(ctx, serverID, resolveSnapshotID(backupID))
 	if err != nil {
 		log.Printf("Error getting backup %s for server %s: %v", backupID, serverID, err)
 		writeJSONError(w, "backup not found", http.StatusNotFound)
@@ -97,6 +98,16 @@ func RestoreBackupByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", resp.ProvisioningStatusURL)
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// resolveSnapshotID accepts either a composite backup ID ("<serverID>:<snapshotID>")
+// or a bare snapshot ID and returns the snapshot ID used as the state-store key
+// for the backup record.
+func resolveSnapshotID(backupID string) string {
+	if _, snapshotID, ok := strings.Cut(backupID, ":"); ok {
+		return snapshotID
+	}
+	return backupID
 }
 
 func buildVersionMismatchWarning(backupVersion, serverVersion string) string {

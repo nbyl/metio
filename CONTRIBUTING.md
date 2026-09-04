@@ -73,6 +73,23 @@ A development container is configured in `.devcontainer/` for VS Code with:
 - Docker bind-mount for container builds
 - OpenCode config mount for AI tooling
 
+The same configuration works in GitHub Codespaces — open the repository via
+**Code → Codespaces → Create codespace**. On first start, `.devcontainer/devcontainer.env`
+is seeded automatically from `devcontainer.env.example`.
+
+**Limitations in Codespaces:**
+- The seeded env file contains `TBD` placeholders for `GCP_PROJECT`, `GCP_ZONE`,
+  `INSTANCE_NAME`, `ALLOWED_USERS`, and the Google OAuth credentials. Building,
+  running the Go and frontend test suites, and the Vite dev server all work; Google
+  OAuth login and anything touching GCP (Datastore, Compute Engine, `make deploy`)
+  does not until you supply real values.
+- `make deploy` and the `gcloud compute ssh` verification step from `AGENTS.md`
+  require an authenticated `gcloud` session and are not part of the default
+  Codespaces flow.
+- The OpenCode config mounts are empty in Codespaces (they bind host directories
+  that only exist on a local machine), so OpenCode needs to be authenticated
+  inside the codespace.
+
 ## Architecture Overview
 
 ### System Diagram
