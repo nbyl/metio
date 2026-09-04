@@ -11,22 +11,22 @@ RUN DAPR_VERSION=1.16.5 && \
     install /tmp/dapr /usr/local/bin/dapr && \
     rm -f /tmp/dapr.tar.gz /tmp/dapr
 
-RUN curl -fsSL https://opencode.ai/install | VERSION=1.15.10 bash && \
+RUN curl -fsSL https://opencode.ai/install | VERSION=1.18.27 bash && \
     cp /root/.opencode/bin/opencode /usr/local/bin/opencode && \
     chmod 755 /usr/local/bin/opencode
 
 # Install Docker CLI (engine is accessed via host socket mount)
 RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list && \
-    apt-get update -qq && apt-get install -y -qq --no-install-recommends docker-ce-cli docker-compose-plugin
+    apt-get update -qq && apt-get install -y -qq --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin
 
 # Install Google Cloud CLI + Datastore emulator (Java runtime)
 RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
-    apt-get update -qq && apt-get install -y -qq --no-install-recommends google-cloud-cli google-cloud-cli-datastore-emulator openjdk-17-jre-headless
+    apt-get update -qq && apt-get install -y -qq --no-install-recommends google-cloud-cli
 
 # Install OpenTofu
-RUN TOFU_VERSION=${TOFU_VERSION:-1.10.1} && \
+RUN TOFU_VERSION=${TOFU_VERSION:-1.12.6} && \
     TOFU_ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
     curl -sSfL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_${TOFU_ARCH}.zip" -o /tmp/tofu.zip && \
     unzip -qo /tmp/tofu.zip -d /tmp/tofu && \
