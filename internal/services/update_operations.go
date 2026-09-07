@@ -88,7 +88,7 @@ func (b *BackupCoordinator) TriggerWorldSave(ctx context.Context, instanceName s
 	return nil
 }
 
-func (b *BackupCoordinator) TriggerRestore(ctx context.Context, instanceName, snapshotID string) error {
+func (b *BackupCoordinator) TriggerRestore(ctx context.Context, instanceName, snapshotID, repository, password string) error {
 	statusEntry, err := b.dbConn.GetStatus(ctx, instanceName)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -97,7 +97,11 @@ func (b *BackupCoordinator) TriggerRestore(ctx context.Context, instanceName, sn
 		return fmt.Errorf("failed to get server status for restore: %w", err)
 	}
 	statusEntry.PendingCommand = "restore"
-	statusEntry.PendingCommandArgs = map[string]string{"snapshotId": snapshotID}
+	statusEntry.PendingCommandArgs = map[string]string{
+		"snapshotId": snapshotID,
+		"repository": repository,
+		"password":   password,
+	}
 	statusEntry.PendingCommandResult = ""
 	if err := b.dbConn.UpdateStatus(ctx, instanceName, statusEntry); err != nil {
 		return fmt.Errorf("failed to write restore command: %w", err)

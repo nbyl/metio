@@ -16,9 +16,11 @@ import (
 	"github.com/nbyl/metio/internal/db"
 	"github.com/nbyl/metio/internal/dbtypes"
 	"github.com/nbyl/metio/internal/handlers/agent"
+	"github.com/nbyl/metio/internal/pulumi/programs"
 	"github.com/nbyl/metio/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestListAllBackups_ReturnsGlobalCatalog(t *testing.T) {
@@ -190,8 +192,11 @@ func TestCreateServerFromBackup_Success(t *testing.T) {
 
 	// Verify the provisioning service was called with restore fields set.
 	callArgs := mockPS.Calls[0].Arguments
-	programConfig := callArgs.Get(2)
-	assert.NotNil(t, programConfig)
+	raw := callArgs.Get(2)
+	require.NotNil(t, raw)
+	programConfig := raw.(*programs.ServerConfig)
+	assert.Equal(t, "snap-abc", programConfig.RestoreSnapshotID)
+	assert.Equal(t, "servers/old-srv/restic", programConfig.RestoreSourcePrefix)
 }
 
 func TestCreateServerFromBackup_OverridesApplied(t *testing.T) {

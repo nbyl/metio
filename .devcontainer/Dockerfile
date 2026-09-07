@@ -1,8 +1,15 @@
 FROM mcr.microsoft.com/devcontainers/go:2-1.26
 
-RUN go install github.com/air-verse/air@v1.62.0 && \
-    go install github.com/dapr/cli@v1.16.5 && \
-    mv /go/bin/cli /go/bin/dapr
+RUN for i in 1 2 3; do \
+        go install github.com/air-verse/air@v1.62.0 && break || sleep 5; \
+    done
+
+RUN DAPR_VERSION=1.16.5 && \
+    DAPR_ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
+    curl -sSfL "https://github.com/dapr/cli/releases/download/v${DAPR_VERSION}/dapr_linux_${DAPR_ARCH}.tar.gz" -o /tmp/dapr.tar.gz && \
+    tar -xzf /tmp/dapr.tar.gz -C /tmp && \
+    install /tmp/dapr /usr/local/bin/dapr && \
+    rm -f /tmp/dapr.tar.gz /tmp/dapr
 
 RUN curl -fsSL https://opencode.ai/install | VERSION=1.18.27 bash && \
     cp /root/.opencode/bin/opencode /usr/local/bin/opencode && \

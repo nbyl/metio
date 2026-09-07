@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 )
 
 func TestImageRegistryHost(t *testing.T) {
@@ -173,6 +174,11 @@ func TestRenderCloudConfig_RestoreSnapshotOmitted(t *testing.T) {
 
 	assert.NotContains(t, result, "metio-restore")
 	assert.NotContains(t, result, "restic restore")
+	// Without a restore configured, Minecraft depends only on docker (the
+	// restore unit lines must not be injected).
+	assert.Contains(t, result, "After=docker.service\n      Requires=docker.service\n\n      [Service]")
+	assert.NotContains(t, result, "After=metio-restore.service")
+	assert.NotContains(t, result, "Requires=metio-restore.service")
 }
 
 func TestRenderCloudConfig_RestoreSnapshotPresent(t *testing.T) {
@@ -185,35 +191,141 @@ func TestRenderCloudConfig_RestoreSnapshotPresent(t *testing.T) {
 		ResticPassword:      "restic-pw",
 		RCONPassword:        "rcon-pw",
 		BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+		BackupServiceEnable: "minecraft-backup ",
 		RestoreSnapshotID:   "abc123-snapshot",
 		RestoreSourcePrefix: "servers/old-server-id/restic",
 	}
 	result, err := RenderCloudConfig(cfg)
 	assert.NoError(t, err)
 
+	// The restore is shipped as a one-shot systemd unit running as the metio
+	// user (writable HOME, docker access) and gated on a run-once sentinel
+	// keyed to the snapshot.
+	assert.Contains(t, result, "path: /etc/systemd/system/metio-restore.service")
+	assert.Contains(t, result, "Description=Metio One-Shot World Restore")
+	assert.Contains(t, result, "User=metio")
+	assert.Contains(t, result, "ConditionPathExists=!/mnt/disks/minecraft/.metio-restore-abc123-snapshot.done")
 	assert.Contains(t, result, "docker run --rm --name metio-restore")
+	assert.Contains(t, result, "docker-credential-gcr configure-docker --registries europe-west3-docker.pkg.dev")
 	assert.Contains(t, result, "RESTIC_REPOSITORY=gs:my-project-development-backups:/servers/old-server-id/restic")
 	assert.Contains(t, result, "RESTIC_PASSWORD=restic-pw")
-	assert.Contains(t, result, "restic restore abc123-snapshot --target /data")
+	assert.Contains(t, result, "restic restore abc123-snapshot:/data --target /data")
 	assert.Contains(t, result, "-v /mnt/disks/minecraft/data:/data")
+	assert.Contains(t, result, "ExecStartPost=+/bin/touch /mnt/disks/minecraft/.metio-restore-abc123-snapshot.done")
 
-	// Restore step appears before systemctl start
+	// Minecraft must not start against an empty world: the restore unit runs
+	// before it via After=/Requires=, and fails (leaving Minecraft stopped) if
+	// the restore errors. On success the sentinel skips the unit on later boots.
 	restoreIdx := strings.Index(result, "metio-restore")
 	startIdx := strings.Index(result, "systemctl start minecraft")
-	assert.True(t, restoreIdx < startIdx, "restore must appear before systemctl start")
+	assert.True(t, restoreIdx < startIdx, "restore unit must appear before runcmd systemctl start")
+	assert.Contains(t, result, "Before=minecraft.service")
+	assert.Contains(t, result, "After=docker.service\n      After=metio-restore.service\n      Requires=docker.service\n      Requires=metio-restore.service")
+	assert.Contains(t, result, "systemctl start minecraft minecraft-backup metio-machine-agent")
+
+	// The old marker-based runcmd guard is gone.
+	assert.NotContains(t, result, ".metio-restore-failed")
 }
 
 func TestRenderCloudConfig_RestoreSnapshotOnly(t *testing.T) {
 	// When only RestoreSnapshotID is set but RestoreSourcePrefix is empty,
 	// no restore step should be rendered (both must be present).
 	cfg := &TemplateConfig{
-		Region:             "europe-west3",
-		MachineAgentImage:  "machine-agent:latest",
-		RestoreSnapshotID:  "abc123",
-		RCONPassword:       "rcon-pw",
+		Region:            "europe-west3",
+		MachineAgentImage: "machine-agent:latest",
+		RestoreSnapshotID: "abc123",
+		RCONPassword:      "rcon-pw",
 	}
 	result, err := RenderCloudConfig(cfg)
 	assert.NoError(t, err)
 
 	assert.NotContains(t, result, "metio-restore")
+}
+
+func TestRenderCloudConfig_RestoreSourcePrefixTrailingSlash(t *testing.T) {
+	// Stored repository prefixes end in "/" (the wire format is validated by
+	// the backup report handler), so the restore URL and start guard must
+	// not render a doubled slash.
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupBucket:        "my-project-development-backups",
+		ServerID:            "new-server-id",
+		BackupRetentionDays: 90,
+		ResticPassword:      "restic-pw",
+		RCONPassword:        "rcon-pw",
+		BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+		RestoreSnapshotID:   "abc123-snapshot",
+		RestoreSourcePrefix: "servers/old-server-id/restic/",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "RESTIC_REPOSITORY=gs:my-project-development-backups:/servers/old-server-id/restic")
+	assert.NotContains(t, result, "restic//")
+}
+
+func TestRenderCloudConfig_NoRestoreEmitsPlainStart(t *testing.T) {
+	// Without a restore, the start command must be byte-identical to the
+	// historical form so the normal boot path is untouched.
+	cfg := &TemplateConfig{
+		Region:              "europe-west3",
+		MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		BackupServiceEnable: "minecraft-backup ",
+		RCONPassword:        "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "systemctl start minecraft minecraft-backup metio-machine-agent")
+	assert.NotContains(t, result, "metio-restore-failed")
+}
+
+func TestRenderCloudConfig_YAMLValid(t *testing.T) {
+	// The restore and guarded-start entries are plain YAML scalars; a stray
+	// indicator would silently corrupt the whole user-data document. Parse the
+	// rendered output to guarantee the VM would receive valid cloud-config.
+	tests := []*TemplateConfig{
+		{
+			Region:              "europe-west3",
+			MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+			BackupBucket:        "my-project-development-backups",
+			ServerID:            "new-server-id",
+			BackupRetentionDays: 90,
+			ResticPassword:      "restic-pw",
+			RCONPassword:        "rcon-pw",
+			BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+			BackupServiceEnable: "minecraft-backup ",
+			RestoreSnapshotID:   "abc123-snapshot",
+			RestoreSourcePrefix: "servers/old-server-id/restic/",
+		},
+		{
+			Region:              "europe-west3",
+			MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+			BackupBucket:        "my-project-development-backups",
+			ServerID:            "new-server-id",
+			BackupRetentionDays: 90,
+			ResticPassword:      "restic-pw",
+			RCONPassword:        "rcon-pw",
+			BackupImage:         "ghcr.io/itzg/mc-backup:latest",
+			RestoreSnapshotID:   "abc123-snapshot",
+			RestoreSourcePrefix: "servers/old-server-id/restic",
+		},
+		{
+			Region:              "europe-west3",
+			MachineAgentImage:   "machine-agent:latest",
+			BackupServiceEnable: "minecraft-backup ",
+			RCONPassword:        "rcon-pw",
+		},
+	}
+	for _, cfg := range tests {
+		result, err := RenderCloudConfig(cfg)
+		assert.NoError(t, err)
+
+		var parsed map[string]interface{}
+		assert.NoError(t, yaml.Unmarshal([]byte(result), &parsed))
+		runcmd, ok := parsed["runcmd"].([]interface{})
+		assert.True(t, ok, "runcmd must be a list")
+		assert.NotEmpty(t, runcmd)
+	}
 }

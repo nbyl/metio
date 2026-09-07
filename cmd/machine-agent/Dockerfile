@@ -22,7 +22,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       adduser \
       ca-certificates \
-      docker-cli && \
+      docker-cli \
+      util-linux && \
     addgroup --gid 65532 nonroot && \
     addgroup --gid 412 docker && \
     adduser --uid 65532 --gid 65532 --disabled-password --gecos "" nonroot && \
