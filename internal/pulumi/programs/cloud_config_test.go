@@ -209,7 +209,7 @@ func TestRenderCloudConfig_RestoreSnapshotPresent(t *testing.T) {
 	assert.Contains(t, result, "docker-credential-gcr configure-docker --registries europe-west3-docker.pkg.dev")
 	assert.Contains(t, result, "RESTIC_REPOSITORY=gs:my-project-development-backups:/servers/old-server-id/restic")
 	assert.Contains(t, result, "RESTIC_PASSWORD=restic-pw")
-	assert.Contains(t, result, "restic restore abc123-snapshot:/data --target /data")
+	assert.Contains(t, result, "--entrypoint /usr/bin/restic ghcr.io/itzg/mc-backup:latest restore abc123-snapshot:/data --target /data")
 	assert.Contains(t, result, "-v /mnt/disks/minecraft/data:/data")
 	assert.Contains(t, result, "ExecStartPost=+/bin/touch /mnt/disks/minecraft/.metio-restore-abc123-snapshot.done")
 
