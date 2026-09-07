@@ -15,6 +15,10 @@ updates:
         applies-to: version-updates
         patterns:
           - "*"
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: gomod
     directory: /
@@ -29,6 +33,10 @@ updates:
     groups:
       go-modules:
         applies-to: version-updates
+        patterns:
+          - "*"
+      go-modules-security:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -69,6 +77,14 @@ updates:
         dependency-type: development
         update-types:
           - major
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      npm-transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /cmd/controller
@@ -83,6 +99,10 @@ updates:
     groups:
       controller-images:
         applies-to: version-updates
+        patterns:
+          - "*"
+      controller-images-security:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -101,6 +121,10 @@ updates:
         applies-to: version-updates
         patterns:
           - "*"
+      machine-agent-images-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /deploy/daprd
@@ -115,5 +139,9 @@ updates:
     groups:
       daprd-images:
         applies-to: version-updates
+        patterns:
+          - "*"
+      daprd-images-security:
+        applies-to: security-updates
         patterns:
           - "*"
