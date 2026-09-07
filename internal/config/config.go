@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/nbyl/metio/internal/db"
@@ -30,6 +31,7 @@ type Config struct {
 	DaprStateStoreName               string
 	BackupResticPassword             string
 	BackupDeletedServerRetentionDays int
+	SaveAckTimeout                   time.Duration
 }
 
 // Default values for configuration
@@ -37,6 +39,7 @@ const (
 	DefaultEnvironment                      = "development"
 	DefaultRegion                           = "us-central1"
 	DefaultBackupDeletedServerRetentionDays = 30
+	DefaultSaveAckTimeout                   = 3 * time.Minute
 )
 
 // Load reads configuration from environment variables via viper.
@@ -81,6 +84,16 @@ func Load() (Config, error) {
 		backupDeletedServerRetentionDays = days
 	}
 	cfg.BackupDeletedServerRetentionDays = backupDeletedServerRetentionDays
+
+	saveAckTimeout := DefaultSaveAckTimeout
+	if raw := viper.GetString("SAVE_ACK_TIMEOUT"); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil || d <= 0 {
+			return Config{}, fmt.Errorf("SAVE_ACK_TIMEOUT must be a positive duration, got %q", raw)
+		}
+		saveAckTimeout = d
+	}
+	cfg.SaveAckTimeout = saveAckTimeout
 
 	if cfg.MachineAgentImage == "" {
 		log.Print("MACHINE_AGENT_IMAGE is not set")

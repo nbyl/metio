@@ -60,7 +60,7 @@ func TestRestoreBackupByID_Success(t *testing.T) {
 
 	serverConfig := &db.ServerConfig{Name: "survival", MinecraftVersion: "1.21.1"}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(serverConfig, nil)
-	mockDB.On("GetBackup", mock.Anything, "srv1", "srv1:snap1").Return(completedRestoreBackup(), nil)
+	mockDB.On("GetBackup", mock.Anything, "srv1", "snap1").Return(completedRestoreBackup(), nil)
 	mockPS.On("RestoreServer", mock.Anything, "srv1", mock.Anything, "").Return(nil)
 
 	w := performRestoreRequest("srv1", "srv1:snap1")
@@ -77,13 +77,29 @@ func TestRestoreBackupByID_Success(t *testing.T) {
 	assert.Empty(t, resp.Warnings)
 }
 
+func TestRestoreBackupByID_SuccessWithBareSnapshotID(t *testing.T) {
+	mockDB, mockPS, cleanup := setupRestoreHandlerTest(t)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "survival", MinecraftVersion: "1.21.1"}, nil)
+	mockDB.On("GetBackup", mock.Anything, "srv1", "snap1").Return(completedRestoreBackup(), nil)
+	mockPS.On("RestoreServer", mock.Anything, "srv1", mock.Anything, "").Return(nil)
+
+	w := performRestoreRequest("srv1", "snap1")
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	var resp RestoreResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "snap1", resp.SnapshotID)
+}
+
 func TestRestoreBackupByID_VersionMismatchReturnsWarning(t *testing.T) {
 	mockDB, mockPS, cleanup := setupRestoreHandlerTest(t)
 	defer cleanup()
 
 	serverConfig := &db.ServerConfig{Name: "survival", MinecraftVersion: "1.20.4"}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(serverConfig, nil)
-	mockDB.On("GetBackup", mock.Anything, "srv1", "srv1:snap1").Return(completedRestoreBackup(), nil)
+	mockDB.On("GetBackup", mock.Anything, "srv1", "snap1").Return(completedRestoreBackup(), nil)
 	var capturedWarning string
 	mockPS.On("RestoreServer", mock.Anything, "srv1", mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
@@ -132,7 +148,7 @@ func TestRestoreBackupByID_FailedBackupRejected(t *testing.T) {
 	backup.Status = dbtypes.BackupStatusFailed
 
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{Name: "survival"}, nil)
-	mockDB.On("GetBackup", mock.Anything, "srv1", "srv1:snap1").Return(backup, nil)
+	mockDB.On("GetBackup", mock.Anything, "srv1", "snap1").Return(backup, nil)
 
 	w := performRestoreRequest("srv1", "srv1:snap1")
 
@@ -145,7 +161,7 @@ func TestRestoreBackupByID_ConcurrentOperationConflict(t *testing.T) {
 
 	serverConfig := &db.ServerConfig{Name: "survival", MinecraftVersion: "1.21.1"}
 	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(serverConfig, nil)
-	mockDB.On("GetBackup", mock.Anything, "srv1", "srv1:snap1").Return(completedRestoreBackup(), nil)
+	mockDB.On("GetBackup", mock.Anything, "srv1", "snap1").Return(completedRestoreBackup(), nil)
 	mockPS.On("RestoreServer", mock.Anything, "srv1", mock.Anything, "").
 		Return(errors.New("operation already in progress for server srv1"))
 
@@ -160,4 +176,12 @@ func TestBuildVersionMismatchWarning(t *testing.T) {
 	assert.Empty(t, buildVersionMismatchWarning("1.21.1", "1.21.1"))
 	assert.Contains(t, buildVersionMismatchWarning("1.21.1", "1.20.4"), "1.21.1")
 	assert.Contains(t, buildVersionMismatchWarning("1.21.1", "1.20.4"), "1.20.4")
+}
+
+func TestResolveSnapshotID(t *testing.T) {
+	assert.Equal(t, "snap1", resolveSnapshotID("srv1:snap1"))
+	assert.Equal(t, "snap-abc", resolveSnapshotID("934acde2-f3b2-4dec-9f28-8524511c4130:snap-abc"))
+	assert.Equal(t, "nope", resolveSnapshotID("nope"))
+	assert.Equal(t, "snap1", resolveSnapshotID("snap1"))
+	assert.Equal(t, "", resolveSnapshotID(""))
 }

@@ -94,6 +94,19 @@ func backupPrefixCondition(bucket, serverID string) string {
 		bucket, serverBackupPrefix(serverID))
 }
 
+// extendedBackupPrefixCondition returns the IAM condition expression that
+// scopes a principal's object access to both its own Restic prefix and an
+// additional source prefix (needed to restore from another server's backup).
+// The source prefix is normalized so a stored trailing slash cannot render a
+// doubled slash that would never match a real object path.
+func extendedBackupPrefixCondition(bucket, serverID, sourcePrefix string) string {
+	return fmt.Sprintf(
+		"resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\") || resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\")",
+		bucket, serverBackupPrefix(serverID),
+		bucket, normalizeBackupPrefix(sourcePrefix),
+	)
+}
+
 // backupObjectListRoleID returns the project-scoped custom role that grants
 // only storage.objects.list. GCS grants list at the bucket level and IAM
 // conditions cannot scope it, so per-server service accounts get this
@@ -279,11 +292,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 		iamConditionExpr := backupPrefixCondition(config.BackupBucket, config.ServerID)
 		iamConditionDesc := "Limit access to this server's Restic repository prefix"
 		if config.RestoreSourcePrefix != "" {
-			iamConditionExpr = fmt.Sprintf(
-				"resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\") || resource.name.startsWith(\"projects/_/buckets/%s/objects/%s/\")",
-				config.BackupBucket, serverBackupPrefix(config.ServerID),
-				config.BackupBucket, config.RestoreSourcePrefix,
-			)
+			iamConditionExpr = extendedBackupPrefixCondition(config.BackupBucket, config.ServerID, config.RestoreSourcePrefix)
 			iamConditionDesc = "Access to this server's prefix and source backup prefix for restore"
 		}
 

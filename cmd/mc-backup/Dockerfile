@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /post-backup ./cmd/mc-backup/post-backup
 
-FROM ghcr.io/itzg/mc-backup:latest
+FROM itzg/mc-backup:latest
 
 COPY --from=builder /post-backup /usr/local/bin/post-backup
 

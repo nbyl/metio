@@ -16,6 +16,10 @@ import (
 
 var ProvisioningService *services.ProvisioningService
 
+var executeOperation = func(ctx context.Context, serverID string, programConfig *programs.ServerConfig, updateType int) error {
+	return ProvisioningService.ExecuteOperation(ctx, serverID, programConfig, updateType)
+}
+
 var getDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -42,6 +46,25 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if opID := r.URL.Query().Get("opId"); opID != "" {
+		current, err := dbConn.GetProvisioningStatus(ctx, serverID)
+		if err != nil {
+			log.Printf("[tasks] Failed to read provisioning status for %s: %v", serverID, err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if current == nil || current.ID != opID {
+			log.Printf("[tasks] Skipping stale/superseded provisioning task for %s (op %s, current %v)", serverID, opID, current)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if current.State != db.ProvisioningStateInProgress {
+			log.Printf("[tasks] Skipping provisioning task for %s: operation %s is no longer in progress (state %s)", serverID, opID, current.State)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
+
 	serverConfig, err := dbConn.GetServerConfig(ctx, serverID)
 	if err != nil {
 		log.Printf("[tasks] Server config not found for %s: %v", serverID, err)
@@ -60,7 +83,7 @@ func HandleProvisioningTask(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[tasks] Executing provisioning for server %s", serverID)
 
-	if err := ProvisioningService.ExecuteOperation(ctx, serverID, programConfig, 0); err != nil {
+	if err := executeOperation(ctx, serverID, programConfig, 0); err != nil {
 		log.Printf("[tasks] Provisioning failed for %s: %v", serverID, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
