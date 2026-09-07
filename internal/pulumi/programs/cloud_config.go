@@ -122,7 +122,7 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
         -e RESTIC_REPOSITORY=gs:%s:/%s \
         -e RESTIC_PASSWORD=%s \
         -v /mnt/disks/minecraft/data:/data \
-        %s restic restore %s:/data --target /data
+        --entrypoint /usr/bin/restic %s restore %s:/data --target /data
       ExecStartPost=+/bin/touch /mnt/disks/minecraft/.metio-restore-%s.done
 `, config.RestoreSnapshotID, imageHost, config.BackupImage,
 			config.BackupBucket, sourcePrefix, config.ResticPassword,
