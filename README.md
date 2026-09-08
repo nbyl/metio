@@ -134,6 +134,28 @@ Once deployed, visit your Metio instance, complete the setup wizard, and create 
    export ALLOWED_USERS="your-email@example.com"
    ```
 
+### GitHub Codespaces
+
+The `.devcontainer/` configuration works in GitHub Codespaces. After the codespace
+starts, run the one-command setup to authenticate GCP and configure the shared
+OpenTofu remote state:
+
+```bash
+make codespace-setup
+```
+
+This target is idempotent and:
+- Authenticates `gcloud` and `gcloud auth application-default login` (only if needed)
+- Runs `gcloud auth configure-docker europe-west3-docker.pkg.dev` for image pushes
+- Creates the `{ENVIRONMENT}-metio-tfstate` GCS bucket if missing and writes the
+  gitignored `deploy/backend.gcs.tf` (the environment is read from
+  `deploy/metio.auto.tfvars`; override with `ENVIRONMENT=<name>`)
+- Runs `tofu init`, migrating any existing local state into the remote bucket
+
+Then deploy with `make deploy` (`make deploy-infrastructure` deploys without building
+images). A fresh codespace's first deploy does one cold image build; subsequent builds
+are fast thanks to the Dockerfiles' BuildKit cache mounts.
+
 ### Running Locally
 
 **Option 1: Full-stack development (recommended)**

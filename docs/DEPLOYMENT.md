@@ -136,7 +136,49 @@ tofu init
 tofu apply
 ```
 
+The OpenTofu state should live in the shared GCS bucket `{ENVIRONMENT}-metio-tfstate`
+(so any Codespace or machine deploys the same infrastructure). After authenticating
+gcloud, run `make codespace-setup` to create the bucket if needed, write the gitignored
+`deploy/backend.gcs.tf` and `tofu init` (migrating any existing local state). Afterwards
+`tofu -chdir=deploy apply` from anywhere uses the remote state. `deploy/backend.gcs.tf`
+is ignored by git because it is machine/environment-specific.
+
 This creates a module called `gcp-cloud-run` (from `deploy/modules/gcp-cloud-run/`) which manages all shared infrastructure. If you do not specify `controller_image` or `machine_agent_image`, the module uses the defaults from the latest release.
+
+### How Deploys Roll Cloud Run Revisions
+
+`make deploy` (and the other `deploy-*` targets) passes a fresh `deploy_id` on every run:
+
+```
+tofu -chdir=deploy apply -var="controller_image=<tag>" ... -var="deploy_id=$(date +%s)"
+```
+
+The controller module writes `deploy_id` into the Cloud Run **template** metadata as the
+`deploy-id` annotation, so every `make deploy` rolls a new Cloud Run revision even when
+the image tag is unchanged. (This is why `deploy_id` must stay under `template.metadata.annotations`
+in `deploy/modules/gcp-cloud-run/controller.tf` — a service-level annotation alone does **not**
+produce a new revision.)
+
+The variables that drive recreation across deploys are:
+
+| Variable | Effect |
+|----------|--------|
+| `deploy_id` | Forces a new Cloud Run revision (template `deploy-id` annotation) |
+| `controller_image` | Controller container image on Cloud Run |
+| `daprd_image` | Dapr sidecar container image on Cloud Run |
+| `machine_agent_image` | Image used by the Pulumi server program; changing it recreates VMs (an "Update Available" badge appears in the dashboard) |
+| `backup_image` | mc-backup image rendered into each server's cloud-config, applied when the VM is (re)provisioned |
+
+These variables are baked into the images' SHA tags at build time
+(`make build-images` writes `build/*.txt`). The intended flow:
+
+1. Commit a change → CI or `make <binary>-image` builds and pushes a new image tagged with
+   the git SHA → the resulting tag is passed as `controller_image`/`machine_agent_image`.
+2. `make deploy` rolls a new revision (via `deploy_id`) pointing at those tags.
+
+Since values not passed to `tofu apply` fall back to `deploy/metio.auto.tfvars`, the
+clean way to set a cross-recreation variable is to pass it as a `-var` on `tofu apply`
+(or use the `deploy-*` targets), not to edit `metio.auto.tfvars` for one-off deploys.
 
 ### Using as a Module in Your Own Repository
 
@@ -525,7 +567,7 @@ to new/updated servers.
 - **Controller logs**: View in Cloud Logging with the query `resource.type = "cloud_run_revision" AND resource.labels.service_name = "development-controller"`
 - **Server VM logs**: View the machine-agent startup logs with `resource.type = "gce_instance" AND resource.labels.instance_id = "<instance-id>"`
 - **Pulumi operations**: Provisioning progress is streamed to the state store and displayed in the frontend
-- **Infrastructure state**: View `terraform.tfstate` or use `tofu show`
+- **Infrastructure state**: View in the GCS state bucket (`{environment}-metio-tfstate`, set up by `make codespace-setup`) or use `tofu show`
 
 ### Troubleshooting
 
