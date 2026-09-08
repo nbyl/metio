@@ -330,6 +330,17 @@ codespace-setup:
 		exit 1 ;\
 	fi ;\
 	PROJECT_ID=$$(gcloud config get-value project 2>/dev/null) ;\
+	if [ -z "$$PROJECT_ID" ]; then \
+		PROJECT_ID=$$(grep -m1 '^[[:space:]]*project_id[[:space:]]*=' deploy/metio.auto.tfvars 2>/dev/null | sed 's/.*=\s*"\([^"]*\)".*/\1/') ;\
+	fi ;\
+	if [ -n "$$PROJECT_ID" ] && [ "$$(gcloud config get-value project 2>/dev/null)" != "$$PROJECT_ID" ]; then \
+		echo "Setting gcloud project to $$PROJECT_ID" ;\
+		gcloud config set project "$$PROJECT_ID" ;\
+	fi ;\
+	if [ -z "$$PROJECT_ID" ]; then \
+		echo "ERROR: could not determine GCP project. Define project_id in deploy/metio.auto.tfvars or set it with: gcloud config set project <id>" ;\
+		exit 1 ;\
+	fi ;\
 	BUCKET="$${ENV}-metio-tfstate" ;\
 	if ! gcloud storage buckets describe gs://$$BUCKET --project=$$PROJECT_ID >/dev/null 2>&1; then \
 		echo "Creating state bucket gs://$$BUCKET ..." ;\
@@ -342,7 +353,7 @@ codespace-setup:
 	if [ -d deploy/.terraform ]; then \
 		if ! tofu -chdir=deploy init -input=false -no-color ; then \
 			echo "Backend change detected; migrating existing state to gs://$$BUCKET ..." ;\
-			tofu -chdir=deploy init -migrate-state -no-color <<< "yes" ;\
+			printf 'yes\n' | tofu -chdir=deploy init -migrate-state -no-color ;\
 		fi ;\
 	else \
 		tofu -chdir=deploy init -input=false -no-color ;\
