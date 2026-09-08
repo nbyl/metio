@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images codespace-setup deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -295,6 +295,76 @@ promote-distribution:
 build-images: controller-image machine-agent-image mc-backup-image daprd-image
 	@echo "All Docker images built successfully"
 
+# GCS region/location for the OpenTofu remote-state bucket (override with LOCATION=<region>)
+LOCATION ?= europe-west3
+
+# One-command setup for Codespaces/cloud dev environments (idempotent, safe to re-run):
+# authenticates gcloud, configures Docker for Artifact Registry, provisions the GCS
+# remote-state bucket, writes the gitignored OpenTofu backend config and runs `tofu init`
+# (migrating any existing local state to the bucket).
+# Override: make codespace-setup ENVIRONMENT=<env> LOCATION=<region>
+codespace-setup:
+	@set -e ;\
+	ACTIVE_ACCOUNT=$$(gcloud auth list --filter="status:ACTIVE" --format="value(account)" 2>/dev/null | head -n1) ;\
+	if [ -z "$$ACTIVE_ACCOUNT" ]; then \
+		echo "No active gcloud account. Run the browser flow:" ;\
+		gcloud auth login ;\
+	else \
+		echo "Active gcloud account: $$ACTIVE_ACCOUNT" ;\
+	fi ;\
+	if gcloud auth application-default print-access-token >/dev/null 2>&1; then \
+		echo "Application default credentials already present" ;\
+	else \
+		echo "No application default credentials. Run the browser flow:" ;\
+		gcloud auth application-default login ;\
+	fi ;\
+	echo "Configuring Docker for Artifact Registry (europe-west3-docker.pkg.dev)..." ;\
+	gcloud auth configure-docker europe-west3-docker.pkg.dev ;\
+	if [ -n "$(ENVIRONMENT)" ]; then \
+		ENV="$(ENVIRONMENT)" ;\
+	else \
+		ENV=$$(grep -m1 '^[[:space:]]*environment[[:space:]]*=' deploy/metio.auto.tfvars 2>/dev/null | sed 's/.*=\s*"\([^"]*\)".*/\1/') ;\
+	fi ;\
+	if [ -z "$$ENV" ]; then \
+		echo "ERROR: could not determine environment. Set ENVIRONMENT=<name> or define environment in deploy/metio.auto.tfvars" ;\
+		exit 1 ;\
+	fi ;\
+	PROJECT_ID=$$(gcloud config get-value project 2>/dev/null) ;\
+	if [ -z "$$PROJECT_ID" ]; then \
+		PROJECT_ID=$$(grep -m1 '^[[:space:]]*project_id[[:space:]]*=' deploy/metio.auto.tfvars 2>/dev/null | sed 's/.*=\s*"\([^"]*\)".*/\1/') ;\
+	fi ;\
+	if [ -n "$$PROJECT_ID" ] && [ "$$(gcloud config get-value project 2>/dev/null)" != "$$PROJECT_ID" ]; then \
+		echo "Setting gcloud project to $$PROJECT_ID" ;\
+		gcloud config set project "$$PROJECT_ID" ;\
+	fi ;\
+	if [ -z "$$PROJECT_ID" ]; then \
+		echo "ERROR: could not determine GCP project. Define project_id in deploy/metio.auto.tfvars or set it with: gcloud config set project <id>" ;\
+		exit 1 ;\
+	fi ;\
+	BUCKET="$${ENV}-metio-tfstate" ;\
+	if ! gcloud storage buckets describe gs://$$BUCKET --project=$$PROJECT_ID >/dev/null 2>&1; then \
+		echo "Creating state bucket gs://$$BUCKET ..." ;\
+		gcloud storage buckets create gs://$$BUCKET --project=$$PROJECT_ID --location=$(LOCATION) --uniform-bucket-level-access ;\
+	else \
+		echo "State bucket gs://$$BUCKET already exists" ;\
+	fi ;\
+	printf 'terraform {\n  backend "gcs" {\n    bucket = "%s"\n    prefix = "tofu"\n  }\n}\n' "$$BUCKET" > deploy/backend.gcs.tf ;\
+	echo "Wrote gitignored deploy/backend.gcs.tf for bucket gs://$$BUCKET" ;\
+	if [ -d deploy/.terraform ]; then \
+		if ! tofu -chdir=deploy init -input=false -no-color ; then \
+			echo "Backend change detected; migrating existing state to gs://$$BUCKET ..." ;\
+			printf 'yes\n' | tofu -chdir=deploy init -migrate-state -no-color ;\
+		fi ;\
+	else \
+		tofu -chdir=deploy init -input=false -no-color ;\
+	fi ;\
+	echo "" ;\
+	echo "Codespace setup complete." ;\
+	echo "  - GCP project : $$PROJECT_ID" ;\
+	echo "  - Environment : $$ENV" ;\
+	echo "  - State bucket: gs://$$BUCKET" ;\
+	echo "Next: make deploy (or make deploy-infrastructure to skip image builds)"
+
 # Deploy infrastructure: apply OpenTofu with pre-built Docker images
 deploy: deploy-full
 
@@ -447,6 +517,7 @@ help:
 	@echo "  dev-down                - Stop all Dapr infrastructure"
 	@echo ""
 	@echo "Deployment targets:"
+	@echo "  codespace-setup         - One-command Codespace setup (gcloud auth, state bucket, tofu init)"
 	@echo "  deploy                  - Deploy full system (alias for deploy-full)"
 	@echo "  deploy-full             - Build both images and deploy all infrastructure"
 	@echo "  deploy-infrastructure   - Deploy infrastructure only (use existing/default images)"

@@ -180,8 +180,6 @@ resource "google_cloud_run_v2_service" "controller" {
     google_secret_manager_secret_version.postgres_connection_string_cloudsql,
   ]
 
-  annotations = var.deploy_id != "" ? { "deploy-id" = var.deploy_id } : {}
-
   scaling {
     manual_instance_count = 0
     min_instance_count    = 0
@@ -190,6 +188,10 @@ resource "google_cloud_run_v2_service" "controller" {
   template {
     service_account = google_service_account.controller_service_account.email
     timeout         = "1800s"
+
+    # A new deploy_id rolls a new Cloud Run revision.
+    # This must live on the template (not the service) to force a revision.
+    annotations = var.deploy_id != "" ? { "deploy-id" = var.deploy_id } : {}
 
     scaling {
       max_instance_count = 1

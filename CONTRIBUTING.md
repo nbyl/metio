@@ -77,15 +77,25 @@ The same configuration works in GitHub Codespaces — open the repository via
 **Code → Codespaces → Create codespace**. On first start, `.devcontainer/devcontainer.env`
 is seeded automatically from `devcontainer.env.example`.
 
+**Setup in Codespaces:** run `make codespace-setup` once. It is idempotent and:
+- Authenticates `gcloud` (only if needed) with `gcloud auth login` and
+  `gcloud auth application-default login`
+- Configures Docker for Artifact Registry (`gcloud auth configure-docker europe-west3-docker.pkg.dev`)
+- Creates the `{ENVIRONMENT}-metio-tfstate` GCS bucket if missing (the shared OpenTofu
+  remote-state bucket; `ENVIRONMENT` is read from `deploy/metio.auto.tfvars` or overridden
+  with `make codespace-setup ENVIRONMENT=<name>`)
+- Writes the gitignored `deploy/backend.gcs.tf` and runs `tofu init`, migrating any
+  existing local state so the codespace shares the remote state
+- Afterwards `make deploy` (or `make deploy-infrastructure` to skip image builds) deploys
+
 **Limitations in Codespaces:**
 - The seeded env file contains `TBD` placeholders for `GCP_PROJECT`, `GCP_ZONE`,
   `INSTANCE_NAME`, `ALLOWED_USERS`, and the Google OAuth credentials. Building,
   running the Go and frontend test suites, and the Vite dev server all work; Google
   OAuth login and anything touching GCP (Datastore, Compute Engine, `make deploy`)
   does not until you supply real values.
-- `make deploy` and the `gcloud compute ssh` verification step from `AGENTS.md`
-  require an authenticated `gcloud` session and are not part of the default
-  Codespaces flow.
+- `make codespace-setup` and the `gcloud compute ssh` verification step from `AGENTS.md`
+  require an authenticated `gcloud` session (the setup target establishes it).
 - The OpenCode config mounts are empty in Codespaces (they bind host directories
   that only exist on a local machine), so OpenCode needs to be authenticated
   inside the codespace.
