@@ -4,9 +4,11 @@
 FROM node:26-alpine AS frontend-builder
 WORKDIR /app
 COPY web/package*.json ./web/
-RUN cd web && npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    cd web && npm ci
 COPY web/ ./web/
-RUN cd web && npm run build
+RUN --mount=type=cache,target=/app/web/node_modules/.tmp \
+    cd web && npm run build
 
 # Stage 2: Go build
 FROM golang:1.26-alpine AS builder
