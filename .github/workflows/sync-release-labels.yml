@@ -97,8 +97,8 @@ jobs:
               }
               await github.graphql(
                 `mutation($project: ID!, $item: ID!, $field: ID!) {
-                   updateProjectV2ItemFieldValue(input: {
-                     projectId: $project, itemId: $item, fieldId: $field, value: { clearValue: true }
+                   clearProjectV2ItemFieldValue(input: {
+                     projectId: $project, itemId: $item, fieldId: $field
                    }) { projectV2Item { id } }
                  }`,
                 { project: project.id, item: item.id, field: field.id },
