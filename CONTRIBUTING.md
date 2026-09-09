@@ -519,6 +519,8 @@ Every issue that is part of an upcoming release carries a `release/<version>` la
 - Two or more `release/*` labels fail the workflow loudly and leave the field untouched.
 - The label is the source of truth — manual field edits are overwritten on the next label event.
 
+The workflow authenticates with the `PROJECTS_TOKEN` repository secret — a classic personal access token with `repo` and `project` scopes. `GITHUB_TOKEN` cannot use the Projects v2 GraphQL API for user-owned projects, even when the project is linked to the repository.
+
 After release-please publishes version `X.Y.Z`:
 
 1. Decide the next version and create the matching label, e.g. for `v2.1.0`:
