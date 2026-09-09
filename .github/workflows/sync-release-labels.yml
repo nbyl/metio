@@ -37,28 +37,31 @@ jobs:
             console.log(`release/* labels: ${releaseLabels.length ? releaseLabels.join(", ") : "(none)"}`);
 
             const projectQ = `
-              query($owner: String!, $number: Int!, $contentId: ID!) {
-                projectV2(number: $number, owner: $owner) {
-                  id
-                  items(first: 100, byContent: { contentId: $contentId }) {
-                    nodes {
-                      id
-                      fieldValues(first: 20) {
-                        nodes {
-                          ... on ProjectV2ItemFieldSingleSelectValue {
-                            name
-                            field { ... on ProjectV2SingleSelectField { id } }
+              query($login: String!, $number: Int!) {
+                user(login: $login) {
+                  projectV2(number: $number) {
+                    id
+                    items(first: 100) {
+                      nodes {
+                        id
+                        content { ... on Issue { number } }
+                        fieldValues(first: 20) {
+                          nodes {
+                            ... on ProjectV2ItemFieldSingleSelectValue {
+                              name
+                              field { ... on ProjectV2SingleSelectField { id } }
+                            }
                           }
                         }
                       }
                     }
-                  }
-                  fields(first: 50) {
-                    nodes {
-                      ... on ProjectV2SingleSelectField {
-                        id
-                        name
-                        options { id name }
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
                       }
                     }
                   }
@@ -66,19 +69,17 @@ jobs:
               }`;
 
             const project = (await github.graphql(projectQ, {
-              owner: PROJECT_OWNER,
+              login: PROJECT_OWNER,
               number: PROJECT_NUMBER,
-              contentId: issue.node_id,
-            })).projectV2;
+            })).user.projectV2;
 
-            const items = project.items.nodes;
-            if (items.length === 0) {
+            const item = project.items.nodes.find((n) => n.content && n.content.number === issue.number);
+            if (!item) {
               const msg = `Issue #${issue.number} is not in the Metio Development project (project #${PROJECT_NUMBER}). Add it to the project and trigger a label event again.`;
               await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: msg });
               core.setFailed(msg);
               return;
             }
-            const item = items[0];
 
             const field = project.fields.nodes.find((f) => f.name === FIELD_NAME);
             if (!field) {
