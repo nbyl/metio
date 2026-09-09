@@ -11,7 +11,7 @@ build: build-web
 	@for dir in cmd/*/; do \
 		if [ -f "$$dir/main.go" ]; then \
 			binary=$$(basename "$$dir"); \
-			version=$$(git rev-parse --short HEAD 2>/dev/null || echo "local"); \
+			version=$(VERSION); \
 			echo "Building $$binary with version $$version..."; \
 			go build -ldflags "-X main.Version=$$version" -o "build/$$binary" "./$$dir"; \
 			echo "Built build/$$binary"; \
@@ -173,7 +173,7 @@ test-dapr-integration: dev-up ## Run DaprDB integration tests against the local 
 %:
 	@mkdir -p build
 	@if [ -f "cmd/$@/main.go" ]; then \
-		version=$$(git rev-parse --short HEAD 2>/dev/null || echo "local"); \
+		version=$(VERSION); \
 		echo "Building $@ with version $$version..."; \
 		go build -ldflags "-X main.Version=$$version" -o "build/$@" "./cmd/$@"; \
 		echo "Built build/$@"; \
@@ -187,38 +187,51 @@ clean:
 	rm -rf build/
 	rm -rf static/dist/
 
-# Version baked into controller/machine-agent binaries via ldflags
-# (git describe, e.g. "1.7.0" or "1.7.0-3-gabc1234"; override with VERSION=x make ...)
-VERSION ?= $(shell git describe --tags --always 2>/dev/null | sed 's/^v//' || echo local)
+# Build identity baked into controller/machine-agent binaries via ldflags.
+# Base is immutable (HEAD sha + git describe), so release tags resolve to semver
+# (e.g. "2.0.0" or "2.0.0-13-ga1b2c3d"); a working tree with staged/unstaged or
+# non-ignored untracked changes gets a short content hash appended, so
+# deploy-before-commit builds are distinguishable in both the baked version and
+# the image tag (e.g. "2.0.0-13-ga1b2c3d-9f8e7d6c"). Override with VERSION=x make ...
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo local)
+TREE_HASH := $(shell { git diff; git diff --cached; git ls-files --others --exclude-standard -z | xargs -0 -r sha256sum; } | git hash-object --stdin | cut -c1-8)
+DIRTY_SUFFIX := $(shell { [ "$(TREE_HASH)" = "e69de29b" ] && echo "" || echo "-$(TREE_HASH)"; })
+VERSION ?= $(shell git describe --tags --always 2>/dev/null | sed 's/^v//' || echo local)$(DIRTY_SUFFIX)
+IMAGE_TAG := $(GIT_SHA)$(DIRTY_SUFFIX)
+
+# Print the resolved build identity (version + image tag)
+print-version:
+	@echo "VERSION=$(VERSION)"
+	@echo "IMAGE_TAG=$(IMAGE_TAG)"
 
 # CI controller image build — tag for ghcr.io, load into local daemon (no push)
 ci-controller-image:
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	echo "Building controller image for CI: ghcr.io/nbyl/metio/controller:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/controller:$${SHA} --build-arg VERSION=$(VERSION) -f cmd/controller/Dockerfile --load .
 
 # CI machine-agent image build — tag for ghcr.io, load into local daemon (no push)
 ci-machine-agent-image:
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	echo "Building machine-agent image for CI: ghcr.io/nbyl/metio/machine-agent:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/machine-agent:$${SHA} --build-arg VERSION=$(VERSION) -f cmd/machine-agent/Dockerfile --load .
 
 # CI mc-backup image build — tag for ghcr.io, load into local daemon (no push)
 ci-mc-backup-image:
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	echo "Building mc-backup image for CI: ghcr.io/nbyl/metio/mc-backup:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/mc-backup:$${SHA} -f cmd/mc-backup/Dockerfile --load .
 
 # CI daprd image build — tag for ghcr.io, load into local daemon (no push)
 ci-daprd-image:
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	echo "Building daprd image for CI: ghcr.io/nbyl/metio/daprd:$${SHA}"; \
 	docker buildx build --platform linux/amd64 -t ghcr.io/nbyl/metio/daprd:$${SHA} -f cmd/daprd/Dockerfile --load .
 
 # Local controller image build + push to Artifact Registry
 controller-image:
 	@mkdir -p build
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/controller:$${SHA}"; \
 	echo "Building controller image: $${IMAGE}"; \
 	docker buildx build --platform linux/amd64 -f cmd/controller/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . && \
@@ -227,7 +240,7 @@ controller-image:
 # Local machine-agent image build + push to Artifact Registry
 machine-agent-image:
 	@mkdir -p build
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:$${SHA}"; \
 	echo "Building machine-agent image: $${IMAGE}"; \
 	docker buildx build --platform linux/amd64 -f cmd/machine-agent/Dockerfile -t $${IMAGE} --build-arg VERSION=$(VERSION) --push . && \
@@ -236,7 +249,7 @@ machine-agent-image:
 # Local mc-backup image build + push to Artifact Registry
 mc-backup-image:
 	@mkdir -p build
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/mc-backup:$${SHA}"; \
 	echo "Building mc-backup image: $${IMAGE}"; \
 	docker buildx build --platform linux/amd64 -f cmd/mc-backup/Dockerfile -t $${IMAGE} --push . && \
@@ -245,7 +258,7 @@ mc-backup-image:
 # Local daprd image build + push to Artifact Registry
 daprd-image:
 	@mkdir -p build
-	@SHA=$$(git rev-parse --short HEAD); \
+	@SHA=$(IMAGE_TAG); \
 	IMAGE="europe-west3-docker.pkg.dev/minecraftbyl/metio/daprd:$${SHA}"; \
 	echo "Building daprd image: $${IMAGE}"; \
 	docker buildx build --platform linux/amd64 -f cmd/daprd/Dockerfile -t $${IMAGE} --push . && \
@@ -253,10 +266,10 @@ daprd-image:
 
 # Push images to ghcr.io
 push-images:
-	docker push ghcr.io/nbyl/metio/controller:$(shell git rev-parse --short HEAD)
-	docker push ghcr.io/nbyl/metio/machine-agent:$(shell git rev-parse --short HEAD)
-	docker push ghcr.io/nbyl/metio/mc-backup:$(shell git rev-parse --short HEAD)
-	docker push ghcr.io/nbyl/metio/daprd:$(shell git rev-parse --short HEAD)
+	docker push ghcr.io/nbyl/metio/controller:$(IMAGE_TAG)
+	docker push ghcr.io/nbyl/metio/machine-agent:$(IMAGE_TAG)
+	docker push ghcr.io/nbyl/metio/mc-backup:$(IMAGE_TAG)
+	docker push ghcr.io/nbyl/metio/daprd:$(IMAGE_TAG)
 
 # Promote image tags (usage: make promote FROM=a1b2c3d4 TO=main)
 promote:
@@ -272,19 +285,19 @@ promote:
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
 DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
-	docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(SHA)
-	docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(SHA)
-	docker tag ghcr.io/nbyl/metio/mc-backup:$(SHA) $(DISTRO_REGISTRY)/mc-backup:$(SHA)
-	docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(SHA)
-	docker push $(DISTRO_REGISTRY)/controller:$(SHA)
-	docker push $(DISTRO_REGISTRY)/machine-agent:$(SHA)
-	docker push $(DISTRO_REGISTRY)/mc-backup:$(SHA)
-	docker push $(DISTRO_REGISTRY)/daprd:$(SHA)
+	docker tag ghcr.io/nbyl/metio/controller:$(IMAGE_TAG) $(DISTRO_REGISTRY)/controller:$(IMAGE_TAG)
+	docker tag ghcr.io/nbyl/metio/machine-agent:$(IMAGE_TAG) $(DISTRO_REGISTRY)/machine-agent:$(IMAGE_TAG)
+	docker tag ghcr.io/nbyl/metio/mc-backup:$(IMAGE_TAG) $(DISTRO_REGISTRY)/mc-backup:$(IMAGE_TAG)
+	docker tag ghcr.io/nbyl/metio/daprd:$(IMAGE_TAG) $(DISTRO_REGISTRY)/daprd:$(IMAGE_TAG)
+	docker push $(DISTRO_REGISTRY)/controller:$(IMAGE_TAG)
+	docker push $(DISTRO_REGISTRY)/machine-agent:$(IMAGE_TAG)
+	docker push $(DISTRO_REGISTRY)/mc-backup:$(IMAGE_TAG)
+	docker push $(DISTRO_REGISTRY)/daprd:$(IMAGE_TAG)
 	if [ -n "$(VERSION)" ]; then \
-		docker tag ghcr.io/nbyl/metio/controller:$(SHA) $(DISTRO_REGISTRY)/controller:$(VERSION); \
-		docker tag ghcr.io/nbyl/metio/machine-agent:$(SHA) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
-		docker tag ghcr.io/nbyl/metio/mc-backup:$(SHA) $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
-		docker tag ghcr.io/nbyl/metio/daprd:$(SHA) $(DISTRO_REGISTRY)/daprd:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/controller:$(IMAGE_TAG) $(DISTRO_REGISTRY)/controller:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/machine-agent:$(IMAGE_TAG) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/mc-backup:$(IMAGE_TAG) $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
+		docker tag ghcr.io/nbyl/metio/daprd:$(IMAGE_TAG) $(DISTRO_REGISTRY)/daprd:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/controller:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
 		docker push $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
