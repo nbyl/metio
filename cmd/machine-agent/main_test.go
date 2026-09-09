@@ -58,8 +58,16 @@ func (m *MockAgentClient) SubmitBackupReport(ctx context.Context, serverID strin
 	return args.Error(0)
 }
 
+func stubMinecraftServiceRunning(t *testing.T) {
+	t.Helper()
+	oldFunc := getMinecraftServiceRunningFunc
+	getMinecraftServiceRunningFunc = func() (bool, error) { return true, nil }
+	t.Cleanup(func() { getMinecraftServiceRunningFunc = oldFunc })
+}
+
 func TestRunStatusUpdate(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
@@ -106,6 +114,7 @@ func TestRunStatusUpdate(t *testing.T) {
 
 func TestRunStatusUpdateError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
@@ -164,6 +173,42 @@ func TestGetMinecraftPlayerCountInvalidOutput(t *testing.T) {
 
 	_, _, err := getMinecraftPlayerCount()
 	assert.Error(t, err)
+}
+
+func TestGetMinecraftServiceRunning_Running(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "true")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	running, err := getMinecraftServiceRunning()
+	assert.NoError(t, err)
+	assert.True(t, running)
+}
+
+func TestGetMinecraftServiceRunning_Stopped(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "false")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	running, err := getMinecraftServiceRunning()
+	assert.NoError(t, err)
+	assert.False(t, running)
+}
+
+func TestGetMinecraftServiceRunning_Error(t *testing.T) {
+	oldExecCommand := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		return exec.Command("sh", "-c", "exit 1")
+	}
+	defer func() { execCommand = oldExecCommand }()
+
+	running, err := getMinecraftServiceRunning()
+	assert.Error(t, err)
+	assert.False(t, running)
 }
 
 func TestGetUptime(t *testing.T) {
@@ -277,24 +322,51 @@ func TestFormatDuration_Zero(t *testing.T) {
 
 func TestRunStatusUpdate_PlayerCountError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
+
 	oldGetFunc := getMinecraftPlayerCountFunc
+	oldUptimeFunc := getUptimeFunc
+	oldVersionFunc := getMinecraftVersionFunc
+	oldSyncFunc := syncWhitelistFunc
+	oldIPFunc := getInstanceIPFunc
+	oldCheck := checkScheduledShutdownFunc
+
 	getMinecraftPlayerCountFunc = func() (int, int, error) {
 		return 0, 0, fmt.Errorf("rcon error")
 	}
-	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
-
-	oldCheck := checkScheduledShutdownFunc
-	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error {
-		return nil
+	getUptimeFunc = func() (string, error) { return "1:00", nil }
+	getMinecraftVersionFunc = func() (string, string, error) { return "1.21.4", "", nil }
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		return false, nil
 	}
-	defer func() { checkScheduledShutdownFunc = oldCheck }()
+	getInstanceIPFunc = func() (string, error) { return "1.2.3.4:25565", nil }
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
+	defer func() {
+		getMinecraftPlayerCountFunc = oldGetFunc
+		getUptimeFunc = oldUptimeFunc
+		getMinecraftVersionFunc = oldVersionFunc
+		syncWhitelistFunc = oldSyncFunc
+		getInstanceIPFunc = oldIPFunc
+		checkScheduledShutdownFunc = oldCheck
+	}()
+
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil).Run(func(args mock.Arguments) {
+		status := args.Get(1).(dbtypes.Status)
+		assert.Equal(t, 0, status.Players.Current)
+		assert.Equal(t, 0, status.Players.Max)
+		assert.Equal(t, dbtypes.ServerStateRunning, status.ServerState)
+		assert.Equal(t, "1.21.4", status.Version)
+	})
 
 	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
-	assert.Error(t, err)
+	assert.NoError(t, err)
+	mockClient.AssertExpectations(t)
 }
 
 func TestRunStatusUpdate_UptimeError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	getMinecraftPlayerCountFunc = func() (int, int, error) { return 5, 20, nil }
@@ -314,6 +386,7 @@ func TestRunStatusUpdate_UptimeError(t *testing.T) {
 
 func TestRunStatusUpdate_VersionError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
@@ -347,6 +420,7 @@ func TestRunStatusUpdate_VersionError(t *testing.T) {
 
 func TestRunStatusUpdate_IPError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
 	oldVersionFunc := getMinecraftVersionFunc
@@ -1291,6 +1365,7 @@ func TestInitiateScheduledShutdown_MessageAndSaveErrors(t *testing.T) {
 
 func TestRunStatusUpdate_FullSuccess(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1325,6 +1400,7 @@ func TestRunStatusUpdate_FullSuccess(t *testing.T) {
 
 func TestRunStatusUpdate_PreservesPendingCommand(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1372,6 +1448,7 @@ func TestRunStatusUpdate_PreservesPendingCommand(t *testing.T) {
 
 func TestRunStatusUpdate_CheckShutdownError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1408,6 +1485,7 @@ func TestRunStatusUpdate_CheckShutdownError(t *testing.T) {
 
 func TestRunStatusUpdate_SyncWhitelistError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1442,6 +1520,7 @@ func TestRunStatusUpdate_SyncWhitelistError(t *testing.T) {
 
 func TestRunStatusUpdate_UpdateStatusError(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1476,6 +1555,7 @@ func TestRunStatusUpdate_UpdateStatusError(t *testing.T) {
 
 func TestRunStatusUpdate_VersionWithRawOutput(t *testing.T) {
 	mockClient := new(MockAgentClient)
+	stubMinecraftServiceRunning(t)
 
 	oldGetFunc := getMinecraftPlayerCountFunc
 	oldUptimeFunc := getUptimeFunc
@@ -1506,6 +1586,74 @@ func TestRunStatusUpdate_VersionWithRawOutput(t *testing.T) {
 
 	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
 	assert.NoError(t, err)
+}
+
+func TestRunStatusUpdate_ContainerNotRunning(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	oldRunningFunc := getMinecraftServiceRunningFunc
+	getMinecraftServiceRunningFunc = func() (bool, error) { return false, nil }
+	defer func() { getMinecraftServiceRunningFunc = oldRunningFunc }()
+
+	oldCheck := checkScheduledShutdownFunc
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
+	defer func() { checkScheduledShutdownFunc = oldCheck }()
+
+	oldSyncFunc := syncWhitelistFunc
+	syncWhitelistFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) (bool, error) {
+		t.Fatal("syncWhitelist should not be called when the container is not running")
+		return false, nil
+	}
+	defer func() { syncWhitelistFunc = oldSyncFunc }()
+	oldGetFunc := getMinecraftPlayerCountFunc
+	getMinecraftPlayerCountFunc = func() (int, int, error) {
+		t.Fatal("player count should not be queried when the container is not running")
+		return 0, 0, nil
+	}
+	defer func() { getMinecraftPlayerCountFunc = oldGetFunc }()
+	oldVersionFunc := getMinecraftVersionFunc
+	getMinecraftVersionFunc = func() (string, string, error) {
+		t.Fatal("version should not be queried when the container is not running")
+		return "", "", nil
+	}
+	defer func() { getMinecraftVersionFunc = oldVersionFunc }()
+
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil).Run(func(args mock.Arguments) {
+		status := args.Get(1).(dbtypes.Status)
+		assert.Equal(t, dbtypes.ServerStateStopped, status.ServerState)
+		assert.Equal(t, 0, status.Players.Current)
+		assert.Equal(t, 0, status.Players.Max)
+		assert.Equal(t, "Unknown", status.Version)
+		assert.Equal(t, "", status.Uptime)
+		assert.False(t, status.WhitelistEnabled)
+	})
+
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	mockClient.AssertExpectations(t)
+}
+
+func TestRunStatusUpdate_ContainerCheckError(t *testing.T) {
+	mockClient := new(MockAgentClient)
+	oldRunningFunc := getMinecraftServiceRunningFunc
+	getMinecraftServiceRunningFunc = func() (bool, error) { return false, fmt.Errorf("docker inspect failed") }
+	defer func() { getMinecraftServiceRunningFunc = oldRunningFunc }()
+
+	oldCheck := checkScheduledShutdownFunc
+	checkScheduledShutdownFunc = func(ctx context.Context, client agentclient.AgentClient, instanceName string) error { return nil }
+	defer func() { checkScheduledShutdownFunc = oldCheck }()
+
+	mockClient.On("GetStatus", mock.Anything).Return(dbtypes.Status{}, nil)
+	mockClient.On("UpdateStatus", mock.Anything, mock.AnythingOfType("dbtypes.Status")).Return(nil).Run(func(args mock.Arguments) {
+		status := args.Get(1).(dbtypes.Status)
+		assert.Equal(t, dbtypes.ServerStateStopped, status.ServerState)
+		assert.Equal(t, 0, status.Players.Current)
+		assert.Equal(t, "Unknown", status.Version)
+	})
+
+	err := runStatusUpdate(context.Background(), mockClient, "test-instance")
+	assert.NoError(t, err)
+	mockClient.AssertExpectations(t)
 }
 
 func TestGetInstanceIP_Success(t *testing.T) {

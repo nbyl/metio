@@ -29,6 +29,7 @@ var saveAllTimeout = 60 * time.Second
 var getMinecraftPlayerCountFunc = getMinecraftPlayerCount
 var getUptimeFunc = getUptime
 var getMinecraftVersionFunc = getMinecraftVersion
+var getMinecraftServiceRunningFunc = getMinecraftServiceRunning
 var osReadFile = os.ReadFile
 var syncWhitelistFunc = syncWhitelist
 var importWhitelistIfEmptyFunc = importWhitelistIfEmpty
@@ -134,35 +135,60 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 
 	tracing.RecordDBOperation("status_update")
 
-	current, max, err := getMinecraftPlayerCountFunc()
+	serverRunning, err := getMinecraftServiceRunningFunc()
 	if err != nil {
-		span.SetAttributes(attribute.String("error", "get_player_count_failed"))
-		tracing.RecordError("get_player_count_failed")
-		return err
+		span.SetAttributes(attribute.String("error", "get_minecraft_service_running_failed"))
+		log.Printf("Error checking whether minecraft.service is running: %v", err)
 	}
-	uptime, err := getUptimeFunc()
-	if err != nil {
-		span.SetAttributes(attribute.String("error", "get_uptime_failed"))
-		tracing.RecordError("get_uptime_failed")
-		return err
-	}
-	instanceIP, err := getInstanceIPFunc()
-	if err != nil {
-		span.SetAttributes(attribute.String("error", "get_instance_ip_failed"))
-		tracing.RecordError("get_instance_ip_failed")
-		log.Printf("Error getting instance IP: %v", err)
-		instanceIP = "unknown:25565"
-	}
-	version, rawOutput, err := getMinecraftVersionFunc()
-	if err != nil {
-		span.SetAttributes(attribute.String("error", "get_version_failed"))
-		tracing.RecordError("get_version_failed")
-		log.Printf("Error getting Minecraft version: %v", err)
-		version = "Unknown"
-	}
-	if rawOutput != "" {
-		span.SetAttributes(attribute.String("version.raw_output", rawOutput))
-		log.Printf("Version parsing failed, raw RCON output: %s", rawOutput)
+	span.SetAttributes(attribute.Bool("minecraft.service.running", serverRunning))
+
+	var current, max int
+	var uptime, instanceIP string
+	version := "Unknown"
+	var rawOutput string
+	whitelistEnabled := false
+
+	if serverRunning {
+		current, max, err = getMinecraftPlayerCountFunc()
+		if err != nil {
+			span.SetAttributes(attribute.String("error", "get_player_count_failed"))
+			tracing.RecordError("get_player_count_failed")
+			log.Printf("Error getting player count: %v", err)
+		}
+
+		uptime, err = getUptimeFunc()
+		if err != nil {
+			span.SetAttributes(attribute.String("error", "get_uptime_failed"))
+			tracing.RecordError("get_uptime_failed")
+			return err
+		}
+
+		instanceIP, err = getInstanceIPFunc()
+		if err != nil {
+			span.SetAttributes(attribute.String("error", "get_instance_ip_failed"))
+			tracing.RecordError("get_instance_ip_failed")
+			log.Printf("Error getting instance IP: %v", err)
+			instanceIP = "unknown:25565"
+		}
+
+		version, rawOutput, err = getMinecraftVersionFunc()
+		if err != nil {
+			span.SetAttributes(attribute.String("error", "get_version_failed"))
+			tracing.RecordError("get_version_failed")
+			log.Printf("Error getting Minecraft version: %v", err)
+			version = "Unknown"
+		}
+		if rawOutput != "" {
+			span.SetAttributes(attribute.String("version.raw_output", rawOutput))
+			log.Printf("Version parsing failed, raw RCON output: %s", rawOutput)
+		}
+
+		whitelistEnabled, err = syncWhitelistFunc(ctx, client, instanceName)
+		if err != nil {
+			span.SetAttributes(attribute.String("error", "sync_whitelist_failed"))
+			log.Printf("Error syncing whitelist: %v", err)
+			whitelistEnabled = false
+		}
 	}
 
 	span.SetAttributes(
@@ -171,15 +197,8 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 		attribute.String("uptime", uptime),
 		attribute.String("instance.ip", instanceIP),
 		attribute.String("version", version),
+		attribute.Bool("whitelist.enabled", whitelistEnabled),
 	)
-
-	whitelistEnabled, err := syncWhitelistFunc(ctx, client, instanceName)
-	if err != nil {
-		span.SetAttributes(attribute.String("error", "sync_whitelist_failed"))
-		log.Printf("Error syncing whitelist: %v", err)
-		whitelistEnabled = false
-	}
-	span.SetAttributes(attribute.Bool("whitelist.enabled", whitelistEnabled))
 
 	currentStatus, _ := client.GetStatus(ctx)
 
@@ -187,7 +206,11 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 	status.Players = dbtypes.Players{Current: current, Max: max}
 	status.Timestamp = time.Now()
 	status.Uptime = uptime
-	status.ServerState = dbtypes.ServerStateRunning
+	if serverRunning {
+		status.ServerState = dbtypes.ServerStateRunning
+	} else {
+		status.ServerState = dbtypes.ServerStateStopped
+	}
 	status.InstanceIP = instanceIP
 	status.Version = version
 	status.WhitelistEnabled = whitelistEnabled
@@ -200,7 +223,11 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 		return err
 	}
 
-	tracing.RecordStatusUpdate(instanceName, "running")
+	if serverRunning {
+		tracing.RecordStatusUpdate(instanceName, "running")
+	} else {
+		tracing.RecordStatusUpdate(instanceName, "stopped")
+	}
 
 	span.SetAttributes(attribute.String("success", "true"))
 	return nil
@@ -222,6 +249,15 @@ func getMinecraftPlayerCount() (int, int, error) {
 	current, _ := strconv.Atoi(matches[1])
 	max, _ := strconv.Atoi(matches[2])
 	return current, max, nil
+}
+
+func getMinecraftServiceRunning() (bool, error) {
+	cmd := execCommand("/usr/bin/docker", "inspect", "-f", "{{.State.Running}}", "minecraft.service")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(output)) == "true", nil
 }
 
 func getUptime() (string, error) {
