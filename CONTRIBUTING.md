@@ -511,6 +511,29 @@ To promote an image for deployment:
 make promote FROM=<sha> TO=main
 ```
 
+### Release rollover
+
+Every issue that is part of an upcoming release carries a `release/<version>` label (e.g. `release/v2.1.0`). A GitHub Actions workflow (`.github/workflows/sync-release-labels.yml`) mirrors that label into the single-select **Target release** field of the [Metio Development project](https://github.com/users/nbyl/projects/7): the option name equals the label name minus the `release/` prefix.
+
+- Exactly one `release/*` label sets the field; removing the last one clears it.
+- Two or more `release/*` labels fail the workflow loudly and leave the field untouched.
+- The label is the source of truth — manual field edits are overwritten on the next label event.
+
+After release-please publishes version `X.Y.Z`:
+
+1. Decide the next version and create the matching label, e.g. for `v2.1.0`:
+
+   ```bash
+   gh label create release/v2.1.0 --color bfd4f2 --description "Target release: v2.1.0"
+   ```
+
+2. Add the corresponding single-select option (`v2.1.0`) to the **Target release** field under *Project settings → Fields → Target release*.
+3. On every issue still labelled `release/X.Y.Z` (including already-shipped work), replace the label with the new one:
+
+   ```bash
+   gh issue edit <issue> --remove-label release/X.Y.Z --add-label release/v2.1.0
+   ```
+
 ## Types of Contributions
 
 ### Bug Reports
