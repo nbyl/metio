@@ -1,0 +1,140 @@
+name: Sync release labels
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const PROJECT_OWNER = "nbyl";
+            const PROJECT_NUMBER = 7;
+            const FIELD_NAME = "Target Release";
+
+            const issue = context.payload.issue;
+            console.log(`Syncing issue #${issue.number}: ${issue.title}`);
+
+            const releaseLabels = (await github.rest.issues.listLabelsOnIssue({
+              owner,
+              repo,
+              issue_number: issue.number,
+              per_page: 100,
+            })).data.map((l) => l.name).filter((n) => n.startsWith("release/"));
+            console.log(`release/* labels: ${releaseLabels.length ? releaseLabels.join(", ") : "(none)"}`);
+
+            const projectQ = `
+              query($owner: String!, $number: Int!, $contentId: ID!) {
+                projectV2(number: $number, owner: $owner) {
+                  id
+                  items(first: 100, byContent: { contentId: $contentId }) {
+                    nodes {
+                      id
+                      fieldValues(first: 20) {
+                        nodes {
+                          ... on ProjectV2ItemFieldSingleSelectValue {
+                            name
+                            field { ... on ProjectV2SingleSelectField { id } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  fields(first: 50) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options { id name }
+                      }
+                    }
+                  }
+                }
+              }`;
+
+            const project = (await github.graphql(projectQ, {
+              owner: PROJECT_OWNER,
+              number: PROJECT_NUMBER,
+              contentId: issue.node_id,
+            })).projectV2;
+
+            const items = project.items.nodes;
+            if (items.length === 0) {
+              const msg = `Issue #${issue.number} is not in the Metio Development project (project #${PROJECT_NUMBER}). Add it to the project and trigger a label event again.`;
+              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: msg });
+              core.setFailed(msg);
+              return;
+            }
+            const item = items[0];
+
+            const field = project.fields.nodes.find((f) => f.name === FIELD_NAME);
+            if (!field) {
+              core.setFailed(`Project ${PROJECT_NUMBER} has no "${FIELD_NAME}" single-select field`);
+              return;
+            }
+
+            const targetValue = item.fieldValues.nodes.find((v) => v.field && v.field.id === field.id);
+            const current = targetValue ? targetValue.name : null;
+
+            const clear = async (reason) => {
+              if (!current) {
+                console.log(`Target Release already empty — nothing to do (${reason})`);
+                return;
+              }
+              await github.graphql(
+                `mutation($project: ID!, $item: ID!, $field: ID!) {
+                   updateProjectV2ItemFieldValue(input: {
+                     projectId: $project, itemId: $item, fieldId: $field, value: { clearValue: true }
+                   }) { projectV2Item { id } }
+                 }`,
+                { project: project.id, item: item.id, field: field.id },
+              );
+              console.log(`Cleared Target Release (${reason})`);
+            };
+
+            const set = async (option) => {
+              if (current === option.name) {
+                console.log(`Target Release already "${option.name}" — nothing to do`);
+                return;
+              }
+              await github.graphql(
+                `mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+                   updateProjectV2ItemFieldValue(input: {
+                     projectId: $project, itemId: $item, fieldId: $field,
+                     value: { singleSelectOptionId: $option }
+                   }) { projectV2Item { id } }
+                 }`,
+                { project: project.id, item: item.id, field: field.id, option: option.id },
+              );
+              console.log(`Set Target Release to "${option.name}"`);
+            };
+
+            if (releaseLabels.length === 0) {
+              await clear("no release/* label remains");
+            } else if (releaseLabels.length === 1) {
+              const want = releaseLabels[0].slice("release/".length);
+              const option = field.options.find((o) => o.name === want);
+              if (!option) {
+                const msg = `Label "${releaseLabels[0]}" has no matching "${FIELD_NAME}" option "${want}" on the Metio Development project. Add the option and trigger a label event again.`;
+                await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: msg });
+                core.setFailed(msg);
+                return;
+              }
+              await set(option);
+            } else {
+              const msg = `Issue #${issue.number} has ${releaseLabels.length} release/* labels: ${releaseLabels.join(", ")}. Exactly one is required; the "${FIELD_NAME}" field was left untouched. Remove all but one.`;
+              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: msg });
+              core.setFailed(msg);
+            }
