@@ -281,6 +281,22 @@ func TestRenderCloudConfig_NoRestoreEmitsPlainStart(t *testing.T) {
 	assert.NotContains(t, result, "metio-restore-failed")
 }
 
+func TestRenderCloudConfig_Java25Image(t *testing.T) {
+	// The 26.x releases require Java 25, so the Minecraft image must be the
+	// stable-java25 variant. Java 25 also runs older releases (1.21.x needs
+	// Java 17/21+), so a single tag covers every offered version.
+	cfg := &TemplateConfig{
+		Region:            "europe-west3",
+		MachineAgentImage: "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		MinecraftVersion:  "26.1",
+		RCONPassword:      "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+	assert.Contains(t, result, "itzg/minecraft-server:stable-java25")
+	assert.NotContains(t, result, "itzg/minecraft-server:stable-java21")
+}
+
 func TestRenderCloudConfig_YAMLValid(t *testing.T) {
 	// The restore and guarded-start entries are plain YAML scalars; a stray
 	// indicator would silently corrupt the whole user-data document. Parse the
