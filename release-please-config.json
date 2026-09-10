@@ -1,15 +1,5 @@
 {
   "release-type": "simple",
-  "extra-files": [
-    {
-      "type": "generic",
-      "path": "deploy/variables.tf"
-    },
-    {
-      "type": "generic",
-      "path": "deploy/modules/gcp-cloud-run/variables.tf"
-    }
-  ],
   "packages": {
     ".": {
       "release-type": "simple"
