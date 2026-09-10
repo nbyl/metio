@@ -94,22 +94,9 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       - name: Configure Docker for GCP Artifact Registry
         run: gcloud auth configure-docker europe-docker.pkg.dev
-      - name: Pull from ghcr.io
-        run: |
-          echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker pull ghcr.io/nbyl/metio/controller:${IMAGE_TAG}
-          docker pull ghcr.io/nbyl/metio/machine-agent:${IMAGE_TAG}
-          docker pull ghcr.io/nbyl/metio/mc-backup:${IMAGE_TAG}
-          docker pull ghcr.io/nbyl/metio/daprd:${IMAGE_TAG}
+      - name: Log in to ghcr.io
+        run: echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Promote to GCP Artifact Registry
         run: make promote-distribution IMAGE_TAG="$IMAGE_TAG" VERSION=${{ needs.release.outputs.version }}
       - name: Tag ghcr.io images with version
-        run: |
-          docker tag ghcr.io/nbyl/metio/controller:${IMAGE_TAG} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
-          docker tag ghcr.io/nbyl/metio/machine-agent:${IMAGE_TAG} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
-          docker tag ghcr.io/nbyl/metio/mc-backup:${IMAGE_TAG} ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
-          docker tag ghcr.io/nbyl/metio/daprd:${IMAGE_TAG} ghcr.io/nbyl/metio/daprd:${{ needs.release.outputs.version }}
-          docker push ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
-          docker push ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
-          docker push ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
-          docker push ghcr.io/nbyl/metio/daprd:${{ needs.release.outputs.version }}
+        run: make promote FROM="$IMAGE_TAG" TO=${{ needs.release.outputs.version }}
