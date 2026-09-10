@@ -20,3 +20,5 @@ This directory records significant architecture decisions for Metio using a ligh
 | [0003](0003-postgresql-state-backend.md) | PostgreSQL state backend (Cloud SQL or BYO) | Accepted |
 | [0004](0004-centralized-backup-catalog-and-restore.md) | Centralized backup catalog and restore | Accepted |
 | [0005](0005-frontend-component-library.md) | Frontend component library | Accepted |
+| [0006](0006-modpack-support-and-configurable-memory.md) | Modpack support and configurable server memory | Proposed |
+| [0007](0007-per-mod-and-plugin-selection.md) | Per-mod and per-plugin selection | Proposed |
