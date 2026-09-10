@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.1.0](https://github.com/nbyl/metio/compare/v2.0.0...v2.1.0) (2026-09-10)
+
+
+### Features
+
+* hide IP when server is not running ([#524](https://github.com/nbyl/metio/issues/524)) ([71aeb12](https://github.com/nbyl/metio/commit/71aeb12612d71d8ecef709e7543c6ffb22f84699)), closes [#363](https://github.com/nbyl/metio/issues/363)
+* improve codespace setup ([#511](https://github.com/nbyl/metio/issues/511)) ([2c3c2e7](https://github.com/nbyl/metio/commit/2c3c2e76b6b678ae49415b302edc31c3434b0cb2))
+* support Minecraft 26.x with the stable-java25 image ([#513](https://github.com/nbyl/metio/issues/513)) ([4daae04](https://github.com/nbyl/metio/commit/4daae040dd069b5d16cb7ed4ccea7c39f7bd6512))
+* sync release/* labels with Target release project field ([#517](https://github.com/nbyl/metio/issues/517)) ([33561d3](https://github.com/nbyl/metio/commit/33561d3af46d189d0f20d282bf086ed16e42bd55)), closes [#469](https://github.com/nbyl/metio/issues/469)
+
+
+### Bug Fixes
+
+* clear Target Release via clearProjectV2ItemFieldValue ([#523](https://github.com/nbyl/metio/issues/523)) ([ac87ac3](https://github.com/nbyl/metio/commit/ac87ac3cb4f3bb5eb584ceefd5fbab104426c8fa))
+* report STOPPED while minecraft boots instead of aborting status update ([#514](https://github.com/nbyl/metio/issues/514)) ([14ed9a9](https://github.com/nbyl/metio/commit/14ed9a961155e8edba2d003356c2d414b2f916fe))
+* use project-scoped token for release label sync ([#519](https://github.com/nbyl/metio/issues/519)) ([ff76da4](https://github.com/nbyl/metio/commit/ff76da4340ccc3c4686c99182797b834d74cce7b))
+* use user.projectV2 query shape for release label sync ([#522](https://github.com/nbyl/metio/issues/522)) ([d1e6099](https://github.com/nbyl/metio/commit/d1e60992b6e508cda03265f599ba7264a54aebc7))
+
 ## [2.0.0](https://github.com/nbyl/metio/compare/v1.7.0...v2.0.0) (2026-09-07)
 
 
