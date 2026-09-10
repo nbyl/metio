@@ -285,6 +285,17 @@ promote:
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
 DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
+	@missing=""; \
+	for img in controller machine-agent mc-backup daprd; do \
+		src="ghcr.io/nbyl/metio/$${img}:$(IMAGE_TAG)"; \
+		docker image inspect "$${src}" >/dev/null 2>&1 || missing="$${missing} $${src}"; \
+	done; \
+	if [ -n "$${missing}" ]; then \
+		echo "error: promote-distribution cannot find local source image(s):$${missing}"; \
+		echo "       resolved IMAGE_TAG is '$(IMAGE_TAG)'. Either pull the images under"; \
+		echo "       this tag first, or override it, e.g. make promote-distribution IMAGE_TAG=<sha> VERSION=<version>"; \
+		exit 1; \
+	fi
 	docker tag ghcr.io/nbyl/metio/controller:$(IMAGE_TAG) $(DISTRO_REGISTRY)/controller:$(IMAGE_TAG)
 	docker tag ghcr.io/nbyl/metio/machine-agent:$(IMAGE_TAG) $(DISTRO_REGISTRY)/machine-agent:$(IMAGE_TAG)
 	docker tag ghcr.io/nbyl/metio/mc-backup:$(IMAGE_TAG) $(DISTRO_REGISTRY)/mc-backup:$(IMAGE_TAG)

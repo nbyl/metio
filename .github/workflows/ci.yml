@@ -44,13 +44,15 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
+      - name: Resolve image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
       - run: echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - run: make ci-controller-image VERSION=$IMAGE_VERSION
-      - run: make ci-machine-agent-image VERSION=$IMAGE_VERSION
-      - run: make ci-mc-backup-image VERSION=$IMAGE_VERSION
-      - run: make ci-daprd-image VERSION=$IMAGE_VERSION
+      - run: make ci-controller-image VERSION=$IMAGE_VERSION IMAGE_TAG=$IMAGE_TAG
+      - run: make ci-machine-agent-image VERSION=$IMAGE_VERSION IMAGE_TAG=$IMAGE_TAG
+      - run: make ci-mc-backup-image VERSION=$IMAGE_VERSION IMAGE_TAG=$IMAGE_TAG
+      - run: make ci-daprd-image VERSION=$IMAGE_VERSION IMAGE_TAG=$IMAGE_TAG
       - if: github.ref == 'refs/heads/main'
-        run: make push-images
+        run: make push-images IMAGE_TAG=$IMAGE_TAG
 
   release:
     # Release Please runs before the image build so the computed version can be
@@ -83,6 +85,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+      - name: Resolve image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
@@ -93,18 +97,18 @@ jobs:
       - name: Pull from ghcr.io
         run: |
           echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker pull ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7}
-          docker pull ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7}
-          docker pull ghcr.io/nbyl/metio/mc-backup:${GITHUB_SHA::7}
-          docker pull ghcr.io/nbyl/metio/daprd:${GITHUB_SHA::7}
+          docker pull ghcr.io/nbyl/metio/controller:${IMAGE_TAG}
+          docker pull ghcr.io/nbyl/metio/machine-agent:${IMAGE_TAG}
+          docker pull ghcr.io/nbyl/metio/mc-backup:${IMAGE_TAG}
+          docker pull ghcr.io/nbyl/metio/daprd:${IMAGE_TAG}
       - name: Promote to GCP Artifact Registry
-        run: make promote-distribution SHA=${GITHUB_SHA::7} VERSION=${{ needs.release.outputs.version }}
+        run: make promote-distribution IMAGE_TAG="$IMAGE_TAG" VERSION=${{ needs.release.outputs.version }}
       - name: Tag ghcr.io images with version
         run: |
-          docker tag ghcr.io/nbyl/metio/controller:${GITHUB_SHA::7} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
-          docker tag ghcr.io/nbyl/metio/machine-agent:${GITHUB_SHA::7} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
-          docker tag ghcr.io/nbyl/metio/mc-backup:${GITHUB_SHA::7} ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
-          docker tag ghcr.io/nbyl/metio/daprd:${GITHUB_SHA::7} ghcr.io/nbyl/metio/daprd:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/controller:${IMAGE_TAG} ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/machine-agent:${IMAGE_TAG} ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/mc-backup:${IMAGE_TAG} ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
+          docker tag ghcr.io/nbyl/metio/daprd:${IMAGE_TAG} ghcr.io/nbyl/metio/daprd:${{ needs.release.outputs.version }}
           docker push ghcr.io/nbyl/metio/controller:${{ needs.release.outputs.version }}
           docker push ghcr.io/nbyl/metio/machine-agent:${{ needs.release.outputs.version }}
           docker push ghcr.io/nbyl/metio/mc-backup:${{ needs.release.outputs.version }}
