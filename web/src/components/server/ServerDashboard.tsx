@@ -512,12 +512,12 @@ function ServerCard({ server }: ServerCardProps) {
             label: 'Uptime',
             value: currentStatus?.uptime || '-',
           },
+          {
+            label: 'IP',
+            value: currentStatus?.instanceIP || '-',
+          },
         ]
       : []),
-    {
-      label: 'IP',
-      value: currentStatus?.instanceIP || '-',
-    },
   ];
 
   const handleUpdate = (data: UpdateServerRequest) => {

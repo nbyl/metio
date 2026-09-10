@@ -168,7 +168,7 @@ func runStatusUpdate(ctx context.Context, client agentclient.AgentClient, instan
 			span.SetAttributes(attribute.String("error", "get_instance_ip_failed"))
 			tracing.RecordError("get_instance_ip_failed")
 			log.Printf("Error getting instance IP: %v", err)
-			instanceIP = "unknown:25565"
+			instanceIP = ""
 		}
 
 		version, rawOutput, err = getMinecraftVersionFunc()
