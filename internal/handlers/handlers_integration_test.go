@@ -1381,7 +1381,7 @@ func TestStatusByID_StatusNotFound(t *testing.T) {
 	var response servers.StatusResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, string(db.ServerStateStarting), response.ServerState)
-	assert.Equal(t, "unknown:25565", response.InstanceIP)
+	assert.Equal(t, "", response.InstanceIP)
 }
 
 func TestStatusByID_StatusNotFound_ProvisioningInProgress(t *testing.T) {
@@ -1476,7 +1476,36 @@ func TestStatusByID_UnknownIP(t *testing.T) {
 	var response servers.StatusResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, string(db.ServerStateStopped), response.ServerState)
-	assert.Equal(t, "unknown:25565", response.InstanceIP)
+	assert.Equal(t, "", response.InstanceIP)
+}
+
+func TestStatusByID_LegacyUnknownIP(t *testing.T) {
+	mockDB := new(testutil.MockDB)
+	cleanup := setupMockDB(mockDB)
+	defer cleanup()
+
+	mockDB.On("GetServerConfig", mock.Anything, "srv1").Return(&db.ServerConfig{
+		Name: "test-instance", Region: "us-central1", Zone: "us-central1-a",
+	}, nil)
+	// Older machine agents persisted the placeholder; the handler must
+	// normalise it so it never reaches the API.
+	mockDB.On("GetStatus", mock.Anything, "test-instance").Return(db.Status{
+		Players:     db.Players{Current: 0, Max: 20},
+		Timestamp:   time.Now(),
+		ServerState: db.ServerStateStopped,
+		InstanceIP:  "unknown:25565",
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv1/status", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "srv1"})
+	w := httptest.NewRecorder()
+	servers.StatusByID(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response servers.StatusResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, string(db.ServerStateStopped), response.ServerState)
+	assert.Equal(t, "", response.InstanceIP)
 }
 
 func TestStatusByID_WithScheduledShutdown(t *testing.T) {

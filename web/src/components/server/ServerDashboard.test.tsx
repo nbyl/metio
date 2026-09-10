@@ -220,16 +220,16 @@ describe('ServerDashboard stats', () => {
     mockServerList([mockServerResponse(stoppedStatus)]);
   });
 
-  it('hides Players and Uptime when server is stopped', () => {
+  it('hides Players, Uptime and IP when server is stopped', () => {
     renderDashboard();
 
     expect(screen.getByText('State')).toBeInTheDocument();
-    expect(screen.getByText('IP')).toBeInTheDocument();
+    expect(screen.queryByText('IP')).not.toBeInTheDocument();
     expect(screen.queryByText('Players')).not.toBeInTheDocument();
     expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
   });
 
-  it('hides Players and Uptime while server is starting', () => {
+  it('hides Players, Uptime and IP while server is starting', () => {
     vi.mocked(useServers).mockReturnValue({
       data: [mockServerResponse(startingStatus)],
       isLoading: false,
@@ -240,12 +240,12 @@ describe('ServerDashboard stats', () => {
     renderDashboard();
 
     expect(screen.getByText('State')).toBeInTheDocument();
-    expect(screen.getByText('IP')).toBeInTheDocument();
+    expect(screen.queryByText('IP')).not.toBeInTheDocument();
     expect(screen.queryByText('Players')).not.toBeInTheDocument();
     expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
   });
 
-  it('hides Players and Uptime while server is stopping', () => {
+  it('hides Players, Uptime and IP while server is stopping', () => {
     vi.mocked(useServers).mockReturnValue({
       data: [mockServerResponse(stoppingStatus)],
       isLoading: false,
@@ -256,12 +256,12 @@ describe('ServerDashboard stats', () => {
     renderDashboard();
 
     expect(screen.getByText('State')).toBeInTheDocument();
-    expect(screen.getByText('IP')).toBeInTheDocument();
+    expect(screen.queryByText('IP')).not.toBeInTheDocument();
     expect(screen.queryByText('Players')).not.toBeInTheDocument();
     expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
   });
 
-  it('shows Players and Uptime when server is running', () => {
+  it('shows Players, Uptime and IP when server is running', () => {
     vi.mocked(useServers).mockReturnValue({
       data: [mockServerResponse(runningStatus)],
       isLoading: false,
@@ -273,6 +273,7 @@ describe('ServerDashboard stats', () => {
 
     expect(screen.getByText('State')).toBeInTheDocument();
     expect(screen.getByText('IP')).toBeInTheDocument();
+    expect(screen.getByText('192.168.1.100')).toBeInTheDocument();
     expect(screen.getByText('Players')).toBeInTheDocument();
     expect(screen.getByText('5/20')).toBeInTheDocument();
     expect(screen.getByText('Uptime')).toBeInTheDocument();

@@ -333,9 +333,12 @@ func StatusByID(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Return the stored IP as-is; empty means unknown. Normalise a stored
+	// legacy "unknown:25565" placeholder (written by older machine agents or
+	// state-store documents) so it never leaks through the API.
 	ip := playerStatus.InstanceIP
-	if ip == "" {
-		ip = "unknown:25565"
+	if ip == "unknown:25565" {
+		ip = ""
 	}
 
 	var scheduledShutdown *string
