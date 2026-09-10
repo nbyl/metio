@@ -208,6 +208,9 @@ tmp/
 views/*_templ.go
 .devcontainer/devcontainer.env
 
+# GitHub Actions WIF credentials (written into the workspace root by google-github-actions/auth)
+gha-creds-*.json
+
 # Frontend build output
 static/dist/
 
