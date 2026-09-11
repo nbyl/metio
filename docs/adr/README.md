@@ -22,3 +22,4 @@ This directory records significant architecture decisions for Metio using a ligh
 | [0005](0005-frontend-component-library.md) | Frontend component library | Accepted |
 | [0006](0006-modpack-support-and-configurable-memory.md) | Modpack support and configurable server memory | Accepted |
 | [0007](0007-per-mod-and-plugin-selection.md) | Per-mod and per-plugin selection | Proposed |
+| [0008](0008-kubernetes-runtime.md) | Kubernetes as the Minecraft runtime | Proposed |
