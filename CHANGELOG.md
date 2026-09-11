@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.1](https://github.com/nbyl/metio/compare/v2.1.0...v2.1.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **ci:** promote images using the tag pulled from ghcr.io ([#525](https://github.com/nbyl/metio/issues/525)) ([20481ce](https://github.com/nbyl/metio/commit/20481cec0889da292e64ad65340081690edfea1b))
+* **release:** gate image-default update on promoted images ([#530](https://github.com/nbyl/metio/issues/530)) ([89c247b](https://github.com/nbyl/metio/commit/89c247b2f8fc99300784ee42e8f61bc9d7e30235))
+
 ## [2.1.0](https://github.com/nbyl/metio/compare/v2.0.0...v2.1.0) (2026-09-10)
 
 
