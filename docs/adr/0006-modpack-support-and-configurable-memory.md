@@ -33,7 +33,9 @@ The governing constraint is `internal/pulumi/programs/server.go:428`:
    loader, Minecraft version and mod set; the user should pick a pack and nothing else.
 2. **The JVM heap must fit the machine.** Correct by construction, not by user arithmetic.
 3. **Minimise recreations.** Recreation is acceptable for rare structural changes, not routine ones.
-4. **Secrets stay server-side.** CurseForge needs an API key that must not reach the browser.
+4. **No third-party credentials on the game server.** Instance metadata (`user-data`) is readable
+   by anyone with instance access or metadata-server reach, so a pack source that requires a
+   credential inside the container is materially worse than one that does not.
 5. **Additive persistence.** Dapr JSON state, no migrations (ADR-0002/0003); new fields must
    default safely for existing servers.
 
@@ -48,22 +50,27 @@ The governing constraint is `internal/pulumi/programs/server.go:428`:
   `db.MachineTypes[mt].MemoryGB`, reserving headroom for the OS, backup sidecar and machine-agent.
   No new user-facing field. Memory then changes only when machine type changes -- which today is
   classified `UpdateTypeResize` (`crud.go:397`) and would be promoted to a recreation.
-- **D. Let the JVM size itself.** Drop `MAX_MEMORY` entirely, set
-  `JVM_XX_OPTS=-XX:MaxRAMPercentage=...`, and cap the container with `--memory`. The heap tracks the
-  machine automatically and **`user-data` need not encode any absolute number at all**, so machine
-  type changes stay a resize.
+- **D. Size the heap as a percentage of machine RAM.** `MAX_MEMORY` accepts a `<size>%` value,
+  which the image implements as `-XX:MaxRAMPercentage`. The heap tracks the machine automatically
+  and **`user-data` encodes no absolute number at all**, so machine type changes stay a resize.
 
 ### Pack installation
 
 - **E. `MODPACK` (zip URL).** Generic but the user must find a raw zip; no metadata, no browsing.
-- **F. Platform-native install** -- `MODRINTH_MODPACK` for `.mrpack`, `AUTO_CURSEFORGE` for
-  CurseForge packs. The image resolves loader, Minecraft version, and mods from the pack manifest.
-- **G. `GENERIC_PACK` + `LOAD_ENV_FROM_GENERIC_PACK`.** Most powerful, but sources shell-evaluated
+- **F. `MODRINTH_MODPACK`.** Platform-native `.mrpack` install. The image resolves loader,
+  Minecraft version, and mods from the pack manifest. Requires **no credentials**.
+- **G. `AUTO_CURSEFORGE`.** Equivalent coverage for CurseForge packs, and the larger catalogue.
+  **Rejected on driver 4:** the pack install runs *inside the container*, so `CF_API_KEY` must be
+  present on the VM and would therefore land in instance metadata. That is a meaningfully
+  different exposure from a key held only by the controller, and it is not justified by a
+  second pack source. CurseForge may still be reconsidered for ADR-0007, where per-mod resolution
+  happens controller-side and the key never leaves it.
+- **H. `GENERIC_PACK` + `LOAD_ENV_FROM_GENERIC_PACK`.** Most powerful, but sources shell-evaluated
   env files from a remote pack -- arbitrary code execution on the game server. Rejected.
 
 ## Decision Outcome
 
-Chosen: **D for memory + F for packs.**
+Chosen: **D for memory + F for packs.** Modpack support is **Modrinth-only**.
 
 ### Modpack installation
 
@@ -71,15 +78,18 @@ A server gains an optional pack reference on `db.ServerConfig`:
 
 ```go
 Modpack *ModpackConfig `json:"modpack,omitempty"`
-// Platform  string  // "modrinth" | "curseforge"
+// Platform  string  // "modrinth" (reserved for future sources)
 // ProjectID string
 // VersionID string  // pinned; empty means latest
 ```
 
-Rendered into the cloud-config as `MODRINTH_MODPACK` / `CF_PAGE_URL` + `AUTO_CURSEFORGE`
-placeholders. `TYPE`, `VERSION` and the mod set all come from the pack manifest, so **Metio does
-not ask the user for a loader or a Minecraft version** when a pack is selected -- the Minecraft
-version field is disabled and shown as pack-controlled.
+Rendered into the cloud-config as a `MODRINTH_MODPACK` placeholder. `TYPE`, `VERSION` and the mod
+set all come from the pack manifest, so **Metio does not ask the user for a loader or a Minecraft
+version** when a pack is selected -- the Minecraft version field is disabled and shown as
+pack-controlled.
+
+The `Platform` field is retained despite having a single valid value today, so that adding a
+second source later is an additive change rather than a schema migration.
 
 A pack is an **exclusive mode**: a server is either vanilla or pack-driven. Selecting, changing,
 or removing a pack is a cloud-config change and is therefore classified `UpdateTypeRecreate`. This
@@ -88,30 +98,35 @@ disruptive, and the data disk survives.
 
 ### Pack discovery UI
 
-The controller proxies pack search behind an internal endpoint so the CurseForge key never
-reaches the browser and CORS is avoided. Results from both platforms are normalised into one shape
-(name, author, icon, downloads, supported Minecraft versions, loader). Results are cached with a
-TTL and stale-on-outage fallback, mirroring `internal/services/minecraft_versions.go`.
+The controller proxies pack search behind an internal endpoint rather than having the browser call
+Modrinth directly, so that CORS is avoided, results can be cached and normalised, and a future
+credentialed source can be added without touching the frontend. Results are cached with a TTL and
+stale-on-outage fallback, mirroring `internal/services/minecraft_versions.go`.
 
-CurseForge is **optional**: when no API key is configured, the CurseForge source is hidden from the
-UI and skipped by the aggregator. Modrinth needs no key and always works.
+Modrinth's API requires no key, so pack search has no configuration and is always available.
 
 ### Memory
 
-`MAX_MEMORY=3G` is removed from the cloud-config entirely. Instead:
+The hardcoded `MAX_MEMORY=3G` is replaced with a percentage value. The itzg image accepts
+`MAX_MEMORY=<size>%` and implements it as `-XX:MaxRAMPercentage`, so the heap is expressed
+relative to the machine rather than as an absolute figure:
 
-- The Minecraft container is capped with `--memory` / `--memory-swap`, derived by the controller
-  from `db.MachineTypes[machineType].MemoryGB` minus headroom for the OS, the `mc-backup` sidecar
-  and the machine-agent.
-- The JVM sizes its own heap inside that cap via `JVM_XX_OPTS=-XX:MaxRAMPercentage=...`.
-- No absolute heap figure is encoded in `user-data`. Changing machine type remains
-  `UpdateTypeResize` (`crud.go:397`) instead of being promoted to a full recreation.
+- Because these are dedicated single-purpose VMs, a percentage of host RAM is the correct model;
+  the reserved remainder covers the OS, the `mc-backup` sidecar and the machine-agent.
+- `user-data` stays byte-identical across machine types, so changing machine type remains
+  `UpdateTypeResize` (`crud.go:397`) rather than being promoted to a full recreation.
+- No container `--memory` cap and no boot-time computation are required. One constant replaces
+  another.
 - The effective heap is displayed read-only next to the machine type, so "bigger machine = bigger
   server" stays visible.
 
-> Caveat worth validating during implementation: `USE_MEOWICE_FLAGS=true`
-> (`server_cloud_config.yml:39`) may itself set `-Xmx`, which would override `MaxRAMPercentage`.
-> Needs a check against the image's flag handling before this is finalised.
+`USE_MEOWICE_FLAGS=true` (`server_cloud_config.yml:39`) was checked and does **not** set `-Xmx`;
+MeowIce's flags are GC and JIT tuning flags derived from Aikar's, and heap sizing remains solely
+under `MEMORY` / `INIT_MEMORY` / `MAX_MEMORY`.
+
+> Minor open point for implementation: Aikar/MeowIce flag tuning branches on `MEMORY >= 12G`, and
+> that comparison may not evaluate a percentage value. This affects GC tuning only, not
+> correctness, but should be confirmed empirically.
 
 ### UI design process
 
@@ -131,7 +146,10 @@ architectural commitment; no v0-generated code ships unreviewed.
 **Negative / risks**
 
 - Changing or removing a pack recreates the VM.
-- Metio takes a dependency on Modrinth/CurseForge availability for *search* (not for boot).
+- Metio takes a dependency on Modrinth availability for *search* (not for boot).
+- **CurseForge packs are not supported**, which excludes a large share of the popular pack
+  catalogue. This is the main functional cost of the decision and the most likely reason to
+  revisit this ADR.
 - Large packs materially lengthen first boot; provisioning feedback must reflect that.
 - `CurrentInfraVersion` (`internal/pulumi/programs/version.go`, currently `4`) must be bumped.
 - Two copies of `buildProgramConfig` (`internal/handlers/servers/common.go:121` and
