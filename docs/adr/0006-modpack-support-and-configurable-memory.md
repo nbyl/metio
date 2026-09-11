@@ -1,6 +1,6 @@
 # ADR-0006: Modpack Support and Configurable Server Memory
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-10
 - **Deciders:** Metio maintainers
 
