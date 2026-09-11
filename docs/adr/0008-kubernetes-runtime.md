@@ -152,11 +152,26 @@ manifests, no `client-go`, no Helm, nothing.
    VM replacement** — the primary benefit, which the gating criteria do not otherwise
    demonstrate.
 
-**If criterion 1 fails**, the fallback is **Ubuntu LTS**, accepting the changed patching cadence,
-boot time and attack surface. This is recorded now so the spike has a defined branch rather than
-stalling on an open question.
+**If criterion 1 fails**, the operating system is chosen by working down a three-rung ladder,
+stopping at the first rung that works:
 
-**This ADR authorises the spike only.** Its outcome — Container-Optimized OS versus Ubuntu, the
+1. **Container-Optimized OS** — the status quo. Minimal change, but `/var` is mounted `noexec`
+   while k3s expects to place executables and its data root there.
+2. **Flatcar Container Linux** — immutable and container-focused like COS, and explicitly built
+   to run Kubernetes, so it is the closest philosophical match. It provisions with
+   **Ignition/Butane rather than cloud-init**, so `cloud_config.go` would be rewritten rather
+   than adapted. That cost is smaller than it first appears: under Kubernetes, three of the four
+   systemd units become pods, leaving only disk setup, the k3s install, and a static manifest
+   drop.
+3. **Ubuntu LTS** — the cheapest fallback in engineering terms, because it consumes cloud-init
+   exactly as COS does, at the cost of a larger attack surface, a different patching cadence and
+   slower boot.
+
+The ladder is ordered by architectural fit rather than by adoption cost; Ubuntu is the easiest
+port but the weakest match for a single-purpose, immutable server image. This is recorded now so
+the spike has defined branches rather than stalling on an open question.
+
+**This ADR authorises the spike only.** Its outcome — the chosen operating system, the
 measured control-plane overhead, and the reachability and config-change findings — must land as
 an **amendment to this ADR before any build work begins**, in the same way ADR-0006 was amended
 by #532.
@@ -340,8 +355,10 @@ the configuration-rendering portions of `internal/services/provisioning.go`.
 
 Variance is dominated by a single unknown: whether k3s runs on Container-Optimized OS. In
 particular COS mounts `/var` **`noexec`**, while k3s expects to place executables and its data
-root there. This is plausibly a short remount workaround, or the thing that forces Ubuntu. It is
-the reason the spike runs first.
+root there. This is plausibly a short remount workaround, or the thing that sends the decision
+down the operating-system ladder. It is the reason the spike runs first. Falling through to
+Flatcar adds the cost of rewriting the machine configuration as Ignition; falling through to
+Ubuntu does not, but yields a weaker fit.
 
 ### Option B is not foreclosed
 
