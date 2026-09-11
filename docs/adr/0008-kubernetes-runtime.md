@@ -110,9 +110,10 @@ Minecraft and its adjacent containers are always scheduled by Kubernetes. Two mo
 - **Cluster** — the controller is installed into an existing Kubernetes cluster alongside
   everything else; Metio does not manage machines at all.
 
-Metio defines its own Kubernetes API objects. A **metio-operator** reconciles those into
-Deployments, Services, PVCs and Secrets. The machine-agent evolves into a **metio-agent** whose
-job is to read desired state from the controller and express it as Metio API objects.
+Metio defines its own Kubernetes API objects. The machine-agent evolves into a **metio-operator**
+that both translates desired state from the controller into those objects and reconciles them
+into Deployments, Services, PVCs and Secrets. See the Decision Outcome for the resulting
+component layout.
 
 ### D. Podman + Quadlet, or another declarative container manager on the VM
 
@@ -155,19 +156,72 @@ manifests, no `client-go`, no Helm, nothing.
 boot time and attack surface. This is recorded now so the spike has a defined branch rather than
 stalling on an open question.
 
+**This ADR authorises the spike only.** Its outcome — Container-Optimized OS versus Ubuntu, the
+measured control-plane overhead, and the reachability and config-change findings — must land as
+an **amendment to this ADR before any build work begins**, in the same way ADR-0006 was amended
+by #532.
+
 ### Architecture (subject to the spike)
 
-- Metio defines its own Kubernetes API objects, so that the desired state of a server is a
-  first-class, declarative resource rather than a rendered cloud-config string.
-- The **metio-operator** reconciles Metio objects into Deployments, Services, PVCs and Secrets.
-- The **metio-agent** bridges the controller and the cluster in standalone mode.
+Metio defines its own Kubernetes API objects, so that the desired state of a server is a
+first-class, declarative resource rather than a rendered cloud-config string.
 
-**Deliberately left open:** whether the agent and the operator are one binary or two. In cluster
-mode the controller runs inside the cluster and can write Metio objects directly, which makes a
-separate agent pure overhead; in standalone mode a bridge across the network boundary is
-genuinely required. An operator is already a reconcile loop with a work queue, so collapsing the
-two into one binary with two configuration modes may remove an entire component and a
-translation layer. This is deferred because the spike is likely to inform it.
+These objects are served by a **single binary, `metio-operator`, hosting two controllers**, in the
+style of `kube-controller-manager`. The existing `cmd/machine-agent/` becomes
+`cmd/metio-operator/`.
+
+- **Sync controller** — reconciles desired state from the controller API into Metio custom
+  resources. It is the **sole writer of Metio custom resources in both modes**, applying them with
+  Server-Side Apply under a single field manager.
+- **Reconcile controller** — reconciles Metio custom resources into Deployments, Services, PVCs
+  and Secrets, and writes `.status`. The sync controller reads that status and reports it back to
+  the controller API.
+
+**The custom resource is the seam.** Neither controller knows the other exists: the sync
+controller's only job is to make the resource match the controller API, and the reconcile
+controller's only job is to make the cluster match the resource. The provenance of the object is
+irrelevant to reconciliation.
+
+Making the sync controller the sole writer in both modes is deliberate. The alternative — having
+the controller write custom resources directly when it runs inside a cluster — produces two code
+paths generating the same objects. Metio already carries that defect in the two copies of
+`buildProgramConfig` (`internal/handlers/servers/common.go:121` and
+`internal/handlers/tasks/handler.go:100`), which must be kept in sync by hand and are a standing
+source of bugs. With a single writer, the only differences between modes are *where the binary
+runs* and *whether Metio provisions the machine*.
+
+This design yields four properties:
+
+1. **A uniform contract across both modes.** Standalone and cluster mode differ in deployment
+   topology, not in data flow.
+2. **Level-triggered instead of edge-triggered reconciliation.** Writing a resource is an apply,
+   not a command, so re-running is free and recovery after preemption is simply another reconcile.
+   This replaces the current edge-triggered `PendingCommand` / `PendingCommandResult` handshake
+   (`internal/services/update_operations.go:113`), which polls every two seconds against a
+   timeout and must be acknowledged exactly once.
+3. **A clean status path.** Status flows outward through the resource rather than through shared
+   state between components.
+4. **Tolerance of controller unavailability.** The controller is a Cloud Run service scaled to
+   zero. If it is unreachable, the custom resource retains the last known desired state and the
+   reconcile controller continues to operate.
+
+It also improves debuggability: the desired and observed state of a server become inspectable in
+the cluster with standard tooling, rather than living in memory and in log lines.
+
+Two caveats follow from it:
+
+- **In standalone mode the custom resource is a projection, not the source of truth.** The
+  controller API remains authoritative, so a manual `kubectl edit` is reverted on the next sync.
+  Cluster state is authoritative to *read*, not to *author*. Server-Side Apply with a single
+  field manager makes this ownership explicit rather than implicit.
+- **The sync controller requires in-cluster credentials** — a ServiceAccount and RBAC permitting
+  it to write Metio resources.
+
+**Bootstrapping standalone mode:** k3s automatically applies manifests placed in
+`/var/lib/rancher/k3s/server/manifests`. The cloud-config drops the `metio-operator` manifest
+there and k3s deploys it on boot, requiring no `kubectl` invocation and no bootstrap job.
+Critically, that manifest is **static** — it carries no per-server mutable configuration — so it
+does not reintroduce the `user-data` churn this ADR exists to eliminate.
 
 ### Cluster mode is a direction, not a commitment
 
@@ -209,12 +263,24 @@ This removes what would otherwise have been the highest-risk part of the program
 
 ### Sequencing against ADR-0006
 
-Milestone #9 (ADR-0006, modpack support) is **paused** until this direction is settled.
+Milestone #9 (ADR-0006, modpack support) is **partially held**, split by whether a ticket depends
+on the runtime.
 
-Recorded dissent: #533 (memory), #534 (Modrinth service) and #535 (search API) are
-runtime-agnostic and would survive either outcome; only #536 (cloud-config rendering) and its
-dependants would be rewritten. Pausing the entire milestone therefore forgoes optionality at no
-saving, and if the spike fails, a user-facing feature will have been stalled for nothing.
+**Proceeding**, because they are runtime-agnostic and survive either spike outcome:
+
+- #533 — sizing the JVM heap from the machine type. Valid under systemd and under Kubernetes, and
+  it fixes a defect affecting 30 of 31 machine types today.
+- #534 — the Modrinth search service. Pure third-party HTTP client work.
+- #535 — the modpack search API endpoints. Controller-side only.
+
+**Held pending the spike**, because they encode the cloud-config runtime:
+
+- #536 — the modpack data model and cloud-config rendering. Its data-model half survives; its
+  cloud-config half would be replaced by a field on the custom resource.
+- #537 onward, which depend on #536.
+
+Holding the whole milestone was considered and rejected: it would forgo optionality at no saving,
+and if the spike fails a user-facing feature would have been stalled for nothing.
 
 ## Consequences
 
