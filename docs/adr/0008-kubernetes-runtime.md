@@ -297,6 +297,11 @@ on the runtime.
 Holding the whole milestone was considered and rejected: it would forgo optionality at no saving,
 and if the spike fails a user-facing feature would have been stalled for nothing.
 
+ADR-0007 (per-mod and per-plugin selection) is likewise held at `Proposed`. Its `MODS_FILE`
+mechanism exists solely to keep mutable state out of `user-data` and therefore avoid
+`ReplaceOnChanges`; if the spike passes, that constraint disappears and the ADR should be
+reconsidered rather than accepted as written.
+
 ## Consequences
 
 ### Positive
