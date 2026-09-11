@@ -3,17 +3,52 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Verify release images exist in Artifact Registry
+        env:
+          AR_REGISTRY: europe-docker.pkg.dev/metio-distribution/metio
+          VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          imgs="controller machine-agent mc-backup daprd"
+          missing=""
+          for attempt in $(seq 1 30); do
+            missing=""
+            for img in $imgs; do
+              ref="${AR_REGISTRY}/${img}:${VERSION}"
+              if ! gcloud artifacts docker images describe "$ref" --format='value(digest)' >/dev/null 2>&1; then
+                missing="${missing} ${ref}"
+              fi
+            done
+            if [ -z "$missing" ]; then
+              echo "All release images exist in Artifact Registry: ${AR_REGISTRY}/*:${VERSION}"
+              exit 0
+            fi
+            echo "attempt ${attempt}/30: missing${missing}"
+            sleep 60
+          done
+          echo "::error::Release ${VERSION} images not found in Artifact Registry after retrying for 30 minutes:${missing}"
+          echo "::error::The CI promote-images job may have failed. Re-promote the images first (see PR #525), then re-run this workflow."
+          exit 1
       - name: Update image defaults and move tag
         run: |
+          set -euo pipefail
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           for f in deploy/variables.tf deploy/modules/gcp-cloud-run/variables.tf; do

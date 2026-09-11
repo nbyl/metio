@@ -277,32 +277,23 @@ promote:
 		echo "Usage: make promote FROM=<sha> TO=<tag>"; \
 		exit 1; \
 	fi
-	docker buildx imagetools create -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
-	docker buildx imagetools create -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
-	docker buildx imagetools create -t ghcr.io/nbyl/metio/mc-backup:$(TO) ghcr.io/nbyl/metio/mc-backup:$(FROM)
-	docker buildx imagetools create -t ghcr.io/nbyl/metio/daprd:$(TO) ghcr.io/nbyl/metio/daprd:$(FROM)
+	docker buildx imagetools create --prefer-index=false -t ghcr.io/nbyl/metio/controller:$(TO) ghcr.io/nbyl/metio/controller:$(FROM)
+	docker buildx imagetools create --prefer-index=false -t ghcr.io/nbyl/metio/machine-agent:$(TO) ghcr.io/nbyl/metio/machine-agent:$(FROM)
+	docker buildx imagetools create --prefer-index=false -t ghcr.io/nbyl/metio/mc-backup:$(TO) ghcr.io/nbyl/metio/mc-backup:$(FROM)
+	docker buildx imagetools create --prefer-index=false -t ghcr.io/nbyl/metio/daprd:$(TO) ghcr.io/nbyl/metio/daprd:$(FROM)
 
 # Promote images from ghcr.io to GCP Artifact Registry (distribution repo)
 DISTRO_REGISTRY ?= europe-docker.pkg.dev/metio-distribution/metio
 promote-distribution:
-	docker tag ghcr.io/nbyl/metio/controller:$(IMAGE_TAG) $(DISTRO_REGISTRY)/controller:$(IMAGE_TAG)
-	docker tag ghcr.io/nbyl/metio/machine-agent:$(IMAGE_TAG) $(DISTRO_REGISTRY)/machine-agent:$(IMAGE_TAG)
-	docker tag ghcr.io/nbyl/metio/mc-backup:$(IMAGE_TAG) $(DISTRO_REGISTRY)/mc-backup:$(IMAGE_TAG)
-	docker tag ghcr.io/nbyl/metio/daprd:$(IMAGE_TAG) $(DISTRO_REGISTRY)/daprd:$(IMAGE_TAG)
-	docker push $(DISTRO_REGISTRY)/controller:$(IMAGE_TAG)
-	docker push $(DISTRO_REGISTRY)/machine-agent:$(IMAGE_TAG)
-	docker push $(DISTRO_REGISTRY)/mc-backup:$(IMAGE_TAG)
-	docker push $(DISTRO_REGISTRY)/daprd:$(IMAGE_TAG)
-	if [ -n "$(VERSION)" ]; then \
-		docker tag ghcr.io/nbyl/metio/controller:$(IMAGE_TAG) $(DISTRO_REGISTRY)/controller:$(VERSION); \
-		docker tag ghcr.io/nbyl/metio/machine-agent:$(IMAGE_TAG) $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
-		docker tag ghcr.io/nbyl/metio/mc-backup:$(IMAGE_TAG) $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
-		docker tag ghcr.io/nbyl/metio/daprd:$(IMAGE_TAG) $(DISTRO_REGISTRY)/daprd:$(VERSION); \
-		docker push $(DISTRO_REGISTRY)/controller:$(VERSION); \
-		docker push $(DISTRO_REGISTRY)/machine-agent:$(VERSION); \
-		docker push $(DISTRO_REGISTRY)/mc-backup:$(VERSION); \
-		docker push $(DISTRO_REGISTRY)/daprd:$(VERSION); \
-	fi
+	@for img in controller machine-agent mc-backup daprd; do \
+		src="ghcr.io/nbyl/metio/$${img}:$(IMAGE_TAG)"; \
+		tags="-t $(DISTRO_REGISTRY)/$${img}:$(IMAGE_TAG)"; \
+		if [ -n "$(VERSION)" ]; then \
+			tags="$${tags} -t $(DISTRO_REGISTRY)/$${img}:$(VERSION)"; \
+		fi; \
+		echo "promoting $${src}"; \
+		docker buildx imagetools create --prefer-index=false $${tags} "$${src}" || exit 1; \
+	done
 
 # Build all Docker images (local, without gcloud)
 build-images: controller-image machine-agent-image mc-backup-image daprd-image
