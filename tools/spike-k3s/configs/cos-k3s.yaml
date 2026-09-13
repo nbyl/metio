@@ -1,0 +1,98 @@
+#cloud-config
+#
+# SPIKE ONLY - ADR-0008 rung 1 (Container-Optimized OS), issue #543.
+#
+# The hypothesis under test: COS mounts every writable path noexec
+# (/var, /home, /tmp, /mnt/stateful_partition) and /usr/local is not
+# writable, so k3s cannot use either of its default locations. See the
+# evidence gathered in #542.
+#
+# We therefore mount OUR OWN disk with an explicit exec option and place
+# both the k3s binary and its data root there. Whether COS permits this,
+# or enforces noexec globally, IS the experiment.
+#
+# Note: cloud-init runcmd re-runs on EVERY boot on COS, so everything
+# below must be idempotent.
+
+device_aliases:
+  metio_data: /dev/disk/by-id/google-minecraft-data
+
+fs_setup:
+  - device: metio_data
+    filesystem: ext4
+    label: metio
+    overwrite: false
+
+# The 'exec' option is the crux. COS's own mounts are all noexec; this
+# asserts that a self-managed mount can differ.
+mounts:
+  - [metio_data, /mnt/disks/metio, ext4, "defaults,exec", "0", "2"]
+
+write_files:
+  - path: /etc/profile.d/k3s-path.sh
+    permissions: "0644"
+    content: |
+      export PATH="$PATH:/mnt/disks/metio/k3s/bin"
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+  - path: /var/lib/metio/install-k3s.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Idempotent k3s installer. Re-runs harmlessly on every boot.
+      set -euxo pipefail
+
+      K3S_VERSION="v1.36.4+k3s1"
+      ROOT="/mnt/disks/metio/k3s"
+      BIN_DIR="${ROOT}/bin"
+      DATA_DIR="${ROOT}/data"
+      MARKER="${ROOT}/.installed-${K3S_VERSION}"
+
+      # Wait for the data disk; cloud-init mounts may lag runcmd.
+      for _ in $(seq 1 30); do
+        mountpoint -q /mnt/disks/metio && break
+        sleep 2
+      done
+      mountpoint -q /mnt/disks/metio || { echo "FATAL: /mnt/disks/metio not mounted"; exit 1; }
+
+      mkdir -p "${BIN_DIR}" "${DATA_DIR}"
+
+      # Prove the mount is genuinely executable before doing anything else.
+      # If COS enforces noexec globally this fails loudly and early, which
+      # is the answer rung 1 is looking for.
+      printf '#!/bin/sh\necho EXEC_OK\n' > "${ROOT}/.exectest"
+      chmod +x "${ROOT}/.exectest"
+      if ! "${ROOT}/.exectest"; then
+        echo "FATAL: /mnt/disks/metio is not executable; COS enforces noexec globally"
+        exit 1
+      fi
+      rm -f "${ROOT}/.exectest"
+
+      if [ -f "${MARKER}" ] && systemctl is-enabled --quiet k3s 2>/dev/null; then
+        echo "k3s ${K3S_VERSION} already installed; ensuring it is running"
+        systemctl start k3s || true
+        exit 0
+      fi
+
+      # The installer is PIPED to sh rather than downloaded and executed.
+      # /tmp is noexec on COS, so a downloaded script cannot be execve()d.
+      # Piping makes sh read it from stdin, which needs no exec permission.
+      curl -sfL https://get.k3s.io | \
+        INSTALL_K3S_VERSION="${K3S_VERSION}" \
+        INSTALL_K3S_BIN_DIR="${BIN_DIR}" \
+        INSTALL_K3S_SYSTEMD_DIR="/etc/systemd/system" \
+        sh -s - server \
+          --data-dir "${DATA_DIR}" \
+          --disable traefik \
+          --disable metrics-server \
+          --write-kubeconfig-mode 0644
+
+      touch "${MARKER}"
+      echo "k3s ${K3S_VERSION} installed"
+
+runcmd:
+  - systemctl daemon-reload
+  # Invoked via bash rather than executed directly: /var is noexec on COS,
+  # so even a chmod +x script there cannot be execve()d. Reading it as
+  # interpreter input sidesteps that.
+  - bash /var/lib/metio/install-k3s.sh
