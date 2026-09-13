@@ -100,3 +100,41 @@ Verified against the live API on 2026-09-11:
 SPOT `e2-medium` instances are cheap, but a forgotten VM bills silently.
 `./spike.sh destroy` is idempotent and deletes in dependency order; always
 finish with `./spike.sh list` and confirm it is empty.
+
+## Provisioning configs (#543)
+
+`configs/` holds the per-OS provisioning config passed via `--user-data`.
+
+```sh
+./spike.sh create --os cos --user-data configs/cos-k3s.yaml
+```
+
+**Rung 1 (COS) passed**, so per the ladder rule in #543 no Flatcar or Ubuntu
+config was written. `configs/` therefore contains `cos-k3s.yaml` only.
+
+### COS `noexec` workarounds
+
+COS mounts every writable path `noexec` and `/usr/local` is not writable, so
+k3s cannot use either of its default locations. Three adjustments make it work,
+none of which modify a COS-managed path:
+
+1. **Both the k3s binary and its data root live on the attached disk**, mounted
+   with an explicit `exec` option. COS enforces `noexec` on *its own* mounts,
+   not globally, so a self-managed mount may differ. `INSTALL_K3S_BIN_DIR` and
+   `--data-dir` point there.
+2. **The helper script is invoked as `bash /path/script.sh`**, not executed
+   directly. `noexec` blocks `execve()` but not reading, so passing the file to
+   an interpreter works even though `chmod +x` does not.
+3. **The k3s installer is piped to `sh`** rather than downloaded to `/tmp` and
+   run, for the same reason — `/tmp` is `noexec` too.
+
+### Gotchas found
+
+- **`k3s kubectl` re-extracts to the default data dir** (`/var/lib/rancher/k3s/data`),
+  which is `noexec`. Always pass `--data-dir`, or use the system `kubectl` with
+  `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`.
+- **COS ships `kubectl` v1.30.3**, against a v1.36.4 server — outside the
+  supported ±1 minor skew. Fine for spike purposes; production would need a
+  matching client.
+- cloud-init `runcmd` re-runs on **every** COS boot, so the install script must
+  be idempotent. It is, via a version-stamped marker file on the data disk.
