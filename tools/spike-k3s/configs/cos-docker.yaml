@@ -1,0 +1,59 @@
+#cloud-config
+#
+# SPIKE ONLY - ADR-0008 issue #545 (SP4) baseline.
+#
+# Cold-boot comparison for the preemption recovery timing in
+# test-preemption.sh. This mirrors the CURRENT production runtime
+# (systemd + docker run, see internal/pulumi/programs/server_cloud_config.yml)
+# so the k3s recovery time can be weighed against the status quo.
+#
+# Deliberately trimmed: no backup unit, no machine-agent, no RCON bind - the
+# ticket only needs "machine starts -> port 25565 accepts connections".
+# COS ships Docker; this config just formats/mounts the data disk, places a
+# single minecraft.service, and starts it.
+#
+# This is disposable and dies with the rest of tools/spike-k3s.
+
+device_aliases:
+  metio_data: /dev/disk/by-id/google-minecraft-data
+
+fs_setup:
+  - device: metio_data
+    filesystem: ext4
+    label: fs1
+    overwrite: false
+
+mounts:
+  - [metio_data, /mnt/disks/minecraft, ext4, "defaults", "0", "2"]
+
+write_files:
+  - path: /etc/systemd/system/minecraft.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Minecraft Server
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      User=metio
+      WorkingDirectory=/home/metio
+      TimeoutStartSec=0
+      Restart=always
+      ExecStartPre=-/usr/bin/docker stop %n
+      ExecStartPre=-/usr/bin/docker rm %n
+      ExecStart=/usr/bin/docker run --rm --name %n \
+        -p 25565:25565 \
+        -e EULA=TRUE \
+        -e VERSION=1.21.4 \
+        -e MAX_MEMORY=3G \
+        -v /mnt/disks/minecraft/data:/data \
+        itzg/minecraft-server:stable-java25
+      ExecStop=/usr/bin/docker stop %n
+
+      [Install]
+      WantedBy=default.target
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable --now minecraft
