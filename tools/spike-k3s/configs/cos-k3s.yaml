@@ -83,6 +83,7 @@ write_files:
         INSTALL_K3S_SYSTEMD_DIR="/etc/systemd/system" \
         sh -s - server \
           --data-dir "${DATA_DIR}" \
+          --default-local-storage-path /mnt/disks/metio/storage \
           --disable traefik \
           --disable metrics-server \
           --write-kubeconfig-mode 0644
