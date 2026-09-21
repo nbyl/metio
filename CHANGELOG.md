@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.2.0](https://github.com/nbyl/metio/compare/v2.1.0...v2.2.0) (2026-09-21)
+
+
+### Features
+
+* add modpack data model and cloud-config ([#580](https://github.com/nbyl/metio/issues/580)) ([2331f9a](https://github.com/nbyl/metio/commit/2331f9a12a8d7c4aa64cc47e8acbaefdd2ec21df)), closes [#536](https://github.com/nbyl/metio/issues/536)
+* add modpack search API endpoints ([#579](https://github.com/nbyl/metio/issues/579)) ([fbfcf1a](https://github.com/nbyl/metio/commit/fbfcf1a6539a867416f4e173a3c43fdfbd883b4c)), closes [#535](https://github.com/nbyl/metio/issues/535)
+* add Modrinth modpack search service ([#577](https://github.com/nbyl/metio/issues/577)) ([c5a0680](https://github.com/nbyl/metio/commit/c5a06801ace42a76148eeda4b2217c050d40a81e)), closes [#534](https://github.com/nbyl/metio/issues/534)
+* add opencode-web dev environment target ([#578](https://github.com/nbyl/metio/issues/578)) ([9711209](https://github.com/nbyl/metio/commit/9711209878a041dbe1e732a660d5ebc5de485ffe))
+* add throwaway VM harness for the ADR-0008 k3s spike ([#549](https://github.com/nbyl/metio/issues/549)) ([43c0114](https://github.com/nbyl/metio/commit/43c0114f163d2fba3a6fa070b9441b57ea151e4a)), closes [#542](https://github.com/nbyl/metio/issues/542)
+* establish k3s baseline on Container-Optimized OS ([#550](https://github.com/nbyl/metio/issues/550)) ([7d7465b](https://github.com/nbyl/metio/commit/7d7465b884dc76cde381dbb447821f9122265bd4)), closes [#543](https://github.com/nbyl/metio/issues/543)
+* measure k3s control-plane resource overhead ([#560](https://github.com/nbyl/metio/issues/560)) ([0d67d2c](https://github.com/nbyl/metio/commit/0d67d2c06afa1cf9c3ae0171ad9958565c6874a0)), closes [#546](https://github.com/nbyl/metio/issues/546)
+* run Minecraft as a k3s workload on the attached disk ([#558](https://github.com/nbyl/metio/issues/558)) ([5c3e909](https://github.com/nbyl/metio/commit/5c3e90986c02d4432059b1441cb7cba6745f065c)), closes [#544](https://github.com/nbyl/metio/issues/544)
+* size JVM heap from machine type as a percentage ([#576](https://github.com/nbyl/metio/issues/576)) ([3de95cc](https://github.com/nbyl/metio/commit/3de95cceb3a9bf846ffca84be7a0131f64e84ec4))
+* verify cluster and workload survive preemption ([#559](https://github.com/nbyl/metio/issues/559)) ([f8393ee](https://github.com/nbyl/metio/commit/f8393ee7ac3b3dae606bb67f60fa6dbde32c9607)), closes [#545](https://github.com/nbyl/metio/issues/545)
+* verify config changes avoid VM replacement ([#561](https://github.com/nbyl/metio/issues/561)) ([bec6b67](https://github.com/nbyl/metio/commit/bec6b67d730056f3e66dd83aa5f1be1d2000bdd0)), closes [#547](https://github.com/nbyl/metio/issues/547)
+
+
+### Bug Fixes
+
+* **ci:** promote images using the tag pulled from ghcr.io ([#525](https://github.com/nbyl/metio/issues/525)) ([20481ce](https://github.com/nbyl/metio/commit/20481cec0889da292e64ad65340081690edfea1b))
+* **release:** gate image-default update on promoted images ([#530](https://github.com/nbyl/metio/issues/530)) ([89c247b](https://github.com/nbyl/metio/commit/89c247b2f8fc99300784ee42e8f61bc9d7e30235))
+
 ## [2.1.0](https://github.com/nbyl/metio/compare/v2.0.0...v2.1.0) (2026-09-10)
 
 
