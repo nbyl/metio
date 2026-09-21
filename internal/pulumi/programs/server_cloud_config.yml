@@ -35,7 +35,7 @@ ${restoreWriteFiles}
         -p 127.0.0.1:25575:25575 \
         -e EULA=TRUE \
         -e VERSION=${minecraftVersion} \
-        -e MAX_MEMORY=3G \
+        -e MAX_MEMORY=75% \
         -e USE_MEOWICE_FLAGS=true \
         -e RCON_PASSWORD=${rconPassword} \
         -v /mnt/disks/minecraft/data:/data \

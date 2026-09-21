@@ -1,6 +1,7 @@
 package programs
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -295,6 +296,43 @@ func TestRenderCloudConfig_Java25Image(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, result, "itzg/minecraft-server:stable-java25")
 	assert.NotContains(t, result, "itzg/minecraft-server:stable-java21")
+}
+
+func TestRenderCloudConfig_MaxMemoryPercentage(t *testing.T) {
+	// The JVM heap is sized as a percentage of host RAM so user-data encodes
+	// no absolute or machine-specific value: paying for a larger machine must
+	// yield a larger server, and a machine-type change must not rewrite
+	// user-data (which would promote the resize to a recreate).
+	mkCfg := func() *TemplateConfig {
+		return &TemplateConfig{
+			Region:              "europe-west3",
+			MachineAgentImage:   "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+			BackupBucket:        "my-project-development-backups",
+			ServerID:            "server-a",
+			BackupRetentionDays: 90,
+			ResticPassword:      "restic-pw",
+			RCONPassword:        "rcon-pw",
+			MinecraftVersion:    "26.1",
+		}
+	}
+
+	other, err := RenderCloudConfig(mkCfg())
+	assert.NoError(t, err)
+	assert.Contains(t, other, "MAX_MEMORY=75%")
+	assert.NotContains(t, other, "MAX_MEMORY=3G")
+	// No absolute size (MAX_MEMORY=<n>G/M/K) must survive into user-data.
+	assert.NotRegexp(t, regexp.MustCompile(`MAX_MEMORY=\d+[gGmMkK]`), other)
+
+	// The rendered MAX_MEMORY token must be identical across servers so
+	// user-data stays byte-identical across machine types: reject any
+	// machine-derived (absolute) value in favor of a fixed percentage.
+	second := mkCfg()
+	second.RCONPassword = "different-rcon-pw"
+	second.ServerID = "server-b"
+	second.MinecraftVersion = "1.21.1"
+	secondRender, err := RenderCloudConfig(second)
+	assert.NoError(t, err)
+	assert.Contains(t, secondRender, "MAX_MEMORY=75%")
 }
 
 func TestRenderCloudConfig_YAMLValid(t *testing.T) {
