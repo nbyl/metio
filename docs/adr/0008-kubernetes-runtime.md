@@ -484,3 +484,84 @@ roughly a third of the cost and **remains available regardless of the spike outc
 complementary: it forces the desired-state boundary to exist as an API, which is precisely the
 boundary the operator would later consume. It is no longer the fallback for this decision (see
 the Amendment) but should be adopted on its own merits if the prototype stalls.
+
+## Considered alternative: GKE Autopilot (2026-09-21)
+
+Evaluated after the spike, before build work: outsourcing the cluster entirely to GKE Autopilot —
+no VM, no k3s, no cloud-config — while keeping the ADR's application architecture (CRD +
+operator + Deployment + PVC) intact. **Declined on cost at on-demand rates**, with a spot
+variant recorded as the fallback if node operations ever become untenable. Implementation effort
+was deliberately ignored for this comparison.
+
+### Premise correction
+
+The idea was proposed as "one control plane per person is free". It is not: the GKE free tier is
+**$74.40 per billing account per month**, covering the $0.10/hour cluster management fee of
+**exactly one** Autopilot (or zonal Standard) cluster. Any additional cluster costs ~$73/month.
+A per-person-cluster model therefore costs ~$187/server/month (pod + operator + $73 cluster fee +
+$22 LB/IP per server) and was rejected immediately. The viable shape shares one Autopilot cluster
+per account across many servers, which also lets the metio-operator run once per account instead
+of per server.
+
+### Chosen sharing + exposure design
+
+- **One shared Autopilot cluster per billing account**; each server is a namespace (Deployment +
+  PVC + `Service type: NodePort`).
+- **NodePort instead of per-server load balancers.** A NodePort Service pins a server to a port in
+  30000-32767; one cluster-wide (or per-port) firewall rule allows `tcp` in. Every Autopilot node
+  serves every nodePort, so any node IP reaches any server. A cluster is capped at ~2,700 servers
+  by the port range.
+- **Stable addresses via DNS tracking, not static IPs.** Autopilot node IPs are ephemeral and
+  cannot be pinned or reserved, so per-server static IPs (today's product property) are forfeited.
+  Players connect to `name.mc.host:<port>`; Metio records the cluster's node public IPs and
+  updates DNS on node churn. The alternative — one shared static IP + passthrough LB for the
+  whole cluster (~$22/month total) — quietly reintroduces a single shared load balancer and was
+  not chosen.
+
+### Cost model (per server, 730 h/month, us-central1 base rates)
+
+| Line | On-demand pod | `autopilot-spot` pod |
+|---|---|---|
+| CPU — 2 vCPU ($0.0445 / $0.0133 per vCPU-hr) | $64.97 | $19.42 |
+| Memory — 4 GiB ($0.0049225 / $0.0014767 per GiB-hr) | $14.37 | $4.31 |
+| Ephemeral — 20 GiB ($0.0001389 per GiB-hr; no spot discount listed) | $2.03 | $2.03 |
+| PVC — pd-standard 20 GiB | ~$1.00 | ~$1.00 |
+| Cluster fee, NodePort + DNS, shared operator | $0 ($74.40 free tier) / ~$10 total | $0 / ~$10 total |
+| **Per server (N≥10)** | **~$83** | **~$28** |
+
+London (`europe-west2`, the live region) adds roughly 10%: ~$91 and ~$30. Prices verified
+2026-09-21 against `cloud.google.com/kubernetes-engine/pricing` (consumption model
+7754-699E-0EBF); on-demand figures are the general-purpose Autopilot container-optimized rates,
+spot figures are the published spot column (60-91% off, dynamic).
+
+### Comparison against the current runtime
+
+- On-demand Autopilot: **~4.5x** the real GCP spend of the current systemd SPOT VM (~$15-20 for
+  e2-medium at ~50% daily duty) and ~2x its listed plan price ($48.73).
+- `autopilot-spot`: **~1.5x** the current spend (~$28 vs ~$15-20) and roughly the **listed e2-small
+  price ($24.37)** — it rescues the 2 GB tier that the spike excluded on memory grounds, at
+  essentially its listed price.
+- The residual gap is structural: production buys SPOT capacity at 60-91% off on a partial-day
+  schedule, while Autopilot bills at on-demand request rates; cluster-sharing and NodePort remove
+  ~$95/server of fixed Autopilot overhead but cannot touch the per-request compute price.
+
+### Verdict
+
+**Declined at on-demand rates** — a ~4.5x cost regression buys "no node operations" which this
+milestone deliberately de-scoped. The `autopilot-spot` variant (~$28/server, ~1.5x current, with
+the 2 GB tier restored) is recorded as the **fallback**: it should be revisited if node operations
+(patches, upgrades, the COS accommodations, preemption restart handling) ever outweigh ~1.5x cost.
+
+### Residuals and risks
+
+- **Preemption returns on the spot variant.** `autopilot-spot` pods are evacuated gracefully
+  (drain, not VM death), but the restart semantics measured in the preemption spike (#545) come
+  back for the on-demand-durability story that this ADR otherwise removes.
+- **Isolation regression.** A shared control plane is one operator blast radius across all
+  servers, versus ADR-008's chosen standalone default; port-shaped addressing replaces
+  IP-per-server as the user-facing identity.
+- **Announced but unpriced:** from 2026-10-01 GKE bills an additional Autopilot node management
+  premium on top of existing charges; magnitude for general-purpose pods was not published at
+  evaluation time. Any Autopilot plan carries that tail risk.
+- If the DNS-tracking address model is adopted, DNS is on the critical path of server discovery
+  and must update on node churn.
