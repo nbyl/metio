@@ -1,8 +1,10 @@
 package db
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/nbyl/metio/internal/dbtypes"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -265,6 +267,138 @@ func TestBackupConfigIsValid(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateModpackConfig(t *testing.T) {
+	testCases := []struct {
+		name    string
+		config  *ModpackConfig
+		wantErr bool
+	}{
+		{name: "nil means vanilla", config: nil, wantErr: false},
+		{name: "valid pack latest", config: &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123"}, wantErr: false},
+		{name: "valid pack pinned", config: &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123", VersionID: "XyZ789"}, wantErr: false},
+		{name: "unsupported platform", config: &ModpackConfig{Platform: "curse", ProjectID: "abC123"}, wantErr: true},
+		{name: "missing project", config: &ModpackConfig{Platform: dbtypes.ModrinthPlatform}, wantErr: true},
+		{name: "project with illegal chars", config: &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "a b"}, wantErr: true},
+		{name: "project with unicode", config: &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abé1"}, wantErr: true},
+		{name: "version with illegal chars", config: &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123", VersionID: "1.0 beta"}, wantErr: true},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateModpackConfig(tt.config)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateServerConfig_Modpack(t *testing.T) {
+	validBase := &ServerConfig{
+		Name:             "test-server",
+		Region:           "europe-west3",
+		Zone:             "europe-west3-a",
+		MachineType:      "e2-small",
+		MinecraftVersion: "1.21.1",
+		DiskSizeGB:       50,
+	}
+
+	t.Run("pack-driven latest keeps empty version", func(t *testing.T) {
+		config := *validBase
+		config.MinecraftVersion = ""
+		config.Modpack = &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123"}
+		assert.NoError(t, ValidateServerConfig(&config))
+	})
+
+	t.Run("pack-driven pinned keeps empty version", func(t *testing.T) {
+		config := *validBase
+		config.MinecraftVersion = ""
+		config.Modpack = &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123", VersionID: "XyZ789"}
+		assert.NoError(t, ValidateServerConfig(&config))
+	})
+
+	t.Run("pack alongside minecraft version rejected", func(t *testing.T) {
+		config := *validBase
+		config.Modpack = &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123"}
+		assert.Error(t, ValidateServerConfig(&config))
+	})
+
+	t.Run("vanilla without version rejected", func(t *testing.T) {
+		config := *validBase
+		config.MinecraftVersion = ""
+		assert.Error(t, ValidateServerConfig(&config))
+	})
+
+	t.Run("invalid pack rejected", func(t *testing.T) {
+		config := *validBase
+		config.MinecraftVersion = ""
+		config.Modpack = &ModpackConfig{Platform: "curse", ProjectID: "abC123"}
+		assert.Error(t, ValidateServerConfig(&config))
+	})
+}
+
+func TestModpackConfigJSONRoundTrip(t *testing.T) {
+	t.Run("vanilla server without pack", func(t *testing.T) {
+		source := &ServerConfig{
+			Name:             "plain",
+			Region:           "europe-west3",
+			Zone:             "europe-west3-a",
+			MachineType:      "e2-small",
+			MinecraftVersion: "1.21.1",
+			DiskSizeGB:       50,
+		}
+		data, err := json.Marshal(source)
+		assert.NoError(t, err)
+		assert.NotContains(t, string(data), "modpack")
+
+		var decoded ServerConfig
+		assert.NoError(t, json.Unmarshal(data, &decoded))
+		assert.Nil(t, decoded.Modpack)
+		assert.Equal(t, source.MinecraftVersion, decoded.MinecraftVersion)
+	})
+
+	t.Run("pack-driven server", func(t *testing.T) {
+		source := &ServerConfig{
+			Name:             "packed",
+			Region:           "europe-west3",
+			Zone:             "europe-west3-a",
+			MachineType:      "e2-small",
+			MinecraftVersion: "",
+			DiskSizeGB:       50,
+			Modpack:          &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123", VersionID: "XyZ789"},
+		}
+		data, err := json.Marshal(source)
+		assert.NoError(t, err)
+
+		var decoded ServerConfig
+		assert.NoError(t, json.Unmarshal(data, &decoded))
+		assert.NotNil(t, decoded.Modpack)
+		assert.Equal(t, source.Modpack.Platform, decoded.Modpack.Platform)
+		assert.Equal(t, source.Modpack.ProjectID, decoded.Modpack.ProjectID)
+		assert.Equal(t, source.Modpack.VersionID, decoded.Modpack.VersionID)
+	})
+
+	t.Run("backup source config with pack", func(t *testing.T) {
+		source := &BackupSourceConfig{
+			Region:           "europe-west3",
+			Zone:             "europe-west3-a",
+			MachineType:      "e2-small",
+			DiskSizeGB:       50,
+			MinecraftVersion: "",
+			Modpack:          &ModpackConfig{Platform: dbtypes.ModrinthPlatform, ProjectID: "abC123"},
+		}
+		data, err := json.Marshal(source)
+		assert.NoError(t, err)
+
+		var decoded BackupSourceConfig
+		assert.NoError(t, json.Unmarshal(data, &decoded))
+		assert.NotNil(t, decoded.Modpack)
+		assert.Equal(t, source.Modpack.ProjectID, decoded.Modpack.ProjectID)
+	})
 }
 
 func TestValidateServerConfig_Backup(t *testing.T) {

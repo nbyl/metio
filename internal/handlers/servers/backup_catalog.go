@@ -45,11 +45,12 @@ type backupResponse struct {
 }
 
 type backupSourceConfigResponse struct {
-	Region           string `json:"region"`
-	Zone             string `json:"zone"`
-	MachineType      string `json:"machineType"`
-	DiskSizeGB       int    `json:"diskSizeGB"`
-	MinecraftVersion string `json:"minecraftVersion"`
+	Region           string            `json:"region"`
+	Zone             string            `json:"zone"`
+	MachineType      string            `json:"machineType"`
+	DiskSizeGB       int               `json:"diskSizeGB"`
+	MinecraftVersion string            `json:"minecraftVersion"`
+	Modpack          *db.ModpackConfig `json:"modpack,omitempty"`
 }
 
 type paginatedBackupsResponse struct {
@@ -170,6 +171,7 @@ func HandleBackupReport(w http.ResponseWriter, r *http.Request) {
 			MachineType:      serverConfig.MachineType,
 			DiskSizeGB:       serverConfig.DiskSizeGB,
 			MinecraftVersion: serverConfig.MinecraftVersion,
+			Modpack:          serverConfig.Modpack,
 		},
 	}
 
@@ -319,6 +321,7 @@ func toBackupResponse(b *db.Backup) backupResponse {
 			MachineType:      b.SourceConfig.MachineType,
 			DiskSizeGB:       b.SourceConfig.DiskSizeGB,
 			MinecraftVersion: b.SourceConfig.MinecraftVersion,
+			Modpack:          b.SourceConfig.Modpack,
 		}
 	}
 	return resp
@@ -392,6 +395,7 @@ func CreateServerFromBackup(w http.ResponseWriter, r *http.Request) {
 	machineType := req.MachineType
 	minecraftVersion := req.MinecraftVersion
 	diskSizeGB := req.DiskSizeGB
+	var modpack *db.ModpackConfig
 
 	if backup.SourceConfig != nil {
 		if region == "" {
@@ -409,9 +413,12 @@ func CreateServerFromBackup(w http.ResponseWriter, r *http.Request) {
 		if diskSizeGB == 0 {
 			diskSizeGB = backup.SourceConfig.DiskSizeGB
 		}
+		modpack = backup.SourceConfig.Modpack
 	}
 
-	// Apply defaults for any remaining empty fields.
+	// Apply defaults for any remaining empty fields. A pack-driven backup has no
+	// Minecraft version to inherit (the pack controls it, ADR-0006), so the
+	// vanilla default only applies when the backup is not pack-driven.
 	if region == "" {
 		region = "europe-west1"
 	}
@@ -424,7 +431,9 @@ func CreateServerFromBackup(w http.ResponseWriter, r *http.Request) {
 	if diskSizeGB == 0 {
 		diskSizeGB = 10
 	}
-	if minecraftVersion == "" {
+	if modpack != nil {
+		minecraftVersion = ""
+	} else if minecraftVersion == "" {
 		minecraftVersion = "1.21.4"
 	}
 
@@ -435,6 +444,7 @@ func CreateServerFromBackup(w http.ResponseWriter, r *http.Request) {
 		MachineType:      machineType,
 		MinecraftVersion: minecraftVersion,
 		DiskSizeGB:       diskSizeGB,
+		Modpack:          modpack,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
@@ -444,7 +454,7 @@ func CreateServerFromBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isMinecraftVersionAvailable(ctx, serverConfig.MinecraftVersion) {
+	if serverConfig.Modpack == nil && !isMinecraftVersionAvailable(ctx, serverConfig.MinecraftVersion) {
 		writeJSONError(w, fmt.Sprintf("validation error: minecraft version %q is not available", serverConfig.MinecraftVersion), http.StatusBadRequest)
 		return
 	}

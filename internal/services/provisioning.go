@@ -449,6 +449,7 @@ func (s *ProvisioningService) runDestroy(opCtx context.Context, status *db.Provi
 				MachineType:      config.MachineType,
 				DiskSizeGB:       config.DiskSizeGB,
 				MinecraftVersion: config.MinecraftVersion,
+				Modpack:          config.Modpack,
 			}
 		}
 		retentionUntil := time.Now().AddDate(0, 0, s.backupRetentionDays)

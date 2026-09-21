@@ -140,3 +140,16 @@ func isZoneAvailable(ctx context.Context, region, zone string) bool {
 func isModpackAvailable(ctx context.Context, modpackID string) bool {
 	return len(ListModrinthPackVersions(ctx, modpackID)) > 0
 }
+
+// isModpackVersionAvailable reports whether the given version is published for
+// the pack. It resolves through ListModrinthPackVersions, the same source
+// GET /api/modpacks/{id}/versions serves, so a pinned version can never be
+// accepted that the picker does not offer.
+func isModpackVersionAvailable(ctx context.Context, modpackID, versionID string) bool {
+	for _, version := range ListModrinthPackVersions(ctx, modpackID) {
+		if version.ID == versionID {
+			return true
+		}
+	}
+	return false
+}

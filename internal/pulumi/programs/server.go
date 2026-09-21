@@ -34,6 +34,12 @@ type ServerConfig struct {
 	// servers are unaffected until a backup config is set for them.
 	Backup *BackupConfig
 
+	// Modpack makes the server pack-driven (ADR-0006). When set, the
+	// Minecraft version is pack-controlled: VERSION is omitted from the
+	// cloud-config and MODRINTH_MODPACK (plus MODRINTH_VERSION when pinned)
+	// is added instead.
+	Modpack *ModpackConfig
+
 	// BackupBucket is the deployment-wide central backup bucket (ADR-0004).
 	// When empty it is derived from GCPProject and Environment as
 	// "{project}-{environment}-backups", matching what the deployment
@@ -137,6 +143,14 @@ type BackupConfig struct {
 	KeepUnit            string
 }
 
+// ModpackConfig references the modpack a pack-driven server boots with
+// (ADR-0006). VersionID empty means latest.
+type ModpackConfig struct {
+	Platform  string
+	ProjectID string
+	VersionID string
+}
+
 // resticRetention renders the PRUNE_RESTIC_RETENTION argument for a backup
 // config, or "" when no retention override is set so the deployment default
 // (keep-within BackupRetentionDays) is used.
@@ -233,6 +247,7 @@ func ServerProgram(config *ServerConfig) func(*pulumi.Context) error {
 			RCONPassword:         config.RCONPassword,
 			ControllerURL:        config.ControllerURL,
 			AgentToken:           config.AgentToken,
+			Modpack:              config.Modpack,
 			RestoreSnapshotID:    config.RestoreSnapshotID,
 			RestoreSourcePrefix:  config.RestoreSourcePrefix,
 		})

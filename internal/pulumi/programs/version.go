@@ -15,4 +15,8 @@ package programs
 // -XX:MaxRAMPercentage. The percentage keeps user-data byte-identical across
 // machine types, so machine-type changes remain a resize rather than a
 // recreate.
-const CurrentInfraVersion = 5
+//
+// Version 6 adds modpack support (ADR-0006): a pack-driven server passes
+// MODRINTH_MODPACK instead of VERSION, and the Minecraft version becomes
+// pack-controlled. Those servers deploy with an empty minecraftVersion.
+const CurrentInfraVersion = 6

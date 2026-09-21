@@ -335,6 +335,55 @@ func TestRenderCloudConfig_MaxMemoryPercentage(t *testing.T) {
 	assert.Contains(t, secondRender, "MAX_MEMORY=75%")
 }
 
+func TestRenderCloudConfig_ModpackLatest(t *testing.T) {
+	// A pack-driven server (ADR-0006) replaces the VERSION env with
+	// MODRINTH_MODPACK; the pack manifest controls the Minecraft version, so
+	// no version reference may leak through.
+	cfg := &TemplateConfig{
+		Region:            "europe-west3",
+		MachineAgentImage: "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		MinecraftVersion:  "",
+		Modpack:           &ModpackConfig{Platform: "modrinth", ProjectID: "abC123"},
+		RCONPassword:      "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "-e MODRINTH_MODPACK=abC123 \\")
+	assert.NotContains(t, result, "MODRINTH_VERSION")
+	assert.NotContains(t, result, "-e VERSION=")
+}
+
+func TestRenderCloudConfig_ModpackPinned(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:            "europe-west3",
+		MachineAgentImage: "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		MinecraftVersion:  "",
+		Modpack:           &ModpackConfig{Platform: "modrinth", ProjectID: "abC123", VersionID: "XyZ789"},
+		RCONPassword:      "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "-e MODRINTH_MODPACK=abC123 \\")
+	assert.Contains(t, result, "-e MODRINTH_VERSION=XyZ789 \\")
+	assert.NotContains(t, result, "-e VERSION=")
+}
+
+func TestRenderCloudConfig_VanillaStillRendersVersion(t *testing.T) {
+	cfg := &TemplateConfig{
+		Region:            "europe-west3",
+		MachineAgentImage: "europe-west3-docker.pkg.dev/minecraftbyl/metio/machine-agent:tag",
+		MinecraftVersion:  "1.21.1",
+		RCONPassword:      "rcon-pw",
+	}
+	result, err := RenderCloudConfig(cfg)
+	assert.NoError(t, err)
+
+	assert.Contains(t, result, "-e VERSION=1.21.1 \\")
+	assert.NotContains(t, result, "MODRINTH_MODPACK")
+}
+
 func TestRenderCloudConfig_YAMLValid(t *testing.T) {
 	// The restore and guarded-start entries are plain YAML scalars; a stray
 	// indicator would silently corrupt the whole user-data document. Parse the

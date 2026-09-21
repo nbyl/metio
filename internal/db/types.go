@@ -19,3 +19,4 @@ type WhitelistConfig = dbtypes.WhitelistConfig
 type Backup = dbtypes.Backup
 type BackupStatus = dbtypes.BackupStatus
 type BackupSourceConfig = dbtypes.BackupSourceConfig
+type ModpackConfig = dbtypes.ModpackConfig

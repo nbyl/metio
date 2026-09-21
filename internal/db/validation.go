@@ -3,6 +3,8 @@ package db
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/nbyl/metio/internal/dbtypes"
 )
 
 var (
@@ -11,7 +13,12 @@ var (
 	regionRegex      = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 	zoneRegex        = regexp.MustCompile(`^[a-z][a-z0-9-]*?-[a-z]$`)
 	machineTypeRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	validGCPRegions  = map[string]bool{
+	// modpackIDRegex matches Modrinth project and version IDs, which are
+	// base62-ish alphanumeric identifiers. Kept lenient on purpose: membership
+	// against the live catalogue is enforced at the handler layer against the
+	// same source the picker serves.
+	modpackIDRegex  = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+	validGCPRegions = map[string]bool{
 		"us-central1":             true,
 		"us-east1":                true,
 		"us-east4":                true,
@@ -186,6 +193,47 @@ func ValidateServerConfig(config *ServerConfig) error {
 		}
 	}
 
+	if err := ValidateModpackConfig(config.Modpack); err != nil {
+		return err
+	}
+
+	// A server is either vanilla or pack-driven (ADR-0006). When a pack is
+	// set, the Minecraft version is pack-controlled and must be empty; the
+	// reverse (pack set from a request that also carries a version) is the
+	// handshake error this guard catches. Conversely a vanilla server must
+	// carry a version, which is what forces an update that removes a pack to
+	// name its replacement version in the same request.
+	if config.Modpack != nil {
+		if config.MinecraftVersion != "" {
+			return fmt.Errorf("minecraft version must be empty when a modpack is configured (pack-controlled)")
+		}
+	} else if config.MinecraftVersion == "" {
+		return fmt.Errorf("minecraft version is required when no modpack is configured")
+	}
+
+	return nil
+}
+
+// ValidateModpackConfig performs structural validation of a modpack
+// reference. A nil config (vanilla server) is always valid. Membership
+// against the live catalogue is enforced at the handler layer against the
+// same source the picker serves (ADR-0006).
+func ValidateModpackConfig(m *ModpackConfig) error {
+	if m == nil {
+		return nil
+	}
+	if m.Platform != dbtypes.ModrinthPlatform {
+		return fmt.Errorf("unsupported modpack platform %q", m.Platform)
+	}
+	if m.ProjectID == "" {
+		return fmt.Errorf("modpack project is required")
+	}
+	if !modpackIDRegex.MatchString(m.ProjectID) {
+		return fmt.Errorf("invalid modpack project id %q", m.ProjectID)
+	}
+	if m.VersionID != "" && !modpackIDRegex.MatchString(m.VersionID) {
+		return fmt.Errorf("invalid modpack version id %q", m.VersionID)
+	}
 	return nil
 }
 

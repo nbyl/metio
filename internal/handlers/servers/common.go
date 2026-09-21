@@ -38,6 +38,7 @@ type CreateServerRequest struct {
 	DiskSizeGB       int                    `json:"diskSizeGB,omitempty"`
 	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
 	ExistingAddress  string                 `json:"existingAddress,omitempty"`
+	Modpack          *db.ModpackConfig      `json:"modpack,omitempty"`
 }
 
 // CreateFromBackupRequest is the wire representation for creating a new server
@@ -60,6 +61,10 @@ type UpdateServerRequest struct {
 	MinecraftVersion *string                `json:"minecraftVersion,omitempty"`
 	DiskSizeGB       *int                   `json:"diskSizeGB,omitempty"`
 	ShutdownSchedule *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
+	// Modpack is a pointer-to-pointer so an update can express three states:
+	// absent (leave unchanged), null (remove the pack, bare field present) and
+	// an object (set a pack). setting a pack clears the Minecraft version.
+	Modpack **db.ModpackConfig `json:"modpack,omitempty"`
 }
 
 // BackupSettings is the wire representation of a server's backup override.
@@ -114,6 +119,21 @@ func DBBackupToProgramBackup(c *db.BackupConfig) *programs.BackupConfig {
 	}
 }
 
+// DBModpackToProgramModpack converts a persisted modpack config into the
+// Pulumi program representation. It is shared by the server handlers and the
+// Cloud Tasks provisioning handler so every provisioning path rolls out the
+// same pack reference (ADR-0006).
+func DBModpackToProgramModpack(m *db.ModpackConfig) *programs.ModpackConfig {
+	if m == nil {
+		return nil
+	}
+	return &programs.ModpackConfig{
+		Platform:  m.Platform,
+		ProjectID: m.ProjectID,
+		VersionID: m.VersionID,
+	}
+}
+
 // buildProgramConfig assembles the Pulumi program config for a server from
 // its persisted config plus controller-level settings. It is shared by the
 // create, update and backup-settings update paths so all of them roll out the
@@ -135,6 +155,7 @@ func buildProgramConfig(serverID string, sc *db.ServerConfig, ctrlCfg config.Con
 		ControllerURL:            ctrlCfg.BaseURL,
 		AgentToken:               token,
 		Backup:                   DBBackupToProgramBackup(sc.Backup),
+		Modpack:                  DBModpackToProgramModpack(sc.Modpack),
 		BackupResticPassword:     ctrlCfg.BackupResticPassword,
 		RetainLegacyBackupBucket: sc.InfraVersion > 0 && sc.InfraVersion < programs.CurrentInfraVersion,
 	}
@@ -151,6 +172,7 @@ type ServerConfigJSON struct {
 	DeployedByControllerVersion string                 `json:"deployedByControllerVersion,omitempty"`
 	MachineAgentImage           string                 `json:"machineAgentImage,omitempty"`
 	ShutdownSchedule            *ShutdownScheduleInput `json:"shutdownSchedule,omitempty"`
+	Modpack                     *db.ModpackConfig      `json:"modpack,omitempty"`
 	CreatedAt                   string                 `json:"createdAt"`
 	UpdatedAt                   string                 `json:"updatedAt"`
 }
@@ -307,6 +329,7 @@ func serverConfigToJSON(cfg *db.ServerConfig) ServerConfigJSON {
 		DeployedByControllerVersion: cfg.DeployedByControllerVersion,
 		MachineAgentImage:           cfg.MachineAgentImage,
 		ShutdownSchedule:            shutdownScheduleToInput(cfg.ShutdownSchedule),
+		Modpack:                     cfg.Modpack,
 		CreatedAt:                   cfg.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:                   cfg.UpdatedAt.Format(time.RFC3339),
 	}

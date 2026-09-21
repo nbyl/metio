@@ -8,6 +8,7 @@ import (
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/nbyl/metio/internal/db"
+	"github.com/nbyl/metio/internal/dbtypes"
 	"github.com/nbyl/metio/internal/pulumi"
 	"github.com/nbyl/metio/internal/pulumi/programs"
 	"github.com/nbyl/metio/internal/testutil"
@@ -643,6 +644,10 @@ func TestDestroyServer_Success(t *testing.T) {
 		MachineType:      "e2-small",
 		DiskSizeGB:       20,
 		MinecraftVersion: "1.21.1",
+		Modpack: &dbtypes.ModpackConfig{
+			Platform:  dbtypes.ModrinthPlatform,
+			ProjectID: "abC123",
+		},
 	}, nil)
 	mockDB.On("DeleteServerConfig", mock.Anything, "srv1").Return(nil)
 	mockDB.On("MarkServerBackupsDeleted", mock.Anything, "srv1",
@@ -652,11 +657,18 @@ func TestDestroyServer_Success(t *testing.T) {
 			MachineType:      "e2-small",
 			DiskSizeGB:       20,
 			MinecraftVersion: "1.21.1",
+			Modpack: &dbtypes.ModpackConfig{
+				Platform:  dbtypes.ModrinthPlatform,
+				ProjectID: "abC123",
+			},
 		},
 		mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 		sourceConfig := args.Get(2).(*db.BackupSourceConfig)
 		assert.Equal(t, "europe-west6", sourceConfig.Region)
 		assert.Equal(t, "1.21.1", sourceConfig.MinecraftVersion)
+		if assert.NotNil(t, sourceConfig.Modpack) {
+			assert.Equal(t, "abC123", sourceConfig.Modpack.ProjectID)
+		}
 		deletedAt := args.Get(3).(time.Time)
 		retentionUntil := args.Get(4).(time.Time)
 		assert.InDelta(t, 30.0, retentionUntil.Sub(deletedAt).Hours()/24, 0.01)

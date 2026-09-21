@@ -34,7 +34,7 @@ ${restoreWriteFiles}
         -p 25565:25565 \
         -p 127.0.0.1:25575:25575 \
         -e EULA=TRUE \
-        -e VERSION=${minecraftVersion} \
+        ${minecraftArgs}
         -e MAX_MEMORY=75% \
         -e USE_MEOWICE_FLAGS=true \
         -e RCON_PASSWORD=${rconPassword} \
