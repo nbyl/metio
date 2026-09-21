@@ -114,6 +114,7 @@ func buildProgramConfig(serverConfig *db.ServerConfig, cfg config.Config, token 
 		ControllerURL:            cfg.BaseURL,
 		AgentToken:               token,
 		Backup:                   servers.DBBackupToProgramBackup(serverConfig.Backup),
+		Modpack:                  servers.DBModpackToProgramModpack(serverConfig.Modpack),
 		BackupResticPassword:     cfg.BackupResticPassword,
 		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
 	}

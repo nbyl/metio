@@ -80,6 +80,7 @@ type ServerConfig struct {
 	ExistingAddress             string            `json:"existingAddress,omitempty"`
 	ShutdownSchedule            *ShutdownSchedule `json:"shutdownSchedule,omitempty"`
 	Backup                      *BackupConfig     `json:"backup,omitempty"`
+	Modpack                     *ModpackConfig    `json:"modpack,omitempty"`
 	CreatedAt                   time.Time         `json:"createdAt"`
 	UpdatedAt                   time.Time         `json:"updatedAt"`
 }

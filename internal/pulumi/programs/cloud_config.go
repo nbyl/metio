@@ -29,6 +29,11 @@ type TemplateConfig struct {
 	ControllerURL        string
 	AgentToken           string
 
+	// Modpack makes the server pack-driven (ADR-0006). When set, the rendered
+	// Minecraft unit passes MODRINTH_MODPACK instead of VERSION, because the
+	// pack manifest controls the loader, Minecraft version and mod set.
+	Modpack *ModpackConfig
+
 	// RestoreSnapshotID is the restic snapshot to restore before Minecraft
 	// starts on first boot. When set, a one-off restore step is added to the
 	// cloud-config runcmd section.
@@ -130,11 +135,26 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 	}
 	startCommand := fmt.Sprintf("  - systemctl start minecraft %smetio-machine-agent", config.BackupServiceEnable)
 
+	// The Minecraft unit identifies what to run either by vanilla version or by
+	// Modrinth pack (ADR-0006). A pack-driven server omits VERSION entirely and
+	// passes the pack, plus its pinned version when one was chosen; the image
+	// then resolves loader, Minecraft version and mods from the pack manifest.
+	// The multi-line form keeps the systemd line-continuation backslashes
+	// consistent with the surrounding ExecStart block.
+	minecraftArgs := fmt.Sprintf("-e VERSION=%s \\", config.MinecraftVersion)
+	if config.Modpack != nil {
+		minecraftArgs = fmt.Sprintf("-e MODRINTH_MODPACK=%s \\", config.Modpack.ProjectID)
+		if config.Modpack.VersionID != "" {
+			minecraftArgs += fmt.Sprintf("\n        -e MODRINTH_VERSION=%s \\", config.Modpack.VersionID)
+		}
+	}
+
 	replacements := map[string]string{
 		"${restoreWriteFiles}":    restoreWriteFiles,
 		"${afterRestore}":         afterRestore,
 		"${requiresRestore}":      requiresRestore,
 		"${startCommand}":         startCommand,
+		"${minecraftArgs}":        minecraftArgs,
 		"${region}":               config.Region,
 		"${gcpProject}":           config.GCPProject,
 		"${environment}":          config.Environment,
@@ -148,7 +168,6 @@ func RenderCloudConfig(config *TemplateConfig) (string, error) {
 		"${backupInterval}":       config.BackupInterval,
 		"${pruneResticRetention}": config.PruneResticRetention,
 		"${backupServiceEnable}":  config.BackupServiceEnable,
-		"${minecraftVersion}":     config.MinecraftVersion,
 		"${rconPassword}":         config.RCONPassword,
 		"${controllerUrl}":        config.ControllerURL,
 		"${agentToken}":           config.AgentToken,

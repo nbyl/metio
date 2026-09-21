@@ -88,6 +88,7 @@ func HandleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		ExistingAddress:          serverConfig.ExistingAddress,
 		ControllerURL:            cfg.BaseURL,
 		AgentToken:               token,
+		Modpack:                  DBModpackToProgramModpack(serverConfig.Modpack),
 		BackupResticPassword:     cfg.BackupResticPassword,
 		RetainLegacyBackupBucket: serverConfig.InfraVersion > 0 && serverConfig.InfraVersion < programs.CurrentInfraVersion,
 	}

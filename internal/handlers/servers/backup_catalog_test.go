@@ -72,6 +72,55 @@ func TestListAllBackups_ReturnsGlobalCatalog(t *testing.T) {
 	assert.Equal(t, "europe-west6-a", resp.Backups[0].SourceConfig.Zone)
 }
 
+func TestListAllBackups_SurfacesPackDrivenSourceConfig(t *testing.T) {
+	// The backup catalog shows which pack a backup was taken from so a
+	// pack-driven backup can be identified and recreated without guessing.
+	mockDB := new(testutil.MockDB)
+
+	original := GetDBConnection
+	GetDBConnection = func(ctx context.Context) (db.DB, config.Config, error) {
+		return mockDB, config.Config{}, nil
+	}
+	defer func() { GetDBConnection = original }()
+
+	mockDB.On("ListBackups", mock.Anything).Return([]*db.Backup{
+		{
+			ID:               "srv1:snap1",
+			ServerID:         "srv1",
+			ServerName:       "survival",
+			SnapshotID:       "snap1",
+			RepositoryPrefix: "servers/srv1/restic/",
+			CreatedAt:        time.Now().Add(-time.Hour),
+			Status:           dbtypes.BackupStatusCompleted,
+			MinecraftVersion: "",
+			SourceConfig: &dbtypes.BackupSourceConfig{
+				Region:           "europe-west6",
+				Zone:             "europe-west6-a",
+				MachineType:      "e2-small",
+				DiskSizeGB:       20,
+				MinecraftVersion: "",
+				Modpack: &dbtypes.ModpackConfig{
+					Platform:  dbtypes.ModrinthPlatform,
+					ProjectID: "abC123",
+				},
+			},
+		},
+	}, nil)
+
+	req := httptest.NewRequest("GET", "/api/backups", nil)
+	w := httptest.NewRecorder()
+	ListAllBackups(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp paginatedBackupsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Backups, 1)
+	require.NotNil(t, resp.Backups[0].SourceConfig)
+	require.NotNil(t, resp.Backups[0].SourceConfig.Modpack)
+	assert.Equal(t, "abC123", resp.Backups[0].SourceConfig.Modpack.ProjectID)
+}
+
 func TestListAllBackups_EmptyCatalogReturnsArray(t *testing.T) {
 	mockDB := new(testutil.MockDB)
 
@@ -164,6 +213,31 @@ func completedSourceBackup() *db.Backup {
 	}
 }
 
+func packDrivenSourceBackup() *db.Backup {
+	return &db.Backup{
+		ID:               "old-srv:snap-pack",
+		ServerID:         "old-srv",
+		ServerName:       "old-server",
+		SnapshotID:       "snap-pack",
+		RepositoryPrefix: "servers/old-srv/restic",
+		CreatedAt:        time.Now().Add(-time.Hour),
+		Status:           dbtypes.BackupStatusCompleted,
+		MinecraftVersion: "",
+		SourceConfig: &dbtypes.BackupSourceConfig{
+			Region:           "europe-west6",
+			Zone:             "europe-west6-a",
+			MachineType:      "e2-small",
+			DiskSizeGB:       20,
+			MinecraftVersion: "",
+			Modpack: &dbtypes.ModpackConfig{
+				Platform:  dbtypes.ModrinthPlatform,
+				ProjectID: "abC123",
+				VersionID: "XyZ789",
+			},
+		},
+	}
+}
+
 func TestCreateServerFromBackup_Success(t *testing.T) {
 	mockDB, mockPS, cleanup := setupCreateFromBackupTest(t)
 	defer cleanup()
@@ -226,6 +300,44 @@ func TestCreateServerFromBackup_OverridesApplied(t *testing.T) {
 	assert.Equal(t, "e2-standard-4", resp.Config.MachineType)
 	assert.Equal(t, 50, resp.Config.DiskSizeGB)
 	assert.Equal(t, "1.20.4", resp.Config.MinecraftVersion)
+}
+
+func TestCreateServerFromBackup_PackDriven(t *testing.T) {
+	// A backup taken from a pack-driven server (ADR-0006) has no Minecraft
+	// version to inherit — the pack controls it — so the new server must be
+	// pack-driven too, with the pack flowing through to provisioning.
+	mockDB, mockPS, cleanup := setupCreateFromBackupTest(t)
+	defer cleanup()
+
+	mockDB.On("ListBackups", mock.Anything).Return([]*db.Backup{packDrivenSourceBackup()}, nil)
+	mockDB.On("ListServerConfigs", mock.Anything).Return([]*db.ServerConfig{}, nil)
+	mockDB.On("CreateServerConfig", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockPS.On("CreateServerFromBackup", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	w := createFromBackupRequest("old-srv:snap-pack", map[string]string{
+		"name": "new-packed",
+	})
+
+	assert.Equal(t, http.StatusAccepted, w.Code)
+
+	var resp ServerResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "new-packed", resp.Config.Name)
+	// No vanilla default may sneak in when the source is pack-driven.
+	assert.Equal(t, "", resp.Config.MinecraftVersion)
+	require.NotNil(t, resp.Config.Modpack)
+	assert.Equal(t, dbtypes.ModrinthPlatform, resp.Config.Modpack.Platform)
+	assert.Equal(t, "abC123", resp.Config.Modpack.ProjectID)
+	assert.Equal(t, "XyZ789", resp.Config.Modpack.VersionID)
+
+	callArgs := mockPS.Calls[0].Arguments
+	raw := callArgs.Get(2)
+	require.NotNil(t, raw)
+	programConfig := raw.(*programs.ServerConfig)
+	assert.Equal(t, "snap-pack", programConfig.RestoreSnapshotID)
+	require.NotNil(t, programConfig.Modpack)
+	assert.Equal(t, "abC123", programConfig.Modpack.ProjectID)
+	assert.Equal(t, "XyZ789", programConfig.Modpack.VersionID)
 }
 
 func TestCreateServerFromBackup_BackupNotFound(t *testing.T) {

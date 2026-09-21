@@ -69,12 +69,32 @@ func (b BackupStatus) String() string {
 	return string(b)
 }
 
+// ModrinthPlatform is the only valid ModpackConfig platform today. It is
+// retained as a named constant because the field exists to make a future
+// second pack source an additive change.
+const ModrinthPlatform = "modrinth"
+
+// ModpackConfig references a modpack a server boots with (ADR-0006). A server
+// is either vanilla (Modpack nil) or pack-driven: when a pack is set, the
+// Minecraft version is pack-controlled and stored empty. Platform is retained
+// even though only "modrinth" is valid today so a second pack source later is
+// an additive change rather than a schema migration.
+type ModpackConfig struct {
+	// Platform is the pack source, e.g. "modrinth".
+	Platform string `json:"platform"`
+	// ProjectID identifies the pack on the platform.
+	ProjectID string `json:"projectId"`
+	// VersionID pins a specific version of the pack; empty means latest.
+	VersionID string `json:"versionId,omitempty"`
+}
+
 type BackupSourceConfig struct {
-	Region           string `json:"region"`
-	Zone             string `json:"zone"`
-	MachineType      string `json:"machine_type"`
-	DiskSizeGB       int    `json:"disk_size_gb"`
-	MinecraftVersion string `json:"minecraft_version"`
+	Region           string         `json:"region"`
+	Zone             string         `json:"zone"`
+	MachineType      string         `json:"machine_type"`
+	DiskSizeGB       int            `json:"disk_size_gb"`
+	MinecraftVersion string         `json:"minecraft_version"`
+	Modpack          *ModpackConfig `json:"modpack,omitempty"`
 }
 
 type Backup struct {

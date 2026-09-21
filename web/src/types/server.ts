@@ -24,6 +24,15 @@ export interface ShutdownScheduleInput {
 /**
  * Server configuration from backend ServerConfigJSON
  */
+export interface ModpackConfig {
+  platform: string;
+  projectId: string;
+  versionId?: string;
+}
+
+/**
+ * Server configuration from backend ServerConfigJSON
+ */
 export interface ServerConfig {
   name: string;
   region: string;
@@ -34,6 +43,7 @@ export interface ServerConfig {
   infraVersion?: number;
   deployedByControllerVersion?: string;
   shutdownSchedule?: ShutdownScheduleInput;
+  modpack?: ModpackConfig;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +108,11 @@ export interface UpdateServerRequest {
   minecraftVersion?: string;
   diskSizeGB?: number;
   shutdownSchedule?: ShutdownScheduleInput;
+  /**
+   * Tri-state: undefined leaves the pack unchanged, null removes it, an
+   * object sets it. A set pack clears minecraftVersion (pack-controlled).
+   */
+  modpack?: ModpackConfig | null;
 }
 
 /**
@@ -111,6 +126,7 @@ export interface CreateServerRequest {
   minecraftVersion: string;
   diskSizeGB?: number;
   shutdownSchedule?: ShutdownScheduleInput;
+  modpack?: ModpackConfig;
 }
 
 export interface MachineTypeOption {
@@ -148,6 +164,7 @@ export interface BackupSourceConfig {
   machineType: string;
   diskSizeGB: number;
   minecraftVersion: string;
+  modpack?: ModpackConfig;
 }
 
 /**

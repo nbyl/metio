@@ -50,6 +50,7 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		DiskSizeGB:       req.DiskSizeGB,
 		ShutdownSchedule: shutdownSchedule,
 		ExistingAddress:  req.ExistingAddress,
+		Modpack:          req.Modpack,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
@@ -59,7 +60,20 @@ func CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isMinecraftVersionAvailable(ctx, serverConfig.MinecraftVersion) {
+	// A pack-driven server (ADR-0006) does not carry a Minecraft version — the
+	// pack manifest controls it — so the version availability check only
+	// applies to vanilla servers. Membership of the pack (and pinned version)
+	// is checked against the same source the picker serves.
+	if serverConfig.Modpack != nil {
+		if !isModpackAvailable(ctx, serverConfig.Modpack.ProjectID) {
+			writeJSONError(w, fmt.Sprintf("validation error: modpack %q is not available", serverConfig.Modpack.ProjectID), http.StatusBadRequest)
+			return
+		}
+		if serverConfig.Modpack.VersionID != "" && !isModpackVersionAvailable(ctx, serverConfig.Modpack.ProjectID, serverConfig.Modpack.VersionID) {
+			writeJSONError(w, fmt.Sprintf("validation error: modpack version %q is not available for %q", serverConfig.Modpack.VersionID, serverConfig.Modpack.ProjectID), http.StatusBadRequest)
+			return
+		}
+	} else if !isMinecraftVersionAvailable(ctx, serverConfig.MinecraftVersion) {
 		writeJSONError(w, fmt.Sprintf("validation error: minecraft version %q is not available", serverConfig.MinecraftVersion), http.StatusBadRequest)
 		return
 	}
@@ -299,6 +313,22 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 	if req.ShutdownSchedule != nil {
 		existingConfig.ShutdownSchedule = shutdownScheduleFromInput(req.ShutdownSchedule)
 	}
+
+	// A present Modpack field always means a change was requested: null
+	// removes the pack (reverting to a vanilla server), an object sets it. A
+	// set pack makes the Minecraft version pack-controlled, so the stored
+	// version is cleared to uphold the mutual exclusivity rule. Removal does
+	// not restore a version put the pack aside; ValidateServerConfig below
+	// then forces the caller to name a replacement version in this same
+	// request.
+	if req.Modpack != nil {
+		if *req.Modpack == nil {
+			existingConfig.Modpack = nil
+		} else {
+			existingConfig.Modpack = *req.Modpack
+			existingConfig.MinecraftVersion = ""
+		}
+	}
 	existingConfig.MachineAgentImage = cfg.MachineAgentImage
 	existingConfig.UpdatedAt = time.Now()
 
@@ -309,10 +339,27 @@ func UpdateServer(w http.ResponseWriter, r *http.Request) {
 
 	// Only validate the version when the request actually changes it. A server
 	// pinned to a version Mojang no longer lists must stay editable for its
-	// other settings.
-	if req.MinecraftVersion != nil && !isMinecraftVersionAvailable(ctx, *req.MinecraftVersion) {
+	// other settings. Pack-driven servers skip this entirely: their version is
+	// empty by definition (ADR-0006).
+	if req.MinecraftVersion != nil && existingConfig.Modpack == nil && !isMinecraftVersionAvailable(ctx, *req.MinecraftVersion) {
 		writeJSONError(w, fmt.Sprintf("validation error: minecraft version %q is not available", *req.MinecraftVersion), http.StatusBadRequest)
 		return
+	}
+
+	// A pack change (set or remove) is validated against the same live source
+	// the picker serves, with the same leniency as vanilla versions: only when
+	// the request actually changes the pack. On removal the pack's structural
+	// replacement is the (now mandatory, non-empty) Minecraft version, which
+	// db.ValidateServerConfig already vetted above.
+	if req.Modpack != nil && *req.Modpack != nil {
+		if !isModpackAvailable(ctx, (*req.Modpack).ProjectID) {
+			writeJSONError(w, fmt.Sprintf("validation error: modpack %q is not available", (*req.Modpack).ProjectID), http.StatusBadRequest)
+			return
+		}
+		if (*req.Modpack).VersionID != "" && !isModpackVersionAvailable(ctx, (*req.Modpack).ProjectID, (*req.Modpack).VersionID) {
+			writeJSONError(w, fmt.Sprintf("validation error: modpack version %q is not available for %q", (*req.Modpack).VersionID, (*req.Modpack).ProjectID), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Same for machine type: only validate when changed, so a server running
@@ -395,6 +442,12 @@ const (
 )
 
 func classifyUpdate(req UpdateServerRequest, config *db.ServerConfig) int {
+	// Changing or removing a modpack always rebuilds the machine: the pack
+	// manifest controls the loader, Minecraft version and mod set, so there
+	// is no in-place path that could apply it to a running server.
+	if req.Modpack != nil {
+		return int(UpdateTypeRecreate)
+	}
 	if req.MinecraftVersion != nil {
 		return int(UpdateTypeRecreate)
 	}
