@@ -1,4 +1,4 @@
-.PHONY: all build clean build-images codespace-setup deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
+.PHONY: all build clean build-images codespace-setup deploy deploy-full deploy-infrastructure deploy-machine-agent deploy-controller check-images use-default-images cleanup-old-images install-web build-web test test-backend test-web develop opencode-web lint-web verify-backend ci-controller-image ci-machine-agent-image ci-mc-backup-image ci-daprd-image controller-image machine-agent-image mc-backup-image daprd-image push-images promote promote-distribution help dev-up dev-down dev-dapr-setup test-dapr-integration
 
 USERNAME := $(shell whoami)
 
@@ -61,6 +61,13 @@ generate-env:
 		echo "MACHINE_AGENT_IMAGE=$$(cat build/machine-agent-image.txt)" >> build/local.env; \
 	fi
 	@echo "Generated build/local.env"
+
+# Start the opencode web UI on the local network (port 4096).
+# Protected with HTTP basic auth (username: opencode) via OPENCODE_SERVER_PASSWORD.
+OPENCODE_PORT ?= 4096
+OPENCODE_SERVER_PASSWORD ?= zDIHhso9NumzzA7Y5wxuei2P
+opencode-web:
+	OPENCODE_SERVER_PASSWORD="$(OPENCODE_SERVER_PASSWORD)" opencode web --port $(OPENCODE_PORT) --hostname 0.0.0.0
 
 # Start backend (air) and frontend (Vite) with hot reload.
 # Dapr sidecar + local Postgres are always started (and torn down on exit).
@@ -514,6 +521,7 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  develop                 - Start backend + frontend hot reload (Dapr + Postgres)"
+	@echo "  opencode-web            - Start opencode web UI on port 4096 (basic auth: opencode / OPENCODE_SERVER_PASSWORD)"
 	@echo "  test-dapr-integration   - Run DaprDB integration tests against local Postgres"
 	@echo ""
 	@echo "Dapr Infrastructure (auto-started by 'make develop'):"
