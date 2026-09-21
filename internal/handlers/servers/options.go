@@ -131,3 +131,12 @@ func isZoneAvailable(ctx context.Context, region, zone string) bool {
 	}
 	return false
 }
+
+// isModpackAvailable reports whether the given pack is one a user can pick. It
+// deliberately resolves the pack's version listing through
+// ListModrinthPackVersions, the same source GET /api/modpacks/{id}/versions
+// serves, so the picker and this validation can never disagree. Its call sites
+// in create/update land with the modpack data model (#536).
+func isModpackAvailable(ctx context.Context, modpackID string) bool {
+	return len(ListModrinthPackVersions(ctx, modpackID)) > 0
+}
