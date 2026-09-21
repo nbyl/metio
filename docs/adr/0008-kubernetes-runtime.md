@@ -1,7 +1,8 @@
 # ADR-0008: Kubernetes as the Minecraft Runtime
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-11
+- **Amended:** 2026-09-21 (spike outcome — see "Amendment: Spike outcome")
 - **Deciders:** Metio maintainers
 - **Relates to:** ADR-0001 (controller/agent API — extended, not superseded)
 
@@ -126,57 +127,167 @@ hand-rolling most orchestration. Not evaluated in depth.
 **Chosen direction: C.** Kubernetes becomes the Minecraft runtime, with standalone mode as the
 default deployment shape.
 
-**This ADR commits only to a time-boxed spike.** The direction is recorded so that in-flight
-work can be sequenced against it, but no implementation beyond the spike is authorised until
-the spike reports. The reason is that the single most load-bearing assumption — that k3s runs
-acceptably on Container-Optimized OS, on a preemptible VM, without eating the memory budget —
-is currently **unverified**, and the codebase has no Kubernetes usage whatsoever today: no
-manifests, no `client-go`, no Helm, nothing.
+**This ADR committed only to a time-boxed spike.** The direction was recorded so that in-flight
+work could be sequenced against it, but no implementation beyond the spike was authorised until
+the spike reported. The reason was that the single most load-bearing assumption — that k3s runs
+acceptably on Container-Optimized OS, on a preemptible VM, without eating the memory budget — was
+**unverified**. The spike is now complete: the assumption held on COS, the preemption behaviour
+held, and only the memory budget forced a change (2 GB exclusion). Build work is authorised under
+the conditions of the Amendment below. The codebase still has no Kubernetes usage today — no
+manifests, no `client-go`, no Helm — which is why the prototype workstreams in the Effort table
+start from zero.
 
 ### The spike
 
 **Gating criteria — all three must pass:**
 
-1. k3s installs and survives a reboot on `cos-stable` **without a custom machine image**. The
-   known obstacle is that COS mounts `/var` `noexec` while k3s expects to place executables and
-   its data root there; the spike must establish whether a supported workaround exists.
-2. Cluster state survives hard preemption with the datastore on the attached persistent disk.
-3. Backup and restore work **without privileged host access** — no docker socket, no
-   `--privileged --pid=host`, no `nsenter`.
+1. k3s installs and survives a reboot on `cos-stable` **without a custom machine image** — **PASS**
+   (SP2). COS mounts `/var` `noexec` but not globally; a self-managed disk mounted `exec` carries
+   both the binary and the data root. Outcome in the Amendment below.
+2. Cluster state survives hard preemption with the datastore on the attached persistent disk —
+   **PASS** (SP4). Three hard-kill cycles recovered unattended. Outcome in the Amendment below.
+3. Backup and restore work **without privileged host access** (no docker socket, no
+   `--privileged --pid=host`, no `nsenter`) — **not exercised by the spike**; carried to the
+   prototype for early validation (see the Amendment).
 
 **Non-gating measurements the spike must also report:**
 
-4. Idle control-plane RAM and CPU overhead, expressed against the machine's total, so it can be
-   weighed against ADR-0006's `MAX_MEMORY` percentage.
+4. Idle control-plane RAM and CPU overhead, expressed against the machine's total — **measured**
+   (SP5): a roughly constant 435 MB floor. It weighs against ADR-0006's `MAX_MEMORY` percentage;
+   the 2 GB machine types are not viable. See the Amendment.
 5. Whether a Minecraft pod is reachable on 25565 and survives a configuration change **without
-   VM replacement** — the primary benefit, which the gating criteria do not otherwise
-   demonstrate.
+   VM replacement** — **demonstrated** (SP6): version and env changes are pod swaps on an
+   untouched VM; the primary benefit this ADR exists for. See the Amendment.
 
-**If criterion 1 fails**, the operating system is chosen by working down a three-rung ladder,
-stopping at the first rung that works:
+**Operating system — decided at rung 1: Container-Optimized OS.** Criterion 1 passed on COS, so
+the ladder was never walked beyond the first rung. The ordering rationale is retained in case a
+future runtime needs to revisit the OS choice:
 
-1. **Container-Optimized OS** — the status quo. Minimal change, but `/var` is mounted `noexec`
-   while k3s expects to place executables and its data root there.
-2. **Flatcar Container Linux** — immutable and container-focused like COS, and explicitly built
-   to run Kubernetes, so it is the closest philosophical match. It provisions with
-   **Ignition/Butane rather than cloud-init**, so `cloud_config.go` would be rewritten rather
-   than adapted. That cost is smaller than it first appears: under Kubernetes, three of the four
-   systemd units become pods, leaving only disk setup, the k3s install, and a static manifest
-   drop.
-3. **Ubuntu LTS** — the cheapest fallback in engineering terms, because it consumes cloud-init
-   exactly as COS does, at the cost of a larger attack surface, a different patching cadence and
-   slower boot.
+1. **Container-Optimized OS** — the status quo; **chosen**. The expected `/var` `noexec` obstacle
+   does not disqualify it: COS enforces `noexec` on its own mounts, not globally, so a
+   self-managed disk mounted `exec` carries the k3s binary and data root.
+2. **Flatcar Container Linux** — the closest philosophical match for a Kubernetes host, but it
+   provisions with **Ignition/Butane rather than cloud-init**, so `cloud_config.go` would be
+   rewritten rather than adapted (not applicable: not reached).
+3. **Ubuntu LTS** — the cheapest fallback because it consumes cloud-init exactly as COS does, at
+   the cost of a larger attack surface, a different patching cadence and slower boot (not
+   applicable: not reached).
 
 The ladder is ordered by architectural fit rather than by adoption cost; Ubuntu is the easiest
-port but the weakest match for a single-purpose, immutable server image. This is recorded now so
-the spike has defined branches rather than stalling on an open question.
+port but the weakest match for a single-purpose, immutable server image.
 
-**This ADR authorises the spike only.** Its outcome — the chosen operating system, the
-measured control-plane overhead, and the reachability and config-change findings — must land as
-an **amendment to this ADR before any build work begins**, in the same way ADR-0006 was amended
-by #532.
+**This ADR authorised the spike only.** Its outcome — the chosen operating system, the measured
+control-plane overhead, and the reachability and config-change findings — is recorded below as an
+amendment, in the same way ADR-0006 was amended by #532. The spike is complete; this amendment is
+the go/no-go record and supersedes the provisional wording above.
 
-### Architecture (subject to the spike)
+## Amendment: Spike outcome (2026-09-21)
+
+The time-boxed spike (milestone #10, tickets #542-#547) is complete. Evidence for every claim
+below lives on the milestone tickets and their PRs; the harness that produced it was created for
+the spike only and has been deleted.
+
+### Gating results
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| 1. k3s on COS without a custom image | **PASS** (ladder rung 1) | #543/#550 — node Ready 88s cold on stock `cos-cloud/cos-stable`, survives `instances reset`, cloud-init re-runs idempotently |
+| 2. Preemption survival | **PASS** | #545/#559 — a real SPOT termination recovered in 134s; a hard reset landing mid-write recovered in 297s (the in-flight 256 Mi write was discarded cleanly); a plain hard reset in 119s. World data, integrity markers and cluster state intact every cycle |
+| 3. Backup/restore without privileged access | **Not exercised** | No spike ticket covered it. The restore-as-init-container and backup-sidecar are unverified and must be validated early in the prototype |
+
+### Chosen operating system
+
+**Container-Optimized OS**, decided at ladder rung 1. The central failure hypothesis was wrong in
+Metio's favour: COS enforces `noexec` on its *own* mounts, not globally, so a self-managed disk
+mounted `exec` can carry the k3s binary and data root. No Flatcar or Ubuntu rung was reached, so
+the Ignition consequence does not apply.
+
+The accommodations SP2 (#543) required are stable properties and **none modifies a COS-managed
+path**, which is the line between a design choice and a hack:
+
+- the k3s binary, data root and default local-storage path live on the attached
+  disk mounted `exec` (this also serves gating 2, which needs the datastore there);
+- helper scripts are invoked via `bash` and the k3s installer is piped to `sh`,
+  because `noexec` blocks `execve()` but not reading.
+
+These are judged supportable long-term. Two operator caveats were logged: the system
+`kubectl` re-extracts to the default `noexec` data dir and the COS-bundled kubectl skews outside
+support range — the operator must use the k3s binary or a pinned kubectl.
+
+### Non-gating measurements
+
+**Control-plane overhead (SP5, #546), 10-minute idle window, no workload:**
+
+| scenario | machine | used MB (usable) | k3s overhead | control-plane RSS | idle CPU (sum/peak) |
+|---|---|---|---|---|---|
+| bare | e2-small | 289 (1973) | — | 42 MB | 0.04% / 0.10% |
+| k3s | e2-small | 728 (1973) | 438 MB (22.2%) | 636 MB | 4.38% / 5.25% |
+| bare | e2-medium | 362 (3921) | — | 42 MB | 0.05% / 0.15% |
+| k3s | e2-medium | 797 (3921) | 435 MB (11.1%) | 618 MB | 4.78% / 5.73% |
+
+The overhead is a **constant ~435 MB floor**, dominated by `k3s-server` (~480 MB RSS), not
+proportional to machine size. Consequences for the memory budget:
+
+- **e2-small (2 GB):** 75% heap = 1480 MB vs ~1265 MB actually available after k3s — **not
+  viable.**
+- **n2-highcpu-2 (2 GB):** same calculus — not viable.
+- **e2-medium (4 GB):** 75% heap = 2941 MB vs ~3124 MB available — viable but marginal (183 MB
+  headroom, none for JVM native overhead or load spikes).
+- **8 GB and up:** comfortably viable.
+
+CPU overhead (< 5% of a 2-4 vCPU machine idle) is negligible against Minecraft's bursty load.
+
+**Config change without VM replacement (SP6, #547), steady e2-medium:**
+
+| change | field | apply → accepting | pod | VM identity | world |
+|---|---|---|---|---|---|
+| version | `VERSION` 1.21.4 → 1.21.3 | 71s | swapped | id / lastStart / boot_id unchanged, uptime monotonic | intact (4 region files + marker) |
+| env | `MAX_MEMORY` 75% → 70% | 69s | swapped | unchanged | intact |
+
+First boot including world generation was 166s, so a restart-only change costs roughly 40% of a
+cold boot and **zero VM replacement**. The dominant driver of this ADR is demonstrated
+end-to-end: the knobs today's `UpdateTypeRecreate` (`internal/handlers/servers/crud.go:397`)
+reacts to are plain pod-spec fields on the Kubernetes path.
+
+### Preemption semantics
+
+SPOT preemption **terminates** the instance (`AutomaticRestart: false`); nothing restarts it, in
+the spike or in production today. k3s recovers **unattended** once the instance is started — the
+measured recovery times above all include that start. This unchanged-behaviour finding means the
+production plan must include an explicit instance-restart path (it must today too; it is not a
+regression this ADR introduces).
+
+### Recommendation
+
+**Proceed with changes.** Both exercised gating criteria pass and the primary driver is
+demonstrated. Status is therefore **Accepted**, with three conditions:
+
+1. **Exclude the 2 GB machine types** (e2-small, n2-highcpu-2) from the Kubernetes runtime, or
+   step `MAX_MEMORY` down for them. This resolves the open question in #533 with a measured
+   requirement.
+2. **Validate backup/restore without privileged access** (gating 3) early in the prototype. It
+   was not exercised by the spike.
+3. **Provide an explicit instance-restart path** for preemption termination (see the preemption
+   semantics above).
+
+Option B (mutable configuration out of `user-data`) is not foreclosed and remains complementary —
+it forces the desired-state boundary as an API, which the operator consumes anyway — but it is no
+longer the fallback for this decision.
+
+### Downstream re-assessment
+
+- **#536** — its data-model half proceeds; its cloud-config rendering half becomes a field on the
+  Metio custom resource (build work is now authorised by this amendment).
+- **#538** — destructive-change confirmation on the current runtime stays (until migration); on
+  the Kubernetes runtime the "this destroys your VM" warning becomes unnecessary, because
+  configuration changes stop replacing machines.
+- **#533** — proceeds regardless; the spike gives it a concrete requirement (2 GB exclusion or
+  stepped-down `MAX_MEMORY`).
+- **ADR-0007** — its `MODS_FILE` mechanism exists solely to avoid `ReplaceOnChanges`; that
+  constraint disappears on the Kubernetes runtime, so the ADR must be reconsidered rather than
+  accepted as written.
+
+### Architecture (as amended)
 
 Metio defines its own Kubernetes API objects, so that the desired state of a server is a
 first-class, declarative resource rather than a rendered cloud-config string.
@@ -331,10 +442,13 @@ reconsidered rather than accepted as written.
 - **The agent's tests are the hidden cost.** `cmd/machine-agent/` is 1,007 LOC of production code
   against **2,339 LOC of tests**. Rewriting the agent means rewriting its test suite, and this is
   the single largest item not visible in a prototype-oriented estimate.
-- **k3s overhead partially cancels ADR-0006's memory work**, and may make the smallest machine
-  types unviable. The spike must quantify this.
+- **k3s overhead partially cancels ADR-0006's memory work.** The spike quantified it: a constant
+  ~435 MB floor, which makes the 2 GB machine types (e2-small, n2-highcpu-2) unviable at
+  `MAX_MEMORY=75%` and leaves e2-medium (4 GB) marginal. The small types must be excluded from
+  the Kubernetes runtime, or `MAX_MEMORY` stepped down for them (see the Amendment).
 - **A stateful control plane is added to the critical path on hardware chosen to be killed
-  arbitrarily.** Preemption is cheap today: the VM reboots and systemd restarts everything.
+  arbitrarily.** Preemption terminates the instance; recovery depends on an explicit restart
+  (the spike measured k3s recovering unattended once restarted — see the Amendment).
 - **Operator development is a specialist skill** — controller-runtime, finalizers, status
   subresources, idempotent reconciliation. The "lots of knowledge in the wild" argument holds
   strongly for integrations and less so for the core.
@@ -345,7 +459,7 @@ Standalone mode only, for an engineer familiar with both this codebase and Kuber
 
 | Workstream | Estimate |
 |---|---|
-| k3s-on-COS spike and cloud-config bootstrap | ~1 week |
+| k3s-on-COS spike and cloud-config bootstrap | ~1 week — **done** (SP1-SP6; estimate held) |
 | CRD and operator reconcile into Deployment, PVC, Service | ~1 week |
 | Agent rewrite: desired state to Metio objects; domain logic via exec API | ~1 week |
 | Backup and restore as sidecar plus init container | ~1 week |
@@ -358,17 +472,15 @@ authentication model, the Dapr/Postgres state layer and the entire 7,811 LOC fro
 `internal/pulumi/programs/cloud_config.go`, `server_cloud_config.yml`, `cmd/machine-agent/`, and
 the configuration-rendering portions of `internal/services/provisioning.go`.
 
-Variance is dominated by a single unknown: whether k3s runs on Container-Optimized OS. In
-particular COS mounts `/var` **`noexec`**, while k3s expects to place executables and its data
-root there. This is plausibly a short remount workaround, or the thing that sends the decision
-down the operating-system ladder. It is the reason the spike runs first. Falling through to
-Flatcar adds the cost of rewriting the machine configuration as Ignition; falling through to
-Ubuntu does not, but yields a weaker fit.
+Variance was dominated by a single unknown — whether k3s runs on Container-Optimized OS given
+that COS mounts `/var` **`noexec`**. The spike resolved it: COS enforces `noexec` on its own
+mounts, not globally, so the k3s binary and data root moved to a self-managed disk mounted `exec`.
+No remount hack was needed and no ladder rung below COS was required (see the Amendment).
 
 ### Option B is not foreclosed
 
 Moving mutable configuration out of `user-data` (option B) captures the dominant driver at
 roughly a third of the cost and **remains available regardless of the spike outcome**. It is also
 complementary: it forces the desired-state boundary to exist as an API, which is precisely the
-boundary the operator would later consume. If the spike fails, option B is the fallback and
-should be adopted on its own merits.
+boundary the operator would later consume. It is no longer the fallback for this decision (see
+the Amendment) but should be adopted on its own merits if the prototype stalls.
