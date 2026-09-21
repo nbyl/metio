@@ -351,20 +351,34 @@ does not reintroduce the `user-data` churn this ADR exists to eliminate.
 
 ### Cluster mode is a direction, not a commitment
 
-Cluster mode is named here as the long-term destination but **deferred to a later ADR**, because
-it is not yet decidable:
+Cluster mode is named here as the long-term destination but **deferred to a later ADR**. As
+originally written it was "not yet decidable", for two reasons:
 
 - A managed Kubernetes control plane costs roughly **$73/month before any workload runs**, with
-  nodes that cannot scale to zero. That is irreconcilable with ADR-0001 driver 1 for a
-  single-user deployment.
+  nodes that cannot scale to zero — irreconcilable with ADR-0001 driver 1 for a single-user
+  deployment.
 - Minecraft is raw TCP on 25565 with no HTTP layer. One cloud load balancer per server is
-  prohibitively expensive, so cluster mode requires hostname-based TCP routing that inspects the
-  Minecraft handshake. That is real, additional machinery with no prototype today.
+  prohibitively expensive, so cluster mode would require hostname-based TCP routing that inspects
+  the Minecraft handshake — real, additional machinery with no prototype today.
 
-Cluster mode therefore serves a **different user** — someone already operating a cluster and
-hosting many servers — rather than being a second way to serve the same user. The ADR that
-specifies it must say so explicitly, or Metio will be defending "$0 idle" and "bring a cluster"
-at the same time.
+**Both reasons were re-examined when GKE Autopilot was evaluated (see "Considered alternative",
+2026-09-21).** Autopilot changes the calculus for cluster mode specifically:
+
+- **Control-plane cost dissolves.** Cluster mode is one control plane for many servers by
+  definition, and the $74.40/billing-account free tier covers that one cluster's ~$73/month fee.
+  The per-person-cluster cost ($73 × N) never applies. Spot pods scale to zero, so an idle server
+  costs ~nothing, protecting "$0 idle".
+- **Exposure needs no per-server LB and no handshake inspection.** A shared cluster can
+  NodePort-map each server to a port in 30000-32767 and expose a stable `name.mc.host:<port>`
+  address via DNS-tracked node IPs, instead of one cloud load balancer (or SNI-style routing
+  machinery) per server.
+
+Cluster mode therefore remains **deferred to a later ADR**, but on the 2026-09-21 evidence it is
+**decidable rather than assumed-costly**: the later ADR should compare self-managed k3s on a
+shared VM against shared GKE Autopilot (NodePort + DNS, `autopilot-spot` economics at ~$28/server).
+Either way it serves a **different user** — someone already operating a cluster and hosting many
+servers — rather than a second way to serve the same user, and the specifying ADR must keep the
+"$0 idle" and "bring a cluster" lines distinct.
 
 ### Migration of existing servers
 
@@ -551,6 +565,27 @@ spot figures are the published spot column (60-91% off, dynamic).
 milestone deliberately de-scoped. The `autopilot-spot` variant (~$28/server, ~1.5x current, with
 the 2 GB tier restored) is recorded as the **fallback**: it should be revisited if node operations
 (patches, upgrades, the COS accommodations, preemption restart handling) ever outweigh ~1.5x cost.
+
+### Relevance to cluster mode
+
+The shared-cluster shape described above **is** cluster mode as ADR-0008 names it ("Cluster mode
+is a direction, not a commitment"): one operator, many servers, one control plane. Evaluated
+against that section's two deferral blockers:
+
+- **Control-plane cost** — eliminated for cluster mode: one cluster's ~$73/month is covered by the
+  $74.40 free tier, and per-server cluster fees never apply because cluster mode shares the
+  control plane by definition.
+- **TCP exposure** — solved without per-server load balancers or handshake inspection: NodePort
+  ports in 30000-32767 plus DNS-tracked node IPs give each server a stable `name.mc.host:<port>`
+  address. The cost is port-based addressing (~2.7 k servers/cluster) instead of IP-per-server or
+  hostname-based SNI routing.
+
+For the later cluster-mode ADR, shared Autopilot (NodePort + DNS, `autopilot-spot` at ~$28/server)
+is therefore the cheapest credible path to cluster mode — and the alternative to running a
+self-managed k3s cluster across many servers, where node-ops scale with server count. Standalone
+self-managed SPOT remains cheaper per server for the single-user default (~$15-20 vs ~$28), so
+Autopilot does not displace ADR-008's chosen standalone shape; it supplies the long-term
+multi-server destination that the ADR deferred.
 
 ### Residuals and risks
 
