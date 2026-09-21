@@ -59,4 +59,20 @@ var GetUserEmail func(r *http.Request) string
 
 var WriteJSONError func(w http.ResponseWriter, message string, statusCode int)
 
+// SearchModrinthPacks returns the modpacks matching the given query, optionally
+// filtered to a single Minecraft version. It defaults to an empty result so
+// tests and any caller that has not wired the live service still behave;
+// base.go overrides it with the Modrinth-backed service in production.
+var SearchModrinthPacks = func(ctx context.Context, query, mcVersion string) []services.ModrinthPack {
+	return []services.ModrinthPack{}
+}
+
+// ListModrinthPackVersions returns the published versions of a modpack. It
+// defaults to an empty result so tests and any caller that has not wired the
+// live service still behave; base.go overrides it with the Modrinth-backed
+// service in production.
+var ListModrinthPackVersions = func(ctx context.Context, modpackID string) []services.ModrinthVersion {
+	return []services.ModrinthVersion{}
+}
+
 var ControllerVersion string
