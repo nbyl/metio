@@ -336,8 +336,8 @@ go.opentelemetry.io/collector/internal/testutil v0.147.0 h1:DFlRxBRp23/sZnpTITK2
 go.opentelemetry.io/collector/internal/testutil v0.147.0/go.mod h1:Jkjs6rkqs973LqgZ0Fe3zrokQRKULYXPIf4HuqStiEE=
 go.opentelemetry.io/collector/pdata v1.53.0 h1:DlYDbRwammEZaxDZHINx5v0n8SEOVNniPbi6FRTlVkA=
 go.opentelemetry.io/collector/pdata v1.53.0/go.mod h1:LRSYGNjKXaUrZEwZv3Yl+8/zV2HmRGKXW62zB2bysms=
-go.opentelemetry.io/contrib/bridges/otelslog v0.18.0 h1:hhPGP3zvvy1xWT9RTy970wlniSxFttBIsAK1gvMguJM=
-go.opentelemetry.io/contrib/bridges/otelslog v0.18.0/go.mod h1:twJF7inoMza6kxMcF8JOdL3mPmtOZu7GEr34CUNE6Dg=
+go.opentelemetry.io/contrib/bridges/otelslog v0.20.0 h1:oEl2Pw/i4OQwhAuda2pAHFAcOMivA+Xa+iTccBfab/g=
+go.opentelemetry.io/contrib/bridges/otelslog v0.20.0/go.mod h1:yMSQaiiq5dpfrSJCYLBcqFeJkFFI67seT4ngvx6jfVo=
 go.opentelemetry.io/contrib/detectors/gcp v1.46.0 h1:PI8dGkqDaQkwJ8kOopqMhDTbrnK3UIeG/RCHH4HErbo=
 go.opentelemetry.io/contrib/detectors/gcp v1.46.0/go.mod h1:nsrN5c/sOLoY2vsPxN/rQ0V0nvGrWJCqcW4UXLtqNG8=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0 h1:oECp5f+hN7nkwjU/8BxQ/q23bGPb8FIrD839owX222E=
