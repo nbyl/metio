@@ -49,6 +49,34 @@ export interface ServerConfig {
 }
 
 /**
+ * A modpack search result from GET /api/modpacks/search.
+ * Matches Go services.ModrinthPack.
+ */
+export interface ModrinthPack {
+  id: string;
+  slug: string;
+  name: string;
+  author: string;
+  iconUrl: string;
+  downloads: number;
+  gameVersions: string[];
+  loader: string;
+}
+
+/**
+ * A published version of a modpack from GET /api/modpacks/{id}/versions.
+ * Matches Go services.ModrinthVersion.
+ */
+export interface ModrinthVersion {
+  id: string;
+  name: string;
+  versionNumber: string;
+  gameVersions: string[];
+  loaders: string[];
+  latest: boolean;
+}
+
+/**
  * Server response from /api/servers and /api/servers/{id}
  * Matches Go handlers.ServerResponse
  */

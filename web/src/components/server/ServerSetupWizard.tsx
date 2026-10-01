@@ -10,13 +10,19 @@ import {
   Cpu,
   FileText,
   Loader2,
+  Package,
+  Search,
   Server,
   Settings,
 } from 'lucide-react';
 import { useServerOptions } from '../../hooks/useServerOptions';
+import { useModrinthSearch } from '../../hooks/useModrinthSearch';
+import { useModrinthPackVersions } from '../../hooks/useModrinthPackVersions';
 import { useCreateServer } from '../../hooks/useServerMutations';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
+import { Skeleton } from '../ui/Skeleton';
 import {
   Form,
   FormControl,
@@ -35,7 +41,11 @@ import {
 } from '../ui/Select';
 import { Switch } from '../ui/Switch';
 import { cn } from '../../lib/utils';
-import type { MachineTypeOption } from '../../types/server';
+import type {
+  MachineTypeOption,
+  ModpackConfig,
+  ModrinthPack,
+} from '../../types/server';
 
 export interface ServerSetupWizardProps {
   className?: string;
@@ -43,34 +53,77 @@ export interface ServerSetupWizardProps {
 
 const serverNamePattern = /^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]$|^[a-z]$/;
 
-const wizardSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Server name is required')
-    .min(3, 'Name must be between 3 and 24 characters')
-    .max(24, 'Name must be between 3 and 24 characters')
-    .regex(
-      serverNamePattern,
-      'Name must start with a letter and contain only lowercase letters, digits, and hyphens'
-    ),
-  region: z.string().min(1, 'Region is required'),
-  zone: z.string().min(1, 'Zone is required'),
-  machineType: z.string().min(1, 'Machine type is required'),
-  minecraftVersion: z.string().min(1, 'Minecraft version is required'),
-  diskSizeGB: z.number().min(10).max(100),
-  shutdownEnabled: z.boolean(),
-  shutdownTime: z.string(),
-  shutdownTimezone: z.string(),
-});
+/**
+ * A modpack selection made in the wizard. Display fields (name, versionName)
+ * are carried for the Review step; only platform/projectId/versionId are sent
+ * to the API. An empty versionId installs the pack's latest version.
+ */
+type ModpackSelection = {
+  platform: 'modrinth';
+  projectId: string;
+  name: string;
+  iconUrl?: string;
+  loader?: string;
+  versionId?: string;
+  versionName?: string;
+};
+
+const modpackSchema = z
+  .object({
+    platform: z.literal('modrinth'),
+    projectId: z.string().min(1),
+    name: z.string().min(1),
+    iconUrl: z.string().optional(),
+    loader: z.string().optional(),
+    versionId: z.string().optional(),
+    versionName: z.string().optional(),
+  })
+  .nullable();
+
+const wizardSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Server name is required')
+      .min(3, 'Name must be between 3 and 24 characters')
+      .max(24, 'Name must be between 3 and 24 characters')
+      .regex(
+        serverNamePattern,
+        'Name must start with a letter and contain only lowercase letters, digits, and hyphens'
+      ),
+    region: z.string().min(1, 'Region is required'),
+    zone: z.string().min(1, 'Zone is required'),
+    machineType: z.string().min(1, 'Machine type is required'),
+    minecraftVersion: z.string(),
+    diskSizeGB: z.number().min(10).max(100),
+    shutdownEnabled: z.boolean(),
+    shutdownTime: z.string(),
+    shutdownTimezone: z.string(),
+    modpack: modpackSchema,
+  })
+  .superRefine((values, ctx) => {
+    // A pack controls the Minecraft version (ADR-0006); only vanilla servers
+    // must choose one.
+    if (!values.modpack && !values.minecraftVersion) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['minecraftVersion'],
+        message: 'Minecraft version is required',
+      });
+    }
+  });
 
 type WizardForm = z.infer<typeof wizardSchema>;
 
 const STEPS = [
   { id: 0, label: 'Basic Info', icon: Server },
-  { id: 1, label: 'Server Specs', icon: Cpu },
-  { id: 2, label: 'Settings', icon: Settings },
-  { id: 3, label: 'Review', icon: FileText },
+  { id: 1, label: 'Modpack', icon: Package },
+  { id: 2, label: 'Server Specs', icon: Cpu },
+  { id: 3, label: 'Settings', icon: Settings },
+  { id: 4, label: 'Review', icon: FileText },
 ];
+
+const SEARCH_MIN_LENGTH = 3;
 
 const TIMEZONES = [
   'UTC',
@@ -109,15 +162,58 @@ const INITIAL_FORM: WizardForm = {
   shutdownEnabled: false,
   shutdownTime: '21:00',
   shutdownTimezone: 'Europe/Berlin',
+  modpack: null,
 };
 
 const DEFAULT_FAMILIES = ['e2-', 'n2-'];
 const STEP_FIELDS: (keyof WizardForm)[][] = [
   ['name', 'region', 'zone'],
+  ['modpack'],
   ['machineType', 'minecraftVersion'],
   [],
   [],
 ];
+
+/** Formats a raw download count into a compact label (e.g. 12.3M). */
+function formatDownloads(count: number): string {
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  }
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  }
+  return `${count}`;
+}
+
+/** Human-readable summary of a pack selection for the Review step. */
+function modpackSummary(selection: ModpackSelection): string {
+  const version = selection.versionName ?? selection.versionId;
+  return version
+    ? `${selection.name} · ${version}`
+    : `${selection.name} · Latest`;
+}
+
+/** Pack icon with a fallback to a generic package glyph. */
+function PackIcon({ iconUrl }: { iconUrl: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!iconUrl || failed) {
+    return (
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+        <Package className="h-5 w-5 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={iconUrl}
+      alt=""
+      className="h-10 w-10 shrink-0 rounded-md object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 function BasicInfoStep({
   form,
@@ -211,6 +307,224 @@ function BasicInfoStep({
   );
 }
 
+function ModpackStep({
+  form,
+}: {
+  form: ReturnType<typeof useForm<WizardForm>>;
+}) {
+  const [query, setQuery] = useState('');
+  const selected = form.watch('modpack');
+  const search = useModrinthSearch(query);
+  const versions = useModrinthPackVersions(selected?.projectId ?? null);
+
+  const trimmedQuery = query.trim();
+  const packs = search.data ?? [];
+  const versionOptions = versions.data ?? [];
+  const isSearching =
+    search.isLoading ||
+    (trimmedQuery !== search.debouncedQuery &&
+      trimmedQuery.length >= SEARCH_MIN_LENGTH);
+
+  const selectPack = (pack: ModrinthPack) => {
+    form.setValue(
+      'modpack',
+      {
+        platform: 'modrinth',
+        projectId: pack.id,
+        name: pack.name,
+        iconUrl: pack.iconUrl,
+        loader: pack.loader || undefined,
+      },
+      { shouldDirty: true }
+    );
+    // A pack controls the Minecraft version (ADR-0006), so drop any earlier
+    // vanilla pick to keep the two fields mutually exclusive.
+    form.setValue('minecraftVersion', '');
+  };
+
+  const clearPack = () => {
+    form.setValue('modpack', null, { shouldDirty: true });
+  };
+
+  const selectVersion = (value: string) => {
+    if (!selected) return;
+
+    if (value === 'latest') {
+      form.setValue(
+        'modpack',
+        { ...selected, versionId: undefined, versionName: undefined },
+        { shouldDirty: true }
+      );
+      return;
+    }
+
+    const version = versionOptions.find((option) => option.id === value);
+    form.setValue(
+      'modpack',
+      {
+        ...selected,
+        versionId: value,
+        versionName: version?.name ?? version?.versionNumber,
+      },
+      { shouldDirty: true }
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="font-medium text-foreground">Server Type</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Install a published Modrinth modpack, or skip this step for a vanilla
+          server.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="modpack-search" className="text-sm font-medium">
+          Search Modpacks
+        </label>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="modpack-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search Modrinth modpacks…"
+            className="pl-9"
+            autoComplete="off"
+          />
+        </div>
+      </div>
+
+      {selected ? (
+        <div className="space-y-4 rounded-lg border border-green-600 bg-green-600/10 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <PackIcon iconUrl={selected.iconUrl ?? ''} />
+              <div className="min-w-0">
+                <div className="truncate font-medium text-foreground">
+                  {selected.name}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {selected.loader ? `${selected.loader} · ` : ''}Modrinth
+                </div>
+              </div>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={clearPack}>
+              Clear pack
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="modpack-version" className="text-sm font-medium">
+              Pack Version
+            </label>
+            <Select
+              value={selected.versionId ?? 'latest'}
+              onValueChange={selectVersion}
+              disabled={versions.isLoading}
+            >
+              <SelectTrigger id="modpack-version" className="w-full sm:w-72">
+                <SelectValue
+                  placeholder={
+                    versions.isLoading ? 'Loading versions…' : 'Latest'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="latest">Latest</SelectItem>
+                {versionOptions.map((version) => (
+                  <SelectItem key={version.id} value={version.id}>
+                    {version.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {versions.isError ? (
+              <p className="text-sm text-destructive">
+                Failed to load pack versions.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {trimmedQuery.length < SEARCH_MIN_LENGTH ? (
+        <p className="text-sm text-muted-foreground">
+          Type at least {SEARCH_MIN_LENGTH} characters to search the Modrinth
+          catalogue.
+        </p>
+      ) : isSearching ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((index) => (
+            <Skeleton key={index} className="h-20 rounded-lg" />
+          ))}
+        </div>
+      ) : search.isError ? (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+          <p>Failed to search modpacks.</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => search.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : packs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No modpacks found. Try a different search.
+        </p>
+      ) : (
+        <div
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          role="group"
+          aria-label="Modpack results"
+        >
+          {packs.map((pack) => {
+            const isSelected = selected?.projectId === pack.id;
+            return (
+              <button
+                key={pack.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => selectPack(pack)}
+                className={cn(
+                  'flex items-start gap-3 rounded-lg border p-3 text-left transition-all',
+                  isSelected
+                    ? 'border-green-600 bg-green-600/10 ring-1 ring-green-600'
+                    : 'border-border bg-muted hover:border-ring'
+                )}
+              >
+                <PackIcon iconUrl={pack.iconUrl} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-foreground">
+                    {pack.name}
+                  </div>
+                  <div className="truncate text-sm text-muted-foreground">
+                    by {pack.author}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {pack.loader ? (
+                      <Badge variant="secondary">{pack.loader}</Badge>
+                    ) : null}
+                    <span className="text-xs text-muted-foreground">
+                      {formatDownloads(pack.downloads)} downloads
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SpecsStep({
   form,
   machineTypes,
@@ -222,6 +536,7 @@ function SpecsStep({
 }) {
   const [showAllMachineTypes, setShowAllMachineTypes] = useState(false);
   const selectedType = form.watch('machineType');
+  const selectedPack = form.watch('modpack');
   const isDefaultFamily = (id: string) =>
     DEFAULT_FAMILIES.some((family) => id.startsWith(family));
   const visibleMachineTypes = showAllMachineTypes
@@ -295,10 +610,20 @@ function SpecsStep({
         render={({ field }) => (
           <FormItem>
             <FormLabel>Minecraft Version</FormLabel>
-            <Select value={field.value} onValueChange={field.onChange}>
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={Boolean(selectedPack)}
+            >
               <FormControl>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a version" />
+                  <SelectValue
+                    placeholder={
+                      selectedPack
+                        ? 'Controlled by modpack'
+                        : 'Select a version'
+                    }
+                  />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
@@ -309,6 +634,11 @@ function SpecsStep({
                 ))}
               </SelectContent>
             </Select>
+            {selectedPack ? (
+              <p className="text-sm text-muted-foreground">
+                Controlled by the selected modpack ({selectedPack.name}).
+              </p>
+            ) : null}
             <FormMessage />
           </FormItem>
         )}
@@ -451,7 +781,14 @@ function ReviewStep({
           ],
         ]
       : []),
-    ['Minecraft Version', values.minecraftVersion],
+    [
+      'Modpack',
+      values.modpack ? modpackSummary(values.modpack) : 'Vanilla (no pack)',
+    ],
+    [
+      'Minecraft Version',
+      values.modpack ? 'Pack-controlled' : values.minecraftVersion,
+    ],
     ['Disk Size', `${values.diskSizeGB} GB`],
     [
       'Scheduled Shutdown',
@@ -494,14 +831,23 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
   };
 
   const handleCreate = form.handleSubmit((values) => {
+    const modpack: ModpackConfig | undefined = values.modpack
+      ? {
+          platform: values.modpack.platform,
+          projectId: values.modpack.projectId,
+          versionId: values.modpack.versionId,
+        }
+      : undefined;
+
     createServer.mutate(
       {
         name: values.name,
         region: values.region,
         zone: values.zone,
         machineType: values.machineType,
-        minecraftVersion: values.minecraftVersion,
+        minecraftVersion: values.modpack ? '' : values.minecraftVersion,
         diskSizeGB: values.diskSizeGB,
+        ...(modpack ? { modpack } : {}),
         ...(values.shutdownEnabled
           ? {
               shutdownSchedule: {
@@ -606,15 +952,16 @@ export function ServerSetupWizard({ className }: ServerSetupWizardProps) {
             {step === 0 && (
               <BasicInfoStep form={form} regions={options.regions} />
             )}
-            {step === 1 && (
+            {step === 1 && <ModpackStep form={form} />}
+            {step === 2 && (
               <SpecsStep
                 form={form}
                 machineTypes={options.machineTypes}
                 minecraftVersions={options.minecraftVersions}
               />
             )}
-            {step === 2 && <OptionsStep form={form} />}
-            {step === 3 && (
+            {step === 3 && <OptionsStep form={form} />}
+            {step === 4 && (
               <ReviewStep
                 values={form.getValues()}
                 machineTypes={options.machineTypes}
